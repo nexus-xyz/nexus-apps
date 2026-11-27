@@ -1,0 +1,4011 @@
+{
+  "schema": "nexus-cli-commands/1",
+  "version": "0.45.0",
+  "usage": "nexus <command> [options]",
+  "globalFlags": [
+    {
+      "name": "--json",
+      "description": "Print only JSON on stdout; errors go to stderr as {\"error\": {\"message\", \"hint\"}}"
+    },
+    {
+      "name": "--no-color",
+      "description": "Plain text on a terminal too (also NO_COLOR)"
+    },
+    {
+      "name": "--help",
+      "description": "Help for a command (also -h)"
+    },
+    {
+      "name": "--version",
+      "description": "The CLI's version (also -v; with --json: {\"version\"})"
+    }
+  ],
+  "exitCodes": [
+    {
+      "code": 0,
+      "meaning": "Success"
+    },
+    {
+      "code": 1,
+      "meaning": "Failure: Gateway refused or failed the request, a run failed, you are not signed in, or Gateway could not be reached"
+    },
+    {
+      "code": 2,
+      "meaning": "Usage error: an unknown command, a missing argument or an invalid flag"
+    }
+  ],
+  "environment": [
+    {
+      "name": "NEXUS_URL",
+      "description": "The Gateway URL when none is saved (the installer's wrapper sets it; default https://api.nexus.inc)"
+    },
+    {
+      "name": "NEXUS_GATEWAY",
+      "description": "One command against another Gateway, with its own sign-in (nexus auth login once per Gateway); the saved one stays the default"
+    },
+    {
+      "name": "NEXUS_CONFIG",
+      "description": "The CLI config file (default ~/.nexus/factory/config.json)"
+    },
+    {
+      "name": "NEXUS_UI_URL",
+      "description": "Where the CLI's Nexus UI links point, for the Gateway NEXUS_URL names (any Gateway when NEXUS_URL is unset)"
+    },
+    {
+      "name": "NEXUS_TEAM",
+      "description": "The team runs and agent sessions are attributed to (--team wins)"
+    },
+    {
+      "name": "NEXUS_CLAUDE_AUTH",
+      "description": "gateway or subscription: the route nexus claude takes in this shell (a flag wins; unset: your saved route, nexus agents)"
+    },
+    {
+      "name": "NEXUS_CODEX_AUTH",
+      "description": "gateway or subscription: the route nexus codex takes in this shell (a flag wins; unset: your saved route)"
+    },
+    {
+      "name": "NEXUS_ANTIGRAVITY_AUTH",
+      "description": "subscription, its only route: the route nexus agy takes in this shell (Antigravity runs on your Google AI plan)"
+    },
+    {
+      "name": "NEXUS_CURSOR_AUTH",
+      "description": "subscription: run nexus cursor-agent on your Cursor plan"
+    },
+    {
+      "name": "NEXUS_RECORDINGS_DIR",
+      "description": "Where nexus recordings reads screen recordings (default: Nexus for Mac's folder)"
+    },
+    {
+      "name": "NEXUS_DESKTOP_BIN",
+      "description": "The binary nexus recordings frames runs (default: Nexus.app's nexus-desktop, else Nexus GPUI's nexus-desktop-gpui)"
+    },
+    {
+      "name": "NEXUS_DESKTOP_SOCKET",
+      "description": "The socket nexus sessions reaches Nexus for desktop through (default: the app's, in $XDG_RUNTIME_DIR or its data folder)"
+    },
+    {
+      "name": "NEXUS_NO_UPDATE_CHECK",
+      "description": "1: never check for a newer CLI (also off with --json, in CI and when stdout is not a terminal)"
+    },
+    {
+      "name": "NO_COLOR",
+      "description": "Plain output on a terminal too"
+    },
+    {
+      "name": "NEXUS_DEBUG",
+      "description": "1: print the stack trace with an error"
+    }
+  ],
+  "commands": [
+    {
+      "name": "auth",
+      "usage": "nexus auth <command> [options]",
+      "description": "Sign in to a Nexus Gateway, check who you are, sign out, and manage your API keys",
+      "flags": [],
+      "examples": [
+        "nexus auth login --url https://api.nexus.inc",
+        "echo \"$NEXUS_API_KEY\" | nexus auth login --with-token",
+        "nexus auth status --json",
+        "nexus auth tokens create --label \"CI deploys\""
+      ],
+      "subcommands": [
+        {
+          "name": "auth login",
+          "usage": "nexus auth login --url <core>",
+          "description": "Sign in as you, in your organization: approve a one-time code in Nexus UI (--no-browser to only print the link)",
+          "flags": [
+            {
+              "name": "--url",
+              "value": "<core>",
+              "description": "The Gateway to sign in to, saved as the default (default: NEXUS_GATEWAY, else the saved one, else NEXUS_URL, else https://api.nexus.inc)"
+            },
+            {
+              "name": "--no-browser",
+              "description": "Only print the approval link; do not open a browser"
+            },
+            {
+              "name": "--with-token",
+              "description": "Read an API key from stdin instead of signing in through the browser"
+            }
+          ],
+          "examples": [],
+          "variants": [
+            {
+              "usage": "nexus auth login --with-token",
+              "description": "Sign in with an API key read from stdin, for CI and scripts"
+            }
+          ]
+        },
+        {
+          "name": "auth signup",
+          "usage": "nexus auth signup --name <name> [--email <email>] [--dry-run]",
+          "description": "Create an organization and its owner without a browser, and save the new API key (when key-only signup is enabled)",
+          "flags": [
+            {
+              "name": "--name",
+              "value": "<name>",
+              "description": "The new organization's name (1 to 80 characters)"
+            },
+            {
+              "name": "--email",
+              "value": "<email>",
+              "description": "The owner's email address (unverified until verified through sign-in)"
+            },
+            {
+              "name": "--dry-run",
+              "description": "Show what would change, change nothing"
+            }
+          ],
+          "examples": []
+        },
+        {
+          "name": "auth status",
+          "usage": "nexus auth status",
+          "description": "Your org, user and role, the Gateway URL, your token (masked) and whether Gateway accepts it",
+          "flags": [],
+          "examples": [],
+          "exitCodes": [
+            {
+              "code": 0,
+              "meaning": "Signed in, and Gateway accepts the token"
+            },
+            {
+              "code": 1,
+              "meaning": "Not signed in, or Gateway rejects the saved token"
+            }
+          ]
+        },
+        {
+          "name": "auth logout",
+          "usage": "nexus auth logout",
+          "description": "Revoke the saved token on Gateway and forget it",
+          "flags": [],
+          "examples": []
+        },
+        {
+          "name": "auth delete-account",
+          "usage": "nexus auth delete-account [--dry-run] [--confirm DELETE]",
+          "description": "Delete your account for good: your sign-in, your personal organization and your place in every organization",
+          "flags": [
+            {
+              "name": "--dry-run",
+              "description": "Show what would change, change nothing"
+            },
+            {
+              "name": "--confirm",
+              "value": "<DELETE>",
+              "description": "DELETE, to confirm without a terminal (on one, you type it when asked)"
+            }
+          ],
+          "examples": []
+        },
+        {
+          "name": "auth tokens list",
+          "usage": "nexus auth tokens list [--all]",
+          "description": "Your API keys and CLI sign-ins in this organization, newest first (--all: everyone's, owners and admins)",
+          "flags": [
+            {
+              "name": "--all",
+              "description": "Everyone's tokens in the organization (owners and admins)"
+            }
+          ],
+          "examples": []
+        },
+        {
+          "name": "auth tokens create",
+          "usage": "nexus auth tokens create --label <label>",
+          "description": "Create a personal API key for CI and scripts: it acts as you, with your role, and it is shown once",
+          "flags": [
+            {
+              "name": "--label",
+              "value": "<label>",
+              "description": "A name for the key (1 to 80 characters), to tell keys apart"
+            }
+          ],
+          "examples": []
+        },
+        {
+          "name": "auth tokens revoke",
+          "usage": "nexus auth tokens revoke <id>",
+          "description": "Revoke one of your tokens at once (owners and admins: anyone's)",
+          "flags": [],
+          "examples": []
+        }
+      ]
+    },
+    {
+      "name": "keys",
+      "usage": "nexus keys <add|list|history|replace|disable|enable|remove|revoke>",
+      "description": "Your organization's own provider keys (BYOK): Gateway calls each provider with its key",
+      "examples": [
+        "nexus keys add anthropic sk-ant-…",
+        "nexus keys list --json"
+      ],
+      "subcommands": [
+        {
+          "name": "keys add",
+          "usage": "nexus keys add <provider> <key> [--team <slug|id>] [--user <me|id>]",
+          "description": "Bring your own provider key (owners and admins); encrypted at rest. With --team or --user, a team's or a person's key, which their calls use first",
+          "flags": [
+            {
+              "name": "--team",
+              "value": "<slug|id>",
+              "description": "The team that holds the key: its slug or id"
+            },
+            {
+              "name": "--user",
+              "value": "<me|id>",
+              "description": "The person who holds the key: me, or their user id"
+            }
+          ],
+          "examples": []
+        },
+        {
+          "name": "keys list",
+          "usage": "nexus keys list",
+          "description": "Your provider keys, masked, with the teams' and people's keys you may read",
+          "flags": [],
+          "examples": []
+        },
+        {
+          "name": "keys history",
+          "usage": "nexus keys history <provider> [--team <slug|id>] [--user <me|id>]",
+          "description": "A provider key's versions: who added each, when, and its last four characters",
+          "flags": [
+            {
+              "name": "--team",
+              "value": "<slug|id>",
+              "description": "The team that holds the key: its slug or id"
+            },
+            {
+              "name": "--user",
+              "value": "<me|id>",
+              "description": "The person who holds the key: me, or their user id"
+            }
+          ],
+          "examples": []
+        },
+        {
+          "name": "keys replace",
+          "usage": "nexus keys replace <provider> <key> [--team <slug|id>] [--user <me|id>] [--dry-run]",
+          "description": "Replace a provider key, checked against its provider first (owners and admins)",
+          "flags": [
+            {
+              "name": "--team",
+              "value": "<slug|id>",
+              "description": "The team that holds the key: its slug or id"
+            },
+            {
+              "name": "--user",
+              "value": "<me|id>",
+              "description": "The person who holds the key: me, or their user id"
+            },
+            {
+              "name": "--dry-run",
+              "description": "Show what would change, change nothing"
+            }
+          ],
+          "examples": []
+        },
+        {
+          "name": "keys disable",
+          "usage": "nexus keys disable <provider> [--team <slug|id>] [--user <me|id>] [--dry-run]",
+          "description": "Stop calls from using a provider key; it stays sealed (owners and admins)",
+          "flags": [
+            {
+              "name": "--team",
+              "value": "<slug|id>",
+              "description": "The team that holds the key: its slug or id"
+            },
+            {
+              "name": "--user",
+              "value": "<me|id>",
+              "description": "The person who holds the key: me, or their user id"
+            },
+            {
+              "name": "--dry-run",
+              "description": "Show what would change, change nothing"
+            }
+          ],
+          "examples": []
+        },
+        {
+          "name": "keys enable",
+          "usage": "nexus keys enable <provider> [--team <slug|id>] [--user <me|id>] [--dry-run]",
+          "description": "Use a disabled or rejected provider key again, checked against its provider first (owners and admins)",
+          "flags": [
+            {
+              "name": "--team",
+              "value": "<slug|id>",
+              "description": "The team that holds the key: its slug or id"
+            },
+            {
+              "name": "--user",
+              "value": "<me|id>",
+              "description": "The person who holds the key: me, or their user id"
+            },
+            {
+              "name": "--dry-run",
+              "description": "Show what would change, change nothing"
+            }
+          ],
+          "examples": []
+        },
+        {
+          "name": "keys remove",
+          "usage": "nexus keys remove <provider> [--team <slug|id>] [--user <me|id>] [--dry-run]",
+          "description": "Delete a provider key; its versions stay (owners and admins)",
+          "flags": [
+            {
+              "name": "--team",
+              "value": "<slug|id>",
+              "description": "The team that holds the key: its slug or id"
+            },
+            {
+              "name": "--user",
+              "value": "<me|id>",
+              "description": "The person who holds the key: me, or their user id"
+            },
+            {
+              "name": "--dry-run",
+              "description": "Show what would change, change nothing"
+            }
+          ],
+          "examples": []
+        },
+        {
+          "name": "keys revoke",
+          "usage": "nexus keys revoke <scoped key id> [--dry-run]",
+          "description": "Revoke a module's scoped key before it expires (owners and admins): its key id (keyId in the JSON of nexus spend, or the audit log), or its smk_… id",
+          "flags": [
+            {
+              "name": "--dry-run",
+              "description": "Show what would change, change nothing"
+            }
+          ],
+          "examples": []
+        }
+      ],
+      "flags": []
+    },
+    {
+      "name": "team",
+      "usage": "nexus team <command> [options]",
+      "description": "Teams in your organization, nested; owners and admins manage them",
+      "examples": [
+        "nexus team create web --name \"Web\"",
+        "nexus team add web bo@acme.example",
+        "nexus team import teams.yaml --dry-run"
+      ],
+      "subcommands": [
+        {
+          "name": "team list",
+          "usage": "nexus team list",
+          "description": "Teams in your organization, with yours marked",
+          "flags": [],
+          "examples": []
+        },
+        {
+          "name": "team tree",
+          "usage": "nexus team tree [--depth N]",
+          "description": "Teams nested under their parents, with levels, leads and headcount",
+          "flags": [
+            {
+              "name": "--depth",
+              "value": "<N>",
+              "description": "How many levels of teams to show or roll up"
+            }
+          ],
+          "examples": []
+        },
+        {
+          "name": "team show",
+          "usage": "nexus team show <slug>",
+          "description": "A team: its path, child teams, members and pending members",
+          "flags": [],
+          "examples": []
+        },
+        {
+          "name": "team create",
+          "usage": "nexus team create <slug> [--parent P] [--level L] [--name N]",
+          "description": "Create a team, optionally under a parent (owners and admins)",
+          "flags": [
+            {
+              "name": "--parent",
+              "value": "<P>",
+              "description": "The parent team's slug"
+            },
+            {
+              "name": "--level",
+              "value": "<L>",
+              "description": "Your own label for the team's level (e.g. department)"
+            },
+            {
+              "name": "--name",
+              "value": "<N>",
+              "description": "A display name"
+            }
+          ],
+          "examples": []
+        },
+        {
+          "name": "team move",
+          "usage": "nexus team move <slug> --parent P | --root",
+          "description": "Put a team under another one, or at the top (owners and admins)",
+          "flags": [
+            {
+              "name": "--parent",
+              "value": "<P>",
+              "description": "The parent team's slug"
+            },
+            {
+              "name": "--root",
+              "description": "Put the team at the top, under no parent"
+            }
+          ],
+          "examples": []
+        },
+        {
+          "name": "team rename",
+          "usage": "nexus team rename <slug> <new-slug> [--name N]",
+          "description": "Change a team's slug, name, --level or --description (owners and admins)",
+          "flags": [
+            {
+              "name": "--name",
+              "value": "<N>",
+              "description": "A display name"
+            },
+            {
+              "name": "--level",
+              "description": "Your own label for the team's level (e.g. department)",
+              "value": "<L>"
+            },
+            {
+              "name": "--description",
+              "description": "A description",
+              "value": "<text>"
+            }
+          ],
+          "examples": []
+        },
+        {
+          "name": "team delete",
+          "usage": "nexus team delete <slug> --yes [--cascade]",
+          "description": "Delete a team (--cascade: and every team under it); spend stays",
+          "flags": [
+            {
+              "name": "--yes",
+              "description": "Confirm a change that deletes or sends more than one thing"
+            },
+            {
+              "name": "--cascade",
+              "description": "Also delete every team under it"
+            }
+          ],
+          "examples": []
+        },
+        {
+          "name": "team add",
+          "usage": "nexus team add <slug> <email|userId> [--lead] [--home]",
+          "description": "Add someone; an email not in the organization yet is pending until they join",
+          "flags": [
+            {
+              "name": "--lead",
+              "description": "Add the person as a lead"
+            },
+            {
+              "name": "--home",
+              "description": "Make it the person's default team"
+            }
+          ],
+          "examples": []
+        },
+        {
+          "name": "team remove",
+          "usage": "nexus team remove <slug> <email|userId>",
+          "description": "Take someone out of a team (owners and admins)",
+          "flags": [],
+          "examples": []
+        },
+        {
+          "name": "team pending",
+          "usage": "nexus team pending [--team T] [--cancel <email|id>]",
+          "description": "People added by email who have not joined yet (owners and admins)",
+          "flags": [
+            {
+              "name": "--team",
+              "value": "<T>",
+              "description": "Only people pending in this team"
+            },
+            {
+              "name": "--cancel",
+              "value": "<email|id>",
+              "description": "Cancel a pending member (email or id)"
+            }
+          ],
+          "examples": []
+        },
+        {
+          "name": "team import",
+          "usage": "nexus team import <file> [--dry-run] [--plan P] [--prune [--yes]]",
+          "description": "Load teams, leads and members from a YAML or JSON file; --dry-run shows the changes and a plan to apply exactly them (owners and admins)",
+          "flags": [
+            {
+              "name": "--dry-run",
+              "description": "Show what would change, change nothing"
+            },
+            {
+              "name": "--plan",
+              "value": "<P>",
+              "description": "Apply exactly the plan a dry run printed"
+            },
+            {
+              "name": "--prune",
+              "description": "Also remove teams and memberships missing from the file"
+            },
+            {
+              "name": "--yes",
+              "description": "Confirm a change that deletes or sends more than one thing"
+            },
+            {
+              "name": "--invite",
+              "description": "Also invite the file's people who are not in the organization yet"
+            }
+          ],
+          "examples": [],
+          "variants": [
+            {
+              "usage": "nexus team import <file> --invite [--dry-run] [--yes]",
+              "description": "Also invite the file's people who are not in the organization yet (the sign-in provider emails them; never without --invite)"
+            }
+          ]
+        },
+        {
+          "name": "team use",
+          "usage": "nexus team use <slug>",
+          "description": "Make it your default team: where your spend goes when you name none",
+          "flags": [],
+          "examples": []
+        }
+      ],
+      "flags": []
+    },
+    {
+      "name": "analytics",
+      "usage": "nexus analytics [--by team|person|model|provider|key|product|day] [--days N] [--from D] [--to D] [--team T] [--depth N] [--under T] [--person P] [--model M] [--provider P] [--product P] [--csv | --jsonl] [--cursor C] [--out F]",
+      "description": "Usage by team, person, model, provider, key, product or day, with a daily series",
+      "examples": [
+        "nexus analytics --by team --days 7",
+        "nexus analytics --by model --json",
+        "nexus analytics --csv --days 30 > usage.csv",
+        "nexus analytics --jsonl --team web --out usage.jsonl"
+      ],
+      "flags": [
+        {
+          "name": "--by",
+          "value": "<team|person|model|provider|key|product|day>",
+          "description": "Group by team, person, model, provider, key, product or day"
+        },
+        {
+          "name": "--days",
+          "value": "<N>",
+          "description": "The last N days (1 to 366)"
+        },
+        {
+          "name": "--from",
+          "value": "<D>",
+          "description": "From this day (YYYY-MM-DD)"
+        },
+        {
+          "name": "--to",
+          "value": "<D>",
+          "description": "Until this day (YYYY-MM-DD)"
+        },
+        {
+          "name": "--team",
+          "value": "<T>",
+          "description": "Only this team's usage"
+        },
+        {
+          "name": "--depth",
+          "value": "<N>",
+          "description": "How many levels of teams to show or roll up"
+        },
+        {
+          "name": "--under",
+          "value": "<T>",
+          "description": "Only teams under this one"
+        },
+        {
+          "name": "--person",
+          "value": "<P>",
+          "description": "With --csv or --jsonl: only this person's usage (a user id)"
+        },
+        {
+          "name": "--model",
+          "value": "<M>",
+          "description": "With --csv or --jsonl: only this model; - for calls with none"
+        },
+        {
+          "name": "--provider",
+          "value": "<P>",
+          "description": "With --csv or --jsonl: only this provider; - for calls with none"
+        },
+        {
+          "name": "--product",
+          "value": "<P>",
+          "description": "With --csv or --jsonl: only this product, or product/capability"
+        },
+        {
+          "name": "--csv",
+          "description": "Write the usage file as CSV, one row per day, team, person, model, provider and product; its manifest is in the audit log"
+        },
+        {
+          "name": "--jsonl",
+          "description": "Write the usage file as JSON Lines; its last line is the manifest"
+        },
+        {
+          "name": "--cursor",
+          "value": "<C>",
+          "description": "With --csv or --jsonl: continue a file the row limit stopped, from its manifest's nextCursor"
+        },
+        {
+          "name": "--out",
+          "value": "<F>",
+          "description": "With --csv or --jsonl: write the file here instead of stdout"
+        }
+      ]
+    },
+    {
+      "name": "budget",
+      "usage": "nexus budget set org|team/<slug> <amount>/<day|week|month> [--mode hard_stop] [--warn-at 80] [--dry-run]",
+      "description": "The organization's or a team's spend cap per day, week or month: owners and admins set it; a member sees what is left for them. --mode and --warn-at are for teams. Person limits: nexus budgets",
+      "examples": [
+        "nexus budget set org 2000/month",
+        "nexus budget set org 50/week --dry-run",
+        "nexus budget show org",
+        "nexus budget set team/web 500/month",
+        "nexus budget set team/web 500/month --dry-run",
+        "nexus budget show team/web"
+      ],
+      "flags": [
+        {
+          "name": "--mode",
+          "value": "<hard_stop>",
+          "description": "hard_stop (warn and approval are not available yet)"
+        },
+        {
+          "name": "--warn-at",
+          "value": "<80>",
+          "description": "For mode warn, which is not available yet"
+        },
+        {
+          "name": "--dry-run",
+          "description": "Show what would change, change nothing"
+        }
+      ]
+    },
+    {
+      "name": "models",
+      "usage": "nexus models [--all] [--team T]",
+      "description": "The models you may use (--all: the whole catalog, coming soon too)",
+      "examples": [
+        "nexus models",
+        "nexus models --all --json"
+      ],
+      "flags": [
+        {
+          "name": "--all",
+          "description": "The whole catalog, coming-soon models included"
+        },
+        {
+          "name": "--team",
+          "value": "<T>",
+          "description": "The models allowed in this team"
+        }
+      ]
+    },
+    {
+      "name": "chat",
+      "usage": "nexus chat \"prompt\" [--image a.png,b.png] [--session <id> | --new] [--model m|auto] [--team T] [--no-web] [--json]",
+      "description": "A chat session, the same as Nexus UI's home: the answer streams; a prompt continues the session you used last",
+      "examples": [
+        "nexus chat \"hello\"",
+        "nexus chat \"Where is billing handled?\" --new",
+        "nexus chat \"Why is this cut off?\" --image shot.png",
+        "nexus chat \"hello\" --model anthropic/claude-haiku-5-5 --json",
+        "nexus chat sessions images chs_… --out shots"
+      ],
+      "subcommands": [
+        {
+          "name": "chat sessions",
+          "usage": "nexus chat sessions [list] [--all] [--search words] [--limit N]",
+          "description": "Your chat sessions, most recent first (--all: archived ones too)",
+          "flags": [
+            {
+              "name": "--all",
+              "description": "The whole catalog, coming-soon models included"
+            },
+            {
+              "name": "--search",
+              "value": "<words>",
+              "description": "Only sessions with these words in the title or messages"
+            },
+            {
+              "name": "--limit",
+              "value": "<N>",
+              "description": "At most this many (1 to 100)"
+            }
+          ],
+          "examples": []
+        },
+        {
+          "name": "chat sessions show",
+          "usage": "nexus chat sessions show <id>",
+          "description": "A session's messages, with the model, cost and sources of each answer",
+          "flags": [],
+          "examples": []
+        },
+        {
+          "name": "chat sessions images",
+          "usage": "nexus chat sessions images <id> [<image>…] [--out dir] [--force]",
+          "description": "Save a session's images to files: every question's, or the ones named by id",
+          "flags": [
+            {
+              "name": "--out",
+              "value": "<dir>",
+              "description": "The directory to save the images in (default: the working directory; made if it is missing)"
+            },
+            {
+              "name": "--force",
+              "description": "Overwrite files that are already there"
+            }
+          ],
+          "examples": []
+        },
+        {
+          "name": "chat sessions rename",
+          "usage": "nexus chat sessions rename <id> <title…>",
+          "description": "Give a session a title",
+          "flags": [],
+          "examples": []
+        },
+        {
+          "name": "chat sessions archive",
+          "usage": "nexus chat sessions archive <id> [--undo]",
+          "description": "Hide a session from the list (--undo brings it back)",
+          "flags": [
+            {
+              "name": "--undo",
+              "description": "Undo it: restore an archived session"
+            }
+          ],
+          "examples": []
+        },
+        {
+          "name": "chat sessions delete",
+          "usage": "nexus chat sessions delete <id>",
+          "description": "Delete a session and its messages",
+          "flags": [],
+          "examples": []
+        },
+        {
+          "name": "chat share",
+          "usage": "nexus chat share <session> [--org | --team T | --people a@x,b@y] [--replace] [--allow-continue]",
+          "description": "Share a session as an artifact: a snapshot for your organization, chosen teams or chosen people (again: a new version; --replace revokes the earlier ones)",
+          "flags": [
+            {
+              "name": "--org",
+              "description": "Share with everyone in your organization"
+            },
+            {
+              "name": "--team",
+              "value": "<T>",
+              "description": "Share with these teams (slugs, comma-separated) and the teams under them"
+            },
+            {
+              "name": "--people",
+              "value": "<a@x,b@y>",
+              "description": "Share with these people in your organization (emails, comma-separated)"
+            },
+            {
+              "name": "--replace",
+              "description": "Revoke the session's earlier versions, so only this audience can open it"
+            },
+            {
+              "name": "--allow-continue",
+              "description": "Let readers continue it in a new private chat of their own"
+            },
+            {
+              "name": "--to",
+              "value": "<a@x,b@y>",
+              "description": "Share outside your organization with these people (emails, comma-separated); they sign in with that email to open it"
+            },
+            {
+              "name": "--public",
+              "description": "Share with anyone who has the link (unguessable, not indexed by search engines)"
+            },
+            {
+              "name": "--expires",
+              "value": "<30d>",
+              "description": "When a public link stops working: 30d, 12h or a number of days"
+            },
+            {
+              "name": "--include-code",
+              "description": "Keep an old code session's sources in a share outside your organization (only if your organization allows it)"
+            },
+            {
+              "name": "--private",
+              "description": "Stop sharing: revoke every version, so only you can read it"
+            }
+          ],
+          "examples": [],
+          "variants": [
+            {
+              "usage": "nexus chat share <session> --to a@x,b@y | --public [--expires 30d] [--include-code]",
+              "description": "Share it outside your organization, as its settings allow: with named people by email (they sign in with that email to open it) or anyone with the link"
+            },
+            {
+              "usage": "nexus chat share <session> --private",
+              "description": "Stop sharing a session: revoke every version, so only you can read it"
+            }
+          ]
+        },
+        {
+          "name": "chat export",
+          "usage": "nexus chat export <session> [--md] [--out file]",
+          "description": "A session as Markdown, to stdout or a file",
+          "flags": [
+            {
+              "name": "--md",
+              "description": "As Markdown (the only format for now)"
+            },
+            {
+              "name": "--out",
+              "value": "<file>",
+              "description": "Write it to this file instead of stdout"
+            }
+          ],
+          "examples": []
+        }
+      ],
+      "flags": [
+        {
+          "name": "--image",
+          "value": "<a.png,b.png>",
+          "description": "Attach images to the prompt: PNG, JPEG, GIF or WebP files, comma-separated (up to 8, at most 5 MB each)"
+        },
+        {
+          "name": "--session",
+          "value": "<id>",
+          "description": "Continue this chat session (its id)"
+        },
+        {
+          "name": "--new",
+          "description": "Start a new chat session instead of continuing the last one"
+        },
+        {
+          "name": "--model",
+          "value": "<m|auto>",
+          "description": "A model you may use (provider/model), or auto; also changes the session's model"
+        },
+        {
+          "name": "--team",
+          "value": "<T>",
+          "description": "The team the session's spend is attributed to (default: yours)"
+        },
+        {
+          "name": "--no-web",
+          "description": "Turn web search off for this session (it is on by default when your organization allows it)"
+        },
+        {
+          "name": "--json",
+          "description": "Print only JSON on stdout"
+        }
+      ]
+    },
+    {
+      "name": "artifacts",
+      "usage": "nexus artifacts <command> [options]",
+      "description": "Chats shared as snapshots (Nexus Artifacts): inside your organization (everyone, chosen teams or chosen people) or outside it (named people by email, or anyone with the link), as its settings allow",
+      "flags": [],
+      "examples": [
+        "nexus chat share chs_… --team web --allow-continue",
+        "nexus chat share chs_… --to ada@partner.example",
+        "nexus chat share chs_… --public --expires 30d",
+        "nexus artifacts --shared-with-me",
+        "nexus artifacts list --external --audience public",
+        "nexus artifacts access art_… --grant bo@partner.example",
+        "nexus artifacts export art_… --md --out answer.md",
+        "nexus artifacts images art_… --out shots",
+        "nexus artifacts continue art_…"
+      ],
+      "subcommands": [
+        {
+          "name": "artifacts list",
+          "usage": "nexus artifacts list [--mine | --shared-with-me] [--revoked | --all]",
+          "description": "Artifacts shared with you and by you, newest first (--revoked: yours you revoked; --all: both); shared with you includes other organizations' shares to your email",
+          "flags": [
+            {
+              "name": "--mine",
+              "description": "Only the artifacts you shared"
+            },
+            {
+              "name": "--shared-with-me",
+              "description": "Only the artifacts others shared with you"
+            },
+            {
+              "name": "--revoked",
+              "description": "Only your revoked artifacts"
+            },
+            {
+              "name": "--all",
+              "description": "Active and revoked artifacts"
+            },
+            {
+              "name": "--external",
+              "description": "Everything shared outside your organization (owners and admins)"
+            },
+            {
+              "name": "--audience",
+              "value": "<A>",
+              "description": "external (named people) or public (anyone with the link)"
+            },
+            {
+              "name": "--author",
+              "value": "<A>",
+              "description": "Only what this person shared (email or user id)"
+            },
+            {
+              "name": "--team",
+              "value": "<T>",
+              "description": "Only artifacts shared from this team's sessions and the teams under it"
+            },
+            {
+              "name": "--search",
+              "description": "Only artifacts with these words in the title",
+              "value": "<words>"
+            }
+          ],
+          "examples": [],
+          "variants": [
+            {
+              "usage": "nexus artifacts list --external [--audience A] [--author A] [--team T]",
+              "description": "Everything shared outside your organization, with opens, readers, requests and reports (owners and admins); --search narrows by title"
+            }
+          ]
+        },
+        {
+          "name": "artifacts show",
+          "usage": "nexus artifacts show <id>",
+          "description": "An artifact: who shared it with whom, its models and cost, and the conversation",
+          "flags": [],
+          "examples": []
+        },
+        {
+          "name": "artifacts export",
+          "usage": "nexus artifacts export <id> [--md] [--out file]",
+          "description": "An artifact as Markdown, to stdout or a file",
+          "flags": [
+            {
+              "name": "--md",
+              "description": "As Markdown (the only format for now)"
+            },
+            {
+              "name": "--out",
+              "value": "<file>",
+              "description": "Write it to this file instead of stdout"
+            }
+          ],
+          "examples": []
+        },
+        {
+          "name": "artifacts images",
+          "usage": "nexus artifacts images <id|token|link> [<image>…] [--out dir] [--force]",
+          "description": "Save an artifact's images to files: every question's, or the ones named by id; a public link's token or the link works too",
+          "flags": [
+            {
+              "name": "--out",
+              "value": "<dir>",
+              "description": "The directory to save the images in (default: the working directory; made if it is missing)"
+            },
+            {
+              "name": "--force",
+              "description": "Overwrite files that are already there"
+            }
+          ],
+          "examples": []
+        },
+        {
+          "name": "artifacts continue",
+          "usage": "nexus artifacts continue <id>",
+          "description": "Continue an artifact in a new private chat session of your own (when its author allows)",
+          "flags": [],
+          "examples": []
+        },
+        {
+          "name": "artifacts access",
+          "usage": "nexus artifacts access <id> [--grant E] [--deny E] [--remove E]",
+          "description": "Who has an artifact shared outside, who asked for it and how often each opened it; grant, deny or remove people by email (its author, owners and admins)",
+          "flags": [
+            {
+              "name": "--grant",
+              "value": "<E>",
+              "description": "Give these people access (emails, comma-separated)"
+            },
+            {
+              "name": "--deny",
+              "value": "<E>",
+              "description": "Refuse these people's requests (emails, comma-separated)"
+            },
+            {
+              "name": "--remove",
+              "value": "<E>",
+              "description": "Take access away from these people (emails, comma-separated)"
+            }
+          ],
+          "examples": []
+        },
+        {
+          "name": "artifacts request",
+          "usage": "nexus artifacts request <id> [--message text]",
+          "description": "Ask the author of an artifact shared outside their organization for access",
+          "flags": [
+            {
+              "name": "--message",
+              "value": "<text>",
+              "description": "A note for the author"
+            }
+          ],
+          "examples": []
+        },
+        {
+          "name": "artifacts revoke",
+          "usage": "nexus artifacts revoke <id> [<id>…]",
+          "description": "Stop sharing an artifact at once (yours; owners and admins: any they can read); several ids revoke in bulk",
+          "flags": [],
+          "examples": []
+        }
+      ]
+    },
+    {
+      "name": "pages",
+      "usage": "nexus pages <command> [options]",
+      "description": "Standalone HTML or Markdown pages, in versions that never change; share one with your organization, teams, people or a public link",
+      "flags": [],
+      "examples": [
+        "nexus pages publish report.html",
+        "nexus pages update pag_… report.html --base 2",
+        "nexus pages get pag_… --source --out report.html",
+        "nexus pages restore pag_… 1",
+        "nexus pages share pag_… --team web --pin 2",
+        "nexus pages delete pag_… --yes"
+      ],
+      "subcommands": [
+        {
+          "name": "pages publish",
+          "usage": "nexus pages publish <file> [--title T] [--format html|md|jsx|board]",
+          "description": "Publish an HTML, Markdown, React (.jsx, .tsx) or board (.board.json) file as a new page (version 1); the title defaults to its <title> or first heading",
+          "flags": [
+            {
+              "name": "--title",
+              "value": "<T>",
+              "description": "The page's title (default: its <title> or first # heading, else the file name)"
+            },
+            {
+              "name": "--format",
+              "value": "<html|md|jsx|board>",
+              "description": "html, md, jsx, sheet or board (default: from the file name; .md and .markdown are Markdown, .jsx and .tsx are React, .sheet.json is a sheet, .board.json is a board)"
+            }
+          ],
+          "examples": []
+        },
+        {
+          "name": "pages list",
+          "usage": "nexus pages list",
+          "description": "Your pages, most recently written first",
+          "flags": [],
+          "examples": []
+        },
+        {
+          "name": "pages get",
+          "usage": "nexus pages get <id> [<version>] [--source] [--out file]",
+          "description": "A page's latest version, or the one named; --source prints or saves its source as written",
+          "flags": [
+            {
+              "name": "--source",
+              "description": "The source as written, not the version's details"
+            },
+            {
+              "name": "--out",
+              "value": "<file>",
+              "description": "Write the source to this file instead of stdout"
+            }
+          ],
+          "examples": []
+        },
+        {
+          "name": "pages update",
+          "usage": "nexus pages update <id> <file> [--base N] [--title T]",
+          "description": "Write the next version from a file; --base refuses it if someone wrote a newer version since",
+          "flags": [
+            {
+              "name": "--base",
+              "value": "<N>",
+              "description": "The version this was built on: refused if someone wrote a newer version since"
+            },
+            {
+              "name": "--title",
+              "value": "<T>",
+              "description": "The page's title (default: its <title> or first # heading, else the file name)"
+            }
+          ],
+          "examples": []
+        },
+        {
+          "name": "pages versions",
+          "usage": "nexus pages versions <id>",
+          "description": "A page's versions, newest first: title, size and how each was written",
+          "flags": [],
+          "examples": []
+        },
+        {
+          "name": "pages restore",
+          "usage": "nexus pages restore <id> <version> [--base N]",
+          "description": "Make a new version with an old version's title and content",
+          "flags": [
+            {
+              "name": "--base",
+              "value": "<N>",
+              "description": "The version this was built on: refused if someone wrote a newer version since"
+            }
+          ],
+          "examples": []
+        },
+        {
+          "name": "pages delete",
+          "usage": "nexus pages delete <id> --yes",
+          "description": "Delete a page, every version and its content, for good",
+          "flags": [
+            {
+              "name": "--yes",
+              "description": "Confirm a change that deletes or sends more than one thing"
+            }
+          ],
+          "examples": []
+        },
+        {
+          "name": "pages share",
+          "usage": "nexus pages share <id> [--org | --team T | --people a@x,b@y | --to a@x,b@y | --public [--expires 30d]] [--pin N]",
+          "description": "Share a page with your organization, teams, people, named outsiders or anyone with the link; --pin N pins that version, else readers see the latest",
+          "flags": [
+            {
+              "name": "--org",
+              "description": "Share with everyone in your organization"
+            },
+            {
+              "name": "--team",
+              "value": "<T>",
+              "description": "Share with these teams (slugs, comma-separated) and the teams under them"
+            },
+            {
+              "name": "--people",
+              "value": "<a@x,b@y>",
+              "description": "Share with these people in your organization (emails, comma-separated)"
+            },
+            {
+              "name": "--to",
+              "value": "<a@x,b@y>",
+              "description": "Share outside your organization with these people (emails, comma-separated); they sign in with that email to open it"
+            },
+            {
+              "name": "--public",
+              "description": "Share with anyone who has the link (unguessable, not indexed by search engines)"
+            },
+            {
+              "name": "--expires",
+              "value": "<30d>",
+              "description": "When a public link stops working: 30d, 12h or a number of days"
+            },
+            {
+              "name": "--pin",
+              "value": "<N>",
+              "description": "Share this version of the page; without it, readers see the latest version"
+            }
+          ],
+          "examples": []
+        },
+        {
+          "name": "pages open",
+          "usage": "nexus pages open <id|art_id> [<version>] [--no-browser]",
+          "description": "Open a page (or a version of it) or a shared page (its art_ id) in Nexus UI's viewer",
+          "flags": [
+            {
+              "name": "--no-browser",
+              "description": "Only print the approval link; do not open a browser"
+            }
+          ],
+          "examples": []
+        },
+        {
+          "name": "pages frame",
+          "usage": "nexus pages frame <id|art_id> [<version>]",
+          "description": "Print a signed URL that renders the page (the latest version, or the one named) with no sign-in, for five minutes",
+          "flags": [],
+          "examples": []
+        },
+        {
+          "name": "pages export",
+          "usage": "nexus pages export <id> [<version>] --format png|svg|pdf|pptx|html|zip [--board B] [--scale 1|2] [--out file]",
+          "description": "Write the page as a file: one board as PNG or SVG, every board as PDF, PPTX or zip, or the page as standalone HTML; --board picks one board, or a deck's slide by its title or number",
+          "flags": [
+            {
+              "name": "--format",
+              "value": "<png|svg|pdf|pptx|html|zip>",
+              "description": "png or svg (one board), pdf (one page per board), pptx (one slide per board), html (the page, opens offline) or zip"
+            },
+            {
+              "name": "--board",
+              "value": "<B>",
+              "description": "One board or slide, by its data-id, its name or its number from 1; a PNG or SVG of a design or a deck with several needs one"
+            },
+            {
+              "name": "--scale",
+              "value": "<1|2>",
+              "description": "1 or 2: the pixel ratio the boards render at (default: 2 for pdf and pptx, else 1)"
+            },
+            {
+              "name": "--out",
+              "value": "<file>",
+              "description": "Write the file here (default: <id>[-<board>].<format> in the working directory)"
+            }
+          ],
+          "examples": []
+        },
+        {
+          "name": "pages check",
+          "usage": "nexus pages check <id> [<version>]",
+          "description": "Check a design against its design system: colours, font sizes and spacing off its tokens, and text below WCAG AA contrast; it changes nothing",
+          "flags": [],
+          "examples": []
+        }
+      ]
+    },
+    {
+      "name": "design-system",
+      "usage": "nexus design-system <command> [options]",
+      "description": "Nexus Design's design systems: the tokens and notes designs are made with, served with and checked against. The built-in @nexus/brand is the default until you pick another",
+      "flags": [],
+      "examples": [
+        "nexus design-system list",
+        "nexus design-system show",
+        "nexus design-system sync ./web --default",
+        "nexus design-system use acme"
+      ],
+      "subcommands": [
+        {
+          "name": "design-system list",
+          "usage": "nexus design-system list",
+          "description": "The organization's design systems: the built-in @nexus/brand first, and which one new designs use",
+          "flags": [],
+          "examples": []
+        },
+        {
+          "name": "design-system show",
+          "usage": "nexus design-system show [<name>]",
+          "description": "A design system's link tag, tokens (CSS custom properties) and notes; the default without a name",
+          "flags": [],
+          "examples": []
+        },
+        {
+          "name": "design-system sync",
+          "usage": "nexus design-system sync <path> [--name N] [--default]",
+          "description": "Read a repository's tokens (CSS variables, a Tailwind config, tokens.json), its DESIGN.md and its component names into a design system (owners and admins)",
+          "flags": [
+            {
+              "name": "--name",
+              "value": "<N>",
+              "description": "The design system's name (default: the folder's package.json name, else the folder's own)"
+            },
+            {
+              "name": "--default",
+              "description": "Make it the default for new designs too"
+            }
+          ],
+          "examples": []
+        },
+        {
+          "name": "design-system use",
+          "usage": "nexus design-system use <name>",
+          "description": "Make a design system the default for new designs (owners and admins)",
+          "flags": [],
+          "examples": []
+        }
+      ]
+    },
+    {
+      "name": "skills",
+      "usage": "nexus skills <command> [options]",
+      "description": "Your own skills: SKILL.md files, kept in versions that never change; import one, export it unchanged, delete it. Promote one to your organization or a team. It is held until an approver who is not you approves it",
+      "flags": [],
+      "examples": [
+        "nexus skills",
+        "nexus skills import ./pdf-processing",
+        "nexus skills import ./pdf-processing --update",
+        "nexus skills create release-notes",
+        "nexus skills export pdf-processing --out skills",
+        "nexus skills delete pdf-processing --yes",
+        "nexus skills promote pdf-processing --to org --note \"For the whole team\"",
+        "nexus skills promote pdf-processing 2 --to team/web",
+        "nexus skills promotions --state held",
+        "nexus skills promotions spr_…",
+        "nexus skills approve spr_…",
+        "nexus skills refuse spr_… --reason \"Say when to use it in the description\"",
+        "nexus skills withdraw spr_… --all-versions",
+        "nexus skills library"
+      ],
+      "subcommands": [
+        {
+          "name": "skills list",
+          "usage": "nexus skills list",
+          "description": "Your skills, most recently written first: name, latest version and description",
+          "flags": [],
+          "examples": []
+        },
+        {
+          "name": "skills create",
+          "usage": "nexus skills create <name>",
+          "description": "Write a new skill in your editor ($VISUAL or $EDITOR), from a SKILL.md skeleton",
+          "flags": [],
+          "examples": []
+        },
+        {
+          "name": "skills import",
+          "usage": "nexus skills import <path> [--update]",
+          "description": "Add a SKILL.md, or a folder that holds one, as a new skill (version 1); only SKILL.md is sent, and the other files are named; --update writes a new version if you already have a skill of that name, unless the file is already its latest version",
+          "flags": [
+            {
+              "name": "--update",
+              "description": "Write a new version if you already have a skill of that name, unless the file is already its latest version"
+            }
+          ],
+          "examples": []
+        },
+        {
+          "name": "skills export",
+          "usage": "nexus skills export <name|id> [<version>] [--out dir]",
+          "description": "Write a skill's SKILL.md, unchanged, to <dir>/<name>/SKILL.md. The version is a number or latest. A name that a library skill has exports that skill, at an approved version",
+          "flags": [
+            {
+              "name": "--out",
+              "value": "<dir>",
+              "description": "The folder to write <name>/SKILL.md in (default: the working directory; made if it is missing)"
+            }
+          ],
+          "examples": []
+        },
+        {
+          "name": "skills delete",
+          "usage": "nexus skills delete <name|id> --yes",
+          "description": "Delete a skill, every version and its content, for good",
+          "flags": [
+            {
+              "name": "--yes",
+              "description": "Confirm a change that deletes or sends more than one thing"
+            }
+          ],
+          "examples": []
+        },
+        {
+          "name": "skills promote",
+          "usage": "nexus skills promote <name|id> [<version>] --to org|team/<slug> [--note TEXT]",
+          "description": "Ask to promote a version of your skill (default: the latest) to the organization or a team you are in. The request is held until an owner, admin or team lead who is not you approves it",
+          "flags": [
+            {
+              "name": "--to",
+              "value": "<org|team/<slug>>",
+              "description": "Where to promote it: org, or team/<slug> for a team you are in"
+            },
+            {
+              "name": "--note",
+              "value": "<TEXT>",
+              "description": "Why you ask, for the approvers (at most 500 characters)"
+            }
+          ],
+          "examples": []
+        },
+        {
+          "name": "skills promotions",
+          "usage": "nexus skills promotions [--state STATE] [--to TARGET] [--mine] [--limit N] [--cursor C]",
+          "description": "The promotion requests you can see, newest first: your own, and those you may approve. STATE is held, approved, refused or withdrawn",
+          "flags": [
+            {
+              "name": "--state",
+              "value": "<STATE>",
+              "description": "Only requests in this state: held, approved, refused or withdrawn"
+            },
+            {
+              "name": "--to",
+              "value": "<TARGET>",
+              "description": "Only requests to this target: org or team/<slug>"
+            },
+            {
+              "name": "--mine",
+              "description": "Only the promotion requests you made"
+            },
+            {
+              "name": "--limit",
+              "value": "<N>",
+              "description": "Requests per page (1 to 200, default 50)"
+            },
+            {
+              "name": "--cursor",
+              "value": "<C>",
+              "description": "The next page: the cursor the last page printed"
+            }
+          ],
+          "examples": [],
+          "variants": [
+            {
+              "usage": "nexus skills promotions <id>",
+              "description": "One promotion request: who asked and from which version, a diff from the last approved version, and the full text"
+            }
+          ]
+        },
+        {
+          "name": "skills approve",
+          "usage": "nexus skills approve <id> [--reason TEXT]",
+          "description": "Approve a held promotion request, so its version joins the library. Your sign-in decides; an API key cannot",
+          "flags": [
+            {
+              "name": "--reason",
+              "value": "<TEXT>",
+              "description": "Why you approve it, for the author (optional, at most 500 characters)"
+            }
+          ],
+          "examples": []
+        },
+        {
+          "name": "skills refuse",
+          "usage": "nexus skills refuse <id> --reason TEXT",
+          "description": "Refuse a held promotion request; the reason is required, and the author reads it",
+          "flags": [
+            {
+              "name": "--reason",
+              "value": "<TEXT>",
+              "description": "Why you refuse it, for the author (required, at most 500 characters)"
+            }
+          ],
+          "examples": []
+        },
+        {
+          "name": "skills withdraw",
+          "usage": "nexus skills withdraw <id> [--reason TEXT] [--all-versions]",
+          "description": "Withdraw your held request, or (as an owner, admin or team lead) an approved version. --all-versions withdraws every approved version of that skill",
+          "flags": [
+            {
+              "name": "--reason",
+              "value": "<TEXT>",
+              "description": "Why you withdraw it, for the author and the audit log (optional, at most 500 characters)"
+            },
+            {
+              "name": "--all-versions",
+              "description": "Withdraw every approved version of that library skill, not only this one"
+            }
+          ],
+          "examples": []
+        },
+        {
+          "name": "skills library",
+          "usage": "nexus skills library [--to TARGET]",
+          "description": "The skills your organization and teams approved for you to load, with scope and approved version. A name that two skills share is marked duplicate_name",
+          "flags": [
+            {
+              "name": "--to",
+              "value": "<TARGET>",
+              "description": "Only skills promoted to this target: org or team/<slug>"
+            }
+          ],
+          "examples": []
+        }
+      ]
+    },
+    {
+      "name": "org",
+      "usage": "nexus org <command>",
+      "description": "Your organizations (Personal first, then your companies; switch without signing in again) and the organization's settings: how long chat messages are kept and how artifacts may be shared outside it; owners and admins change them. `nexus orgs` is the same command",
+      "flags": [],
+      "examples": [
+        "nexus org",
+        "nexus org switch personal",
+        "nexus org switch acme --json",
+        "nexus org settings",
+        "nexus org settings set artifacts.external named",
+        "nexus org settings set artifacts.external.domains '{\"allow\":[\"partner.example\"],\"deny\":[]}'",
+        "nexus org settings set chatRetentionDays null",
+        "nexus org settings set agentSubscriptions false",
+        "nexus org settings set webSearch.engine borrowed",
+        "nexus org subscription",
+        "nexus org subscription set --payer ada@acme.example --dry-run"
+      ],
+      "subcommands": [
+        {
+          "name": "org list",
+          "usage": "nexus org list",
+          "description": "Your organizations: Personal first, then your companies; the one you are signed in to is marked",
+          "flags": [],
+          "examples": []
+        },
+        {
+          "name": "org waiting",
+          "usage": "nexus org waiting",
+          "description": "Your pending Gateway approvals and waiting cloud sessions, by organization",
+          "flags": [],
+          "examples": []
+        },
+        {
+          "name": "org switch",
+          "usage": "nexus org switch <org>",
+          "description": "Sign in to another of your organizations (its slug, or personal): a new token, saved in your config",
+          "flags": [],
+          "examples": []
+        },
+        {
+          "name": "org settings",
+          "usage": "nexus org settings [list]",
+          "description": "Your organization's settings: each value and its default",
+          "flags": [],
+          "examples": [],
+          "variants": [
+            {
+              "usage": "nexus org settings get <key>",
+              "description": "One setting's value"
+            },
+            {
+              "usage": "nexus org settings set <key> <value>",
+              "description": "Change a setting (owners and admins): a JSON value or a word; null restores the default"
+            }
+          ]
+        },
+        {
+          "name": "org domains",
+          "usage": "nexus org domains [list]",
+          "description": "Your organization's verified email domains and how people on them join (owners and admins)",
+          "flags": [
+            {
+              "name": "--enrollment",
+              "value": "<M>",
+              "description": "How people with a verified email on the domain join: automatic_invitation (the default), automatic_suggestion or manual_invitation"
+            },
+            {
+              "name": "--dry-run",
+              "description": "Show what would change, change nothing"
+            }
+          ],
+          "examples": [],
+          "variants": [
+            {
+              "usage": "nexus org domains add <domain> [--enrollment M] [--dry-run]",
+              "description": "Add a domain you have a verified email on; the sign-in provider invites everyone with a verified email there"
+            },
+            {
+              "usage": "nexus org domains remove <domain> [--dry-run]",
+              "description": "Remove a domain (its name or id); the sign-in provider stops inviting people on it, and who joined stays"
+            }
+          ]
+        },
+        {
+          "name": "org subscription",
+          "usage": "nexus org subscription [show]",
+          "description": "Your organization's subscription: plan, status, payer, billing contact and paid term",
+          "flags": [
+            {
+              "name": "--payer",
+              "value": "<U>",
+              "description": "The member who pays: their email or user id (none clears it)"
+            },
+            {
+              "name": "--billing-contact",
+              "value": "<U>",
+              "description": "The member who receives billing mail: their email or user id (none clears it)"
+            },
+            {
+              "name": "--effective-at",
+              "value": "<T>",
+              "description": "When the change took effect, an ISO 8601 time (default now; never in the future)"
+            },
+            {
+              "name": "--dry-run",
+              "description": "Show what would change, change nothing"
+            }
+          ],
+          "examples": [],
+          "variants": [
+            {
+              "usage": "nexus org subscription set [--payer U] [--billing-contact U] [--effective-at T] [--dry-run]",
+              "description": "Name the payer and the billing contact (owners): a member's id or email, none clears it; Billing sets the plan, term and status"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "policy",
+      "usage": "nexus policy <show|set|test|controls|pause|limit|override|clear|connectors|connector|grants|review-events|agent-writes>",
+      "description": "Model access: allow and deny lists per organization, team and agent, and time-boxed operator controls; a deny always wins. Which connectors the organization's members may use",
+      "flags": [],
+      "examples": [
+        "nexus policy show team/web",
+        "nexus policy set org --deny \"anthropic/claude-fable-*\"",
+        "nexus policy test --agent claude --model claude-haiku-5-5",
+        "nexus policy pause person/usr_123 --reason \"runaway spend\" --expires 12h"
+      ],
+      "subcommands": [
+        {
+          "name": "policy show",
+          "usage": "nexus policy show [org|team/<slug>|agent/<claude|codex>]",
+          "description": "A level's rule, what it inherits, and what it allows",
+          "flags": [],
+          "examples": []
+        },
+        {
+          "name": "policy set",
+          "usage": "nexus policy set <target> --allow a,b --deny c",
+          "description": "Replace a list (--allow all, --deny none clear it); owners and admins",
+          "flags": [
+            {
+              "name": "--allow",
+              "value": "<a,b>",
+              "description": "Allowed model patterns, comma-separated (all clears the list)"
+            },
+            {
+              "name": "--deny",
+              "value": "<c>",
+              "description": "Denied model patterns, comma-separated (none clears the list)"
+            },
+            {
+              "name": "--default",
+              "value": "<m>",
+              "description": "The default model"
+            },
+            {
+              "name": "--from",
+              "value": "<rule.yaml>",
+              "description": "A whole rule from a YAML or JSON file"
+            },
+            {
+              "name": "--clear",
+              "description": "Remove the level's own rule"
+            }
+          ],
+          "examples": [],
+          "variants": [
+            {
+              "usage": "nexus policy set <target> --default m",
+              "description": "The default for nexus/auto (an agent's default for agent/…)"
+            },
+            {
+              "usage": "nexus policy set <target> --from rule.yaml | --clear",
+              "description": "A whole rule from a file, or remove the level's rule"
+            }
+          ]
+        },
+        {
+          "name": "policy test",
+          "usage": "nexus policy test [--model m] [--as who] [--team T] [--agent a]",
+          "description": "Would it be allowed, and by which rule (exit 1 if refused)",
+          "flags": [
+            {
+              "name": "--model",
+              "value": "<m>",
+              "description": "A model (provider/model, or auto)"
+            },
+            {
+              "name": "--as",
+              "value": "<who>",
+              "description": "Test as this person (email or user id)"
+            },
+            {
+              "name": "--team",
+              "value": "<T>",
+              "description": "Test as a member of this team"
+            },
+            {
+              "name": "--agent",
+              "value": "<a>",
+              "description": "Test for a coding agent (claude or codex)"
+            }
+          ],
+          "examples": [],
+          "exitCodes": [
+            {
+              "code": 0,
+              "meaning": "Allowed"
+            },
+            {
+              "code": 1,
+              "meaning": "Refused"
+            }
+          ]
+        },
+        {
+          "name": "policy controls",
+          "usage": "nexus policy controls [--team <slug>]",
+          "description": "The operator controls in force that apply to you (all of them for owners and admins), or a team's with --team",
+          "flags": [
+            {
+              "name": "--team",
+              "value": "<slug>",
+              "description": "Act through this team: a lead may pause or limit it, or a person or key in it or in a team under it"
+            }
+          ],
+          "examples": []
+        },
+        {
+          "name": "policy pause",
+          "usage": "nexus policy pause <org|team/<slug>|person/<id>|key/<id>> --reason r --expires 12h [--team <slug>]",
+          "description": "Stop model traffic for a target until it expires; owners and admins, or a team lead with --team",
+          "flags": [
+            {
+              "name": "--reason",
+              "value": "<r>",
+              "description": "Why the control is needed; the audit log and the people it applies to can read it"
+            },
+            {
+              "name": "--expires",
+              "value": "<12h>",
+              "description": "How long the control stays in force: 30d, 12h or a number of days"
+            },
+            {
+              "name": "--team",
+              "value": "<slug>",
+              "description": "Act through this team: a lead may pause or limit it, or a person or key in it or in a team under it"
+            }
+          ],
+          "examples": []
+        },
+        {
+          "name": "policy limit",
+          "usage": "nexus policy limit <target> --models a,b --reason r --expires 12h [--team <slug>]",
+          "description": "Narrow a target to these models until it expires; owners and admins, or a team lead with --team",
+          "flags": [
+            {
+              "name": "--models",
+              "value": "<a,b>",
+              "description": "The models a limit narrows to, or an override allows, comma-separated"
+            },
+            {
+              "name": "--reason",
+              "value": "<r>",
+              "description": "Why the control is needed; the audit log and the people it applies to can read it"
+            },
+            {
+              "name": "--expires",
+              "value": "<12h>",
+              "description": "How long the control stays in force: 30d, 12h or a number of days"
+            },
+            {
+              "name": "--team",
+              "value": "<slug>",
+              "description": "Act through this team: a lead may pause or limit it, or a person or key in it or in a team under it"
+            }
+          ],
+          "examples": []
+        },
+        {
+          "name": "policy override",
+          "usage": "nexus policy override <target> --models a,b --reason r --expires 12h",
+          "description": "Allow these models past a deny until it expires; owners and admins",
+          "flags": [
+            {
+              "name": "--models",
+              "value": "<a,b>",
+              "description": "The models a limit narrows to, or an override allows, comma-separated"
+            },
+            {
+              "name": "--reason",
+              "value": "<r>",
+              "description": "Why the control is needed; the audit log and the people it applies to can read it"
+            },
+            {
+              "name": "--expires",
+              "value": "<12h>",
+              "description": "How long the control stays in force: 30d, 12h or a number of days"
+            }
+          ],
+          "examples": []
+        },
+        {
+          "name": "policy clear",
+          "usage": "nexus policy clear <control-id> [--team <slug>]",
+          "description": "Take a control out of force; owners and admins, or a team lead with --team",
+          "flags": [
+            {
+              "name": "--team",
+              "value": "<slug>",
+              "description": "Act through this team: a lead may pause or limit it, or a person or key in it or in a team under it"
+            }
+          ],
+          "examples": []
+        },
+        {
+          "name": "policy connectors",
+          "usage": "nexus policy connectors",
+          "description": "Which connectors your organization's members may use",
+          "flags": [],
+          "examples": []
+        },
+        {
+          "name": "policy connector",
+          "usage": "nexus policy connector <name> <disabled|available|enabled_for_all> [--teams a,b]",
+          "description": "Choose who may use a connector; owners and admins",
+          "flags": [
+            {
+              "name": "--teams",
+              "value": "<a,b>",
+              "description": "Only these teams' members and the teams under them, comma-separated slugs (default: everyone)"
+            }
+          ],
+          "examples": []
+        },
+        {
+          "name": "policy grants",
+          "usage": "nexus policy grants [list]",
+          "description": "The connector writes each module may make (write grants), and what may be granted",
+          "flags": [
+            {
+              "name": "--connector",
+              "value": "<c>",
+              "description": "The connector the grants are for (github; the default with --for-mode)"
+            },
+            {
+              "name": "--actions",
+              "value": "<a,b>",
+              "description": "The writes the module holds, in full, comma-separated (empty revokes them all)"
+            },
+            {
+              "name": "--for-mode",
+              "value": "<shadow|comment|comment_and_check>",
+              "description": "Grant Nexus Review exactly what this mode needs: shadow none, comment pull_review, comment_and_check pull_review,check_run"
+            }
+          ],
+          "examples": [],
+          "variants": [
+            {
+              "usage": "nexus policy grants set <product/capability> --connector c --actions a,b",
+              "description": "Set a module's granted writes of one connector, in full (an empty --actions revokes them); owners and admins"
+            },
+            {
+              "usage": "nexus policy grants set robustness/review --for-mode <shadow|comment|comment_and_check>",
+              "description": "Grant Nexus Review exactly what the mode needs, and revoke the rest; owners and admins"
+            }
+          ]
+        },
+        {
+          "name": "policy review-events",
+          "usage": "nexus policy review-events [show]",
+          "description": "Which review events a module may post on pull requests: comment, request_changes or full (the default)",
+          "flags": [],
+          "examples": [],
+          "variants": [
+            {
+              "usage": "nexus policy review-events set <comment|request_changes|full>",
+              "description": "Choose whether modules may request changes and approve; owners and admins"
+            }
+          ]
+        },
+        {
+          "name": "policy agent-writes",
+          "usage": "nexus policy agent-writes [show]",
+          "description": "Whether your agents make your organization's allowed connector writes without a confirmation in Nexus",
+          "flags": [],
+          "examples": [],
+          "variants": [
+            {
+              "usage": "nexus policy agent-writes <on|off>",
+              "description": "Turn your agents' writes on or off; only you, from your own sign-in, never an agent link"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "members",
+      "usage": "nexus members <command> [options]",
+      "description": "Everyone in your organization, who has not joined yet, and invitations",
+      "examples": [
+        "nexus members",
+        "nexus members invite ada@acme.example --dry-run",
+        "nexus members invite --pending --yes"
+      ],
+      "flags": [],
+      "subcommands": [
+        {
+          "name": "members list",
+          "usage": "nexus members list",
+          "description": "Everyone in your organization, by role",
+          "flags": [],
+          "examples": []
+        },
+        {
+          "name": "members pending",
+          "usage": "nexus members pending [--team T]",
+          "description": "People in teams by email who have not joined yet (owners and admins)",
+          "flags": [
+            {
+              "name": "--team",
+              "value": "<T>",
+              "description": "Only people pending in this team"
+            }
+          ],
+          "examples": []
+        },
+        {
+          "name": "members invite",
+          "usage": "nexus members invite <email…> [--role admin] [--dry-run] [--yes]",
+          "description": "Invite people by email; the sign-in provider sends each one (owners and admins)",
+          "flags": [
+            {
+              "name": "--role",
+              "value": "<admin>",
+              "description": "The role to invite as (member or admin)"
+            },
+            {
+              "name": "--dry-run",
+              "description": "Show what would change, change nothing"
+            },
+            {
+              "name": "--yes",
+              "description": "Confirm a change that deletes or sends more than one thing"
+            },
+            {
+              "name": "--pending",
+              "description": "Everyone added to a team by email who has not joined yet"
+            }
+          ],
+          "examples": [],
+          "variants": [
+            {
+              "usage": "nexus members invite --pending [--dry-run] [--yes]",
+              "description": "Invite everyone in a team by email who has not joined yet"
+            }
+          ]
+        },
+        {
+          "name": "members remove",
+          "usage": "nexus members remove <email|userId> [--dry-run] [--yes]",
+          "description": "Remove someone from the organization; recoverable for 30 days (owners and admins)",
+          "flags": [
+            {
+              "name": "--dry-run",
+              "description": "Show what would change, change nothing"
+            },
+            {
+              "name": "--yes",
+              "description": "Confirm a change that deletes or sends more than one thing"
+            }
+          ],
+          "examples": []
+        },
+        {
+          "name": "members removed",
+          "usage": "nexus members removed",
+          "description": "Removed members, and until when each can be recovered (owners and admins)",
+          "flags": [],
+          "examples": []
+        },
+        {
+          "name": "members recover",
+          "usage": "nexus members recover <userId> [--dry-run]",
+          "description": "Bring back a removed member with their teams, inside 30 days (owners and admins)",
+          "flags": [
+            {
+              "name": "--dry-run",
+              "description": "Show what would change, change nothing"
+            }
+          ],
+          "examples": []
+        }
+      ]
+    },
+    {
+      "name": "audit",
+      "usage": "nexus audit [options]",
+      "description": "Who changed what in your organization, from where, newest first",
+      "flags": [
+        {
+          "name": "--since",
+          "value": "<7d>",
+          "description": "From this long ago (30m, 24h, 7d, 2w) or an ISO time; default 7d"
+        },
+        {
+          "name": "--until",
+          "value": "<time>",
+          "description": "Up to this time"
+        },
+        {
+          "name": "--action",
+          "value": "<a>",
+          "description": "An action (team.moved), a list (a,b) or a prefix (team.*)"
+        },
+        {
+          "name": "--actor",
+          "value": "<email>",
+          "description": "Changes made by this person (email or user id)"
+        },
+        {
+          "name": "--team",
+          "value": "<slug>",
+          "description": "Changes to this team and the teams under it"
+        },
+        {
+          "name": "--target",
+          "value": "<id>",
+          "description": "Changes to this target (id or slug)"
+        },
+        {
+          "name": "--limit",
+          "value": "<n>",
+          "description": "Events per page (1 to 500, default 50); --cursor <c> for the next page"
+        },
+        {
+          "name": "--csv",
+          "description": "Every matching event as CSV on stdout (owners, admins and team leads)"
+        }
+      ],
+      "examples": [
+        "nexus audit --since 24h",
+        "nexus audit --action 'team.*' --json",
+        "nexus audit --csv > audit.csv"
+      ]
+    },
+    {
+      "name": "search",
+      "usage": "nexus search \"<query>\" [--type chats|artifacts|people|teams|models] [--limit N] [--json]",
+      "description": "Search what your role may read, grouped and ranked: your own chats (titles and messages), artifacts shared with or by you, people, teams, models and model policies",
+      "examples": [
+        "nexus search \"deploy checklist\"",
+        "nexus search ada --type people",
+        "nexus search fly --type chats --limit 10 --json"
+      ],
+      "flags": [
+        {
+          "name": "--type",
+          "value": "<chats|artifacts|people|teams|models>",
+          "description": "chats, artifacts, people, teams or models; comma-separated for several (default: all)"
+        },
+        {
+          "name": "--limit",
+          "value": "<N>",
+          "description": "Results per type, 1 to 20 (default 5)"
+        },
+        {
+          "name": "--json",
+          "description": "Print only JSON on stdout"
+        }
+      ]
+    },
+    {
+      "name": "budgets",
+      "usage": "nexus budgets <command> [options]",
+      "description": "Monthly spend limits per person (UTC calendar month): the organization's default and each person's override; a call that would go over is refused",
+      "flags": [],
+      "examples": [
+        "nexus budgets",
+        "nexus budgets default 50",
+        "nexus budgets set ada@acme.example 100",
+        "nexus budgets set ada@acme.example default",
+        "nexus budgets show me --json",
+        "nexus budgets managers add bo@acme.example"
+      ],
+      "subcommands": [
+        {
+          "name": "budgets list",
+          "usage": "nexus budgets list",
+          "description": "This month's spend limits: the organization's default per person, and each person's limit, spend, what is left and who is at their limit",
+          "flags": [],
+          "examples": []
+        },
+        {
+          "name": "budgets show",
+          "usage": "nexus budgets show <email|userId|me>",
+          "description": "One person's month: their limit and where it comes from, spend and what is left",
+          "flags": [],
+          "examples": []
+        },
+        {
+          "name": "budgets default",
+          "usage": "nexus budgets default <amount|none>",
+          "description": "Set the organization's default monthly limit per person, in USD; none clears it (owners)",
+          "flags": [],
+          "examples": []
+        },
+        {
+          "name": "budgets set",
+          "usage": "nexus budgets set <email|userId> <amount|default>",
+          "description": "Set one person's monthly limit, above or below the default; default removes it (owners, and admins an owner allows; an owner's limit: owners)",
+          "flags": [],
+          "examples": []
+        },
+        {
+          "name": "budgets managers",
+          "usage": "nexus budgets managers [list]",
+          "description": "Who may set person limits: every owner, and each admin an owner allowed",
+          "flags": [],
+          "examples": [],
+          "variants": [
+            {
+              "usage": "nexus budgets managers add <email|userId>",
+              "description": "Allow an admin to set person limits (owners)"
+            },
+            {
+              "usage": "nexus budgets managers remove <email|userId>",
+              "description": "Stop an admin from setting person limits (owners)"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "billing",
+      "usage": "nexus billing <command> [options]",
+      "description": "Your organization's billing (owners): the card on file through Stripe Checkout, the free start, Nexus credits and their auto top-up, paying after the fact up to a monthly usage limit, the receipts, an unpaid month and when model calls stop for it, the monthly statements and Stripe's billing portal",
+      "flags": [],
+      "examples": [
+        "nexus billing",
+        "nexus billing card add",
+        "nexus billing credits buy 10",
+        "nexus billing auto-topup set --below 10 --add 50",
+        "nexus billing after-the-fact on --limit 50",
+        "nexus billing receipts",
+        "nexus billing statement --period 2026-09",
+        "nexus billing statements --json",
+        "nexus billing portal"
+      ],
+      "subcommands": [
+        {
+          "name": "billing show",
+          "usage": "nexus billing show",
+          "description": "The Stripe mode, the card on file, the free start left, Nexus credits, paying after the fact, Nexus's rate, and an unpaid month with the time model calls stop",
+          "flags": [],
+          "examples": []
+        },
+        {
+          "name": "billing card",
+          "usage": "nexus billing card add [--no-browser] [--no-wait]",
+          "description": "Add or replace the card through Stripe Checkout, then wait until Stripe saves it (up to 10 minutes)",
+          "flags": [
+            {
+              "name": "--no-browser",
+              "description": "Only print the Stripe Checkout link; do not open a browser"
+            },
+            {
+              "name": "--no-wait",
+              "description": "Print the link and return without waiting for the card"
+            }
+          ],
+          "examples": []
+        },
+        {
+          "name": "billing statement",
+          "usage": "nexus billing statement [--period YYYY-MM]",
+          "description": "One month's bill: each charge, the total and what is charged (default: this month so far)",
+          "flags": [
+            {
+              "name": "--period",
+              "value": "<YYYY-MM>",
+              "description": "The month, as YYYY-MM in UTC (default: this month so far)"
+            }
+          ],
+          "examples": []
+        },
+        {
+          "name": "billing statements",
+          "usage": "nexus billing statements",
+          "description": "The closed months, newest first: the total, the invoice's state and its page on Stripe",
+          "flags": [],
+          "examples": []
+        },
+        {
+          "name": "billing receipts",
+          "usage": "nexus billing receipts",
+          "description": "Every payment, newest first: its date, what it paid for, its amount, its status and its id",
+          "flags": [
+            {
+              "name": "--no-browser",
+              "description": "Only print the receipt link; do not open a browser"
+            }
+          ],
+          "examples": [],
+          "variants": [
+            {
+              "usage": "nexus billing receipts open <paymentId> [--no-browser]",
+              "description": "Open Stripe's receipt of one payment"
+            }
+          ]
+        },
+        {
+          "name": "billing portal",
+          "usage": "nexus billing portal [--no-browser]",
+          "description": "Open Stripe's billing portal: cards, invoices and tax ids",
+          "flags": [
+            {
+              "name": "--no-browser",
+              "description": "Only print the portal link; do not open a browser"
+            }
+          ],
+          "examples": []
+        },
+        {
+          "name": "billing confirm",
+          "usage": "nexus billing confirm [--no-browser]",
+          "description": "Confirm a charge the bank wants the cardholder to confirm (3-D Secure) on the bank's page: the same charge, not a new one",
+          "flags": [
+            {
+              "name": "--no-browser",
+              "description": "Only print the bank's page; do not open a browser"
+            }
+          ],
+          "examples": []
+        },
+        {
+          "name": "billing credits",
+          "usage": "nexus billing credits",
+          "description": "Nexus credits: what is left, bought, spent and held. Nexus-run AI spends them after the free start",
+          "flags": [
+            {
+              "name": "--payment-token-stdin",
+              "description": "Read the agent wallet's Stripe shared payment token (spt_) from stdin; no browser or saved card needed"
+            },
+            {
+              "name": "--dry-run",
+              "description": "Say what `credits buy` would charge, and charge nothing"
+            },
+            {
+              "name": "--no-browser",
+              "description": "Only print the Stripe Checkout link; do not open a browser"
+            },
+            {
+              "name": "--no-wait",
+              "description": "Return without waiting for Stripe to take the payment"
+            }
+          ],
+          "examples": [],
+          "variants": [
+            {
+              "usage": "nexus billing credits buy <usd> [--payment-token-stdin] [--dry-run] [--no-browser] [--no-wait]",
+              "description": "Buy Nexus credits (from $25): a delegated Stripe payment token from stdin, the payment method on file, or Stripe Checkout"
+            }
+          ]
+        },
+        {
+          "name": "billing auto-topup",
+          "usage": "nexus billing auto-topup",
+          "description": "Auto top-up of Nexus credits: on or off, its line, its amount and today's top-ups",
+          "flags": [
+            {
+              "name": "--below",
+              "value": "<usd>",
+              "description": "Top up when the credits left fall below this many dollars"
+            },
+            {
+              "name": "--add",
+              "value": "<usd>",
+              "description": "Dollars one top-up buys, from 10 to 500"
+            },
+            {
+              "name": "--dry-run",
+              "description": "Say what would change, and change nothing"
+            }
+          ],
+          "examples": [],
+          "variants": [
+            {
+              "usage": "nexus billing auto-topup set --below <usd> --add <usd> [--dry-run]",
+              "description": "Turn it on: when credits fall below --below, Nexus adds --add ($25 to $500) with the payment method on file"
+            },
+            {
+              "usage": "nexus billing auto-topup off [--dry-run]",
+              "description": "Turn auto top-up off"
+            }
+          ]
+        },
+        {
+          "name": "billing after-the-fact",
+          "usage": "nexus billing after-the-fact",
+          "description": "Paying after the fact: on or off, the monthly usage limit, what the card was used for this month, what is owed and a failed charge",
+          "flags": [
+            {
+              "name": "--limit",
+              "value": "<usd>",
+              "description": "The monthly usage limit in dollars (default 25)"
+            },
+            {
+              "name": "--dry-run",
+              "description": "Say what would change, and change nothing"
+            }
+          ],
+          "examples": [],
+          "variants": [
+            {
+              "usage": "nexus billing after-the-fact on [--limit <usd>] [--dry-run]",
+              "description": "Turn it on: the card on file pays for Nexus-run AI after the free start and the credits, charged each $25 of unpaid usage, up to the limit a month (default $25)"
+            },
+            {
+              "usage": "nexus billing after-the-fact off [--dry-run]",
+              "description": "Turn paying after the fact off"
+            },
+            {
+              "usage": "nexus billing after-the-fact limit <usd> [--dry-run]",
+              "description": "Set the monthly usage limit; paying after the fact stays on or off as it is"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "service-accounts",
+      "usage": "nexus service-accounts <command> [options]",
+      "description": "Service accounts (owners and admins): callers for CI and scripts that are no member and hold no seat. Each holds keys (nxsa_…) that you issue, rotate and revoke; a token is shown once",
+      "flags": [],
+      "examples": [
+        "nexus service-accounts",
+        "nexus service-accounts create --name ci --team web --expires 90d --dry-run",
+        "nexus service-accounts create --name ci --team web --expires 2027-01-31",
+        "nexus service-accounts keys create sva_… --label github-actions",
+        "nexus service-accounts keys rotate sva_… sak_…",
+        "nexus service-accounts revoke sva_… --dry-run"
+      ],
+      "subcommands": [
+        {
+          "name": "service-accounts list",
+          "usage": "nexus service-accounts list",
+          "description": "The organization's service accounts and their keys (owners and admins)",
+          "flags": [],
+          "examples": []
+        },
+        {
+          "name": "service-accounts create",
+          "usage": "nexus service-accounts create --name <name> --team <slug> [--owner <user-id>] --expires <YYYY-MM-DD|30d> [--dry-run]",
+          "description": "Create a service account: a caller for CI and scripts that is no member and holds no seat (owners and admins)",
+          "flags": [
+            {
+              "name": "--name",
+              "value": "<name>",
+              "description": "The service account's name (1 to 64 characters)"
+            },
+            {
+              "name": "--team",
+              "value": "<slug>",
+              "description": "The team that owns it, by slug or id: its keys stop when the team is deleted"
+            },
+            {
+              "name": "--owner",
+              "value": "<user-id>",
+              "description": "The member who answers for it, by user id (default: you): its keys stop when they leave the organization"
+            },
+            {
+              "name": "--expires",
+              "value": "<YYYY-MM-DD|30d>",
+              "description": "When it stops working: a day (YYYY-MM-DD, UTC, the whole day) or a duration (30d, 12h or a number of days); at most 365 days from now"
+            },
+            {
+              "name": "--dry-run",
+              "description": "Show what would change, change nothing"
+            }
+          ],
+          "examples": []
+        },
+        {
+          "name": "service-accounts revoke",
+          "usage": "nexus service-accounts revoke <id> [--dry-run]",
+          "description": "Revoke a service account and stop every live key it holds (owners and admins)",
+          "flags": [
+            {
+              "name": "--dry-run",
+              "description": "Show what would change, change nothing"
+            }
+          ],
+          "examples": []
+        },
+        {
+          "name": "service-accounts keys create",
+          "usage": "nexus service-accounts keys create <account id> --label <label> [--expires <YYYY-MM-DD|30d>]",
+          "description": "Issue a key for a service account: its token (nxsa_…) is shown once",
+          "flags": [
+            {
+              "name": "--label",
+              "value": "<label>",
+              "description": "A name for the key (1 to 80 characters), to tell keys apart"
+            },
+            {
+              "name": "--expires",
+              "value": "<YYYY-MM-DD|30d>",
+              "description": "When the key stops working: a day or a duration, as for the account, and not past the account's own (default: 90 days from now)"
+            }
+          ],
+          "examples": []
+        },
+        {
+          "name": "service-accounts keys rotate",
+          "usage": "nexus service-accounts keys rotate <account id> <key id> [--label <label>] [--expires <YYYY-MM-DD|30d>]",
+          "description": "Issue a new key in place of one and stop the old one at once: it keeps the label and lifetime unless you set them; the new token is shown once",
+          "flags": [
+            {
+              "name": "--label",
+              "value": "<label>",
+              "description": "A name for the new key (1 to 80 characters); the old key's name by default"
+            },
+            {
+              "name": "--expires",
+              "value": "<YYYY-MM-DD|30d>",
+              "description": "When the new key stops working: a day or a duration, as for the account, and not past the account's own (default: as long as the old key lived)"
+            }
+          ],
+          "examples": []
+        },
+        {
+          "name": "service-accounts keys revoke",
+          "usage": "nexus service-accounts keys revoke <account id> <key id>",
+          "description": "Revoke one key at once",
+          "flags": [],
+          "examples": []
+        }
+      ]
+    },
+    {
+      "name": "slack",
+      "usage": "nexus slack <command> [options]",
+      "description": "The Nexus Slack app (owners and admins): bind a Slack workspace to your organization through Slack's install. Only the person who started an install confirms it, and a workspace binds to one organization at a time. A channel binds to a team: in a bound channel, @nexus attributes each call to that team, under its policy and caps; a team lead binds a channel to a team they lead",
+      "flags": [],
+      "examples": [
+        "nexus slack connect",
+        "nexus slack connect --confirm chw_… --dry-run",
+        "nexus slack connect --confirm chw_…",
+        "nexus slack status --json",
+        "nexus slack disconnect chw_… --dry-run",
+        "nexus slack channel list chw_…",
+        "nexus slack channel bind chw_… C0123ABCD --team web",
+        "nexus slack channel unbind chw_… C0123ABCD --json"
+      ],
+      "subcommands": [
+        {
+          "name": "slack connect",
+          "usage": "nexus slack connect [--confirm <install-id>] [--dry-run]",
+          "description": "Connect a Slack workspace: print Slack's install link; approve the app in the browser where you are signed in to Nexus UI, which completes the install; then --confirm binds that workspace to this organization (owners and admins)",
+          "flags": [
+            {
+              "name": "--confirm",
+              "value": "<install-id>",
+              "description": "The install id (chw_…) that nexus slack connect printed: binds its workspace once you approved the app in Slack"
+            },
+            {
+              "name": "--dry-run",
+              "description": "Show what would change, change nothing"
+            }
+          ],
+          "examples": []
+        },
+        {
+          "name": "slack status",
+          "usage": "nexus slack status",
+          "description": "The organization's Slack workspaces, pending and active (owners and admins)",
+          "flags": [],
+          "examples": []
+        },
+        {
+          "name": "slack disconnect",
+          "usage": "nexus slack disconnect <id> [--dry-run]",
+          "description": "Unbind a workspace: Gateway uninstalls the app from it and deletes its bot token, unless another binding of the organization still uses it (owners and admins)",
+          "flags": [
+            {
+              "name": "--dry-run",
+              "description": "Show what would change, change nothing"
+            }
+          ],
+          "examples": []
+        },
+        {
+          "name": "slack channel list",
+          "usage": "nexus slack channel list <workspace id>",
+          "description": "The workspace's channels bound to a team (owners and admins: every one; a lead: those of the teams they lead)",
+          "flags": [],
+          "examples": []
+        },
+        {
+          "name": "slack channel bind",
+          "usage": "nexus slack channel bind <workspace id> <channel id> --team <slug>",
+          "description": "Bind a channel to a team: its calls go to that team, under its policy and caps (owners and admins: any team; a lead: a team they lead)",
+          "flags": [
+            {
+              "name": "--team",
+              "value": "<slug>",
+              "description": "The team the channel's calls go to, by slug or id (a lead: a team they lead or one under it)"
+            }
+          ],
+          "examples": []
+        },
+        {
+          "name": "slack channel unbind",
+          "usage": "nexus slack channel unbind <workspace id> <channel id>",
+          "description": "Unbind a channel from its team",
+          "flags": [],
+          "examples": []
+        }
+      ]
+    },
+    {
+      "name": "spend",
+      "usage": "nexus spend [calls] [--by team|person|model|provider|key|product|day] [--from D] [--to D] [--team T] [--person P] [--model M] [--provider P] [--product P] [--status S] [--session S] [--limit N] [--cursor C] [--csv | --jsonl] [--out F]",
+      "description": "Budget and spend by product and capability, or by team; spend calls lists each model call, and --csv or --jsonl writes them to a file",
+      "examples": [
+        "nexus spend",
+        "nexus spend --by team --json",
+        "nexus spend calls --team web --status failed",
+        "nexus spend --csv --from 2026-10-01 > calls.csv",
+        "nexus spend --jsonl --out calls.jsonl"
+      ],
+      "flags": [
+        {
+          "name": "--by",
+          "value": "<team|person|model|provider|key|product|day>",
+          "description": "Show the analytics table grouped by team, person, model, provider, key, product or day"
+        },
+        {
+          "name": "--from",
+          "value": "<D>",
+          "description": "With --by, calls, --csv or --jsonl: from this day (YYYY-MM-DD, UTC; at most 366 days in all)"
+        },
+        {
+          "name": "--to",
+          "value": "<D>",
+          "description": "With --by, calls, --csv or --jsonl: until this day, included (YYYY-MM-DD, UTC)"
+        },
+        {
+          "name": "--team",
+          "value": "<T>",
+          "description": "With --by, calls, --csv or --jsonl: only this team and the teams under it; with calls or a file, unassigned for calls with no team"
+        },
+        {
+          "name": "--person",
+          "value": "<P>",
+          "description": "With calls, --csv or --jsonl: only this person's calls (a user id)"
+        },
+        {
+          "name": "--model",
+          "value": "<M>",
+          "description": "With calls, --csv or --jsonl: only this model; - for calls with none"
+        },
+        {
+          "name": "--provider",
+          "value": "<P>",
+          "description": "With calls, --csv or --jsonl: only this provider; - for calls with none"
+        },
+        {
+          "name": "--product",
+          "value": "<P>",
+          "description": "With calls, --csv or --jsonl: only this product, or product/capability (Analytics' key)"
+        },
+        {
+          "name": "--status",
+          "value": "<S>",
+          "description": "With calls, --csv or --jsonl: only these statuses, comma-separated: settled, failed, refused, released"
+        },
+        {
+          "name": "--session",
+          "value": "<S>",
+          "description": "With calls, --csv or --jsonl: only this agent or chat session's calls (its id)"
+        },
+        {
+          "name": "--limit",
+          "value": "<N>",
+          "description": "With calls: at most this many calls on a page (1 to 500, default 50)"
+        },
+        {
+          "name": "--cursor",
+          "value": "<C>",
+          "description": "With calls, --csv or --jsonl: the next page of calls, or where a stopped file continues (its manifest's nextCursor)"
+        },
+        {
+          "name": "--csv",
+          "description": "Write the matching calls as CSV, at most 100,000 rows a file; its manifest (rows, nextCursor for the rest) is in the audit log"
+        },
+        {
+          "name": "--jsonl",
+          "description": "Write the matching calls as JSON Lines, at most 100,000 rows a file; its last line is the manifest"
+        },
+        {
+          "name": "--out",
+          "value": "<F>",
+          "description": "With --csv or --jsonl: write the file here instead of stdout"
+        }
+      ]
+    },
+    {
+      "name": "modules",
+      "usage": "nexus modules",
+      "description": "Registered products and capabilities (their commands: nexus <product> --help)",
+      "examples": [
+        "nexus modules --json"
+      ],
+      "flags": []
+    },
+    {
+      "name": "connectors",
+      "usage": "nexus connectors",
+      "description": "Connectors Gateway offers, with their read and write operations",
+      "examples": [
+        "nexus connectors --json"
+      ],
+      "flags": []
+    },
+    {
+      "name": "connections",
+      "usage": "nexus connections",
+      "description": "Your accounts at a connector's vendor, and the organization's: who it says you are there, and whether it needs a reconnect",
+      "examples": [
+        "nexus connections",
+        "nexus connections --json"
+      ],
+      "flags": []
+    },
+    {
+      "name": "connect",
+      "usage": "nexus connect <connector> [--org] [--write] [field=value ...]",
+      "description": "Connect an account at a connector's vendor: the fields its form takes (a value of - reads stdin for one field, and @<file> reads a file only you can read, so a secret stays out of your shell history), or with none, the OAuth link to open. --org connects the organization's (owners and admins); --write asks for the write access a write refused with write_consent_required needs",
+      "examples": [
+        "echo \"$JIRA_TOKEN\" | nexus connect jira site=acme.atlassian.net email=ada@acme.example token=-",
+        "nexus connect notion",
+        "nexus connect microsoft-todo --write",
+        "nexus connect jira --org site=acme.atlassian.net email=ada@acme.example token=-",
+        "echo \"$DD_API_KEY\" | nexus connect datadog --org site=datadoghq.com api_key=- application_key=@dd-app.key"
+      ],
+      "flags": [
+        {
+          "name": "--org",
+          "description": "The organization's account, not your own (owners and admins)"
+        },
+        {
+          "name": "--write",
+          "description": "Allow writes: the OAuth link asks the vendor for the write scopes, not only the reads"
+        }
+      ]
+    },
+    {
+      "name": "disconnect",
+      "usage": "nexus disconnect <connector> <account> [--org]",
+      "description": "Disconnect an account by its id, name or host. --org disconnects the organization's (owners and admins)",
+      "examples": [
+        "nexus disconnect jira acme.atlassian.net",
+        "nexus disconnect notion Acme --org"
+      ],
+      "flags": [
+        {
+          "name": "--org",
+          "description": "The organization's account, not your own (owners and admins)"
+        }
+      ]
+    },
+    {
+      "name": "triage",
+      "usage": "nexus triage [claude|codex] | nexus triage send <file> --yes",
+      "description": "Nexus staff: start an agent that reads this computer's Nexus files, diagnoses a Nexus defect and drafts a report. Send the report you approved to the Nexus team, with your name and email",
+      "flags": [],
+      "examples": [
+        "nexus triage",
+        "nexus triage codex",
+        "nexus triage send report.md --yes"
+      ],
+      "subcommands": [
+        {
+          "name": "triage send",
+          "usage": "nexus triage send <file> --yes",
+          "description": "Post an approved report to the Nexus team, with your name and email",
+          "flags": [
+            {
+              "name": "--yes",
+              "description": "Confirm a change that deletes or sends more than one thing"
+            }
+          ],
+          "examples": []
+        }
+      ]
+    },
+    {
+      "name": "machines",
+      "usage": "nexus machines [list|show|sleep] [<id>]",
+      "description": "Your cloud machines in this organization, one per cloud session: their state, size and why one sleeps. Put one to sleep; the app wakes it when you use the session",
+      "flags": [],
+      "examples": [
+        "nexus machines",
+        "nexus machines show cm_…",
+        "nexus machines sleep cm_…",
+        "nexus machines --json"
+      ],
+      "subcommands": [
+        {
+          "name": "machines list",
+          "usage": "nexus machines list",
+          "description": "Your live cloud machines, one per cloud session, newest first (also plain nexus machines)",
+          "flags": [],
+          "examples": []
+        },
+        {
+          "name": "machines show",
+          "usage": "nexus machines show <id>",
+          "description": "One machine: its session, state, size and why it sleeps",
+          "flags": [],
+          "examples": []
+        },
+        {
+          "name": "machines sleep",
+          "usage": "nexus machines sleep <id>",
+          "description": "Put a machine to sleep: its disk is kept and its running time stops; the app wakes it when you use the session",
+          "flags": [],
+          "examples": []
+        }
+      ]
+    },
+    {
+      "name": "notifications",
+      "usage": "nexus notifications [list|read|done|kinds] [<id>]",
+      "description": "Your inbox in this organization, as Nexus UI's notifications page shows it: the items not yet done, newest first. Mark an item read, or done to clear it",
+      "flags": [],
+      "examples": [
+        "nexus notifications",
+        "nexus notifications list --unread --group usage_and_billing",
+        "nexus notifications done ntf_…",
+        "nexus notifications kinds --json"
+      ],
+      "subcommands": [
+        {
+          "name": "notifications list",
+          "usage": "nexus notifications list [--unread] [--group G] [--cursor C]",
+          "description": "Your items not yet done, newest first (also plain nexus notifications); --unread: only those not yet read",
+          "flags": [
+            {
+              "name": "--unread",
+              "description": "Only items not yet read"
+            },
+            {
+              "name": "--group",
+              "value": "<G>",
+              "description": "Only this group's items: my_sessions, usage_and_billing, requests_and_approvals, automations_and_integrations or account_and_security"
+            },
+            {
+              "name": "--cursor",
+              "value": "<C>",
+              "description": "The next page: the cursor the list printed last"
+            }
+          ],
+          "examples": []
+        },
+        {
+          "name": "notifications read",
+          "usage": "nexus notifications read <id>",
+          "description": "Mark an item read",
+          "flags": [],
+          "examples": []
+        },
+        {
+          "name": "notifications done",
+          "usage": "nexus notifications done <id>",
+          "description": "Mark an item done, and read: it leaves your inbox",
+          "flags": [],
+          "examples": []
+        },
+        {
+          "name": "notifications kinds",
+          "usage": "nexus notifications kinds",
+          "description": "The catalogue: each kind of notification, its group, whether it is required, and its default channels",
+          "flags": [],
+          "examples": []
+        }
+      ]
+    },
+    {
+      "name": "<product>",
+      "usage": "nexus <product> <verb> [capability] [--<input> value] [--team T] [--no-wait]",
+      "description": "A product's commands, discovered from the modules your Gateway registers (nexus modules): run, report and the rest",
+      "flags": [
+        {
+          "name": "--team",
+          "value": "<T>",
+          "description": "A team's slug"
+        },
+        {
+          "name": "--no-wait",
+          "description": "Start the run and return its id without waiting"
+        }
+      ],
+      "examples": [
+        "nexus robustness run --repo https://github.com/nexus-demo/hello-factory",
+        "nexus robustness status review --repo https://github.com/nexus-demo/hello-factory"
+      ]
+    },
+    {
+      "name": "jobs",
+      "usage": "nexus jobs <command> [options]",
+      "description": "Jobs: a module's verb with its input, run in the background for the person who submits it. A job is accepted, then running, then done, failed or cancelled. You, and your organization's owners and admins, read and cancel it",
+      "flags": [],
+      "examples": [
+        "nexus jobs submit robustness/review run --input '{\"repo\":\"https://github.com/nexus-demo/hello-factory\"}'",
+        "nexus jobs get job_…",
+        "nexus jobs cancel job_…",
+        "nexus jobs result job_… --json"
+      ],
+      "subcommands": [
+        {
+          "name": "jobs submit",
+          "usage": "nexus jobs submit <product>/<capability> <verb> [--input <json>] [--team <slug>]",
+          "description": "Submit a job: a module's verb with its input, run in the background for you; prints the job's id. The module is <product>/<capability>, such as robustness/review",
+          "flags": [
+            {
+              "name": "--input",
+              "value": "<json>",
+              "description": "The verb's input, a JSON object (default: {})"
+            },
+            {
+              "name": "--team",
+              "value": "<slug>",
+              "description": "The team the job's model calls go to, by slug or id (default: yours)"
+            }
+          ],
+          "examples": []
+        },
+        {
+          "name": "jobs get",
+          "usage": "nexus jobs get <id>",
+          "description": "A job's state: accepted, running, done, failed or cancelled",
+          "flags": [],
+          "examples": []
+        },
+        {
+          "name": "jobs cancel",
+          "usage": "nexus jobs cancel <id>",
+          "description": "Cancel a job no worker has taken yet; a running or finished job stays as it is",
+          "flags": [],
+          "examples": []
+        },
+        {
+          "name": "jobs result",
+          "usage": "nexus jobs result <id>",
+          "description": "A job's result, once it is done or failed",
+          "flags": [],
+          "examples": []
+        }
+      ]
+    },
+    {
+      "name": "routines",
+      "usage": "nexus routines <command> [options]",
+      "description": "Routines: work Nexus does for you without being asked, such as a morning brief on a schedule. A routine runs as you only, reads and notifies only, and reports to your Slack direct messages. You manage your own; your organization's owners and admins may read, pause and delete them",
+      "flags": [],
+      "examples": [
+        "nexus routines create --at 08:00 --days mon-fri --timezone America/Costa_Rica",
+        "nexus routines list",
+        "nexus routines pause rtn_…",
+        "nexus routines resume rtn_…"
+      ],
+      "subcommands": [
+        {
+          "name": "routines list",
+          "usage": "nexus routines list [--all]",
+          "description": "Your routines, newest first, with each one's next run; --all lists the organization's (owners and admins)",
+          "flags": [
+            {
+              "name": "--all",
+              "description": "Every member's routines (owners and admins)"
+            }
+          ],
+          "examples": []
+        },
+        {
+          "name": "routines show",
+          "usage": "nexus routines show <id>",
+          "description": "A routine: its trigger, action, proactivity, caps, state and next run",
+          "flags": [],
+          "examples": []
+        },
+        {
+          "name": "routines create",
+          "usage": "nexus routines create --at <HH:MM> [--days mon-fri] | --every <interval> [--timezone <zone>] [--title <title>] [--max-runs-per-day <n>] [--team <slug>]",
+          "description": "Create a morning brief on a schedule, for you only; prints its id and next run. The brief reads only, and reports to your Slack direct messages",
+          "flags": [
+            {
+              "name": "--at",
+              "value": "<HH:MM>",
+              "description": "A local time, HH:MM, 24-hour"
+            },
+            {
+              "name": "--days",
+              "value": "<mon-fri>",
+              "description": "The days --at runs on, such as mon-fri or mon,wed,fri (default: every day)"
+            },
+            {
+              "name": "--every",
+              "value": "<interval>",
+              "description": "An interval of 10 minutes or more, such as 30m, 2h or 1d; not with --at"
+            },
+            {
+              "name": "--timezone",
+              "value": "<zone>",
+              "description": "An IANA time zone, such as America/Costa_Rica (default: UTC)"
+            },
+            {
+              "name": "--title",
+              "value": "<title>",
+              "description": "A name for the routine (default: Morning brief)"
+            },
+            {
+              "name": "--max-runs-per-day",
+              "value": "<n>",
+              "description": "The most runs a day; a slot past it is skipped"
+            },
+            {
+              "name": "--team",
+              "value": "<slug>",
+              "description": "The team its model calls go to, by slug or id (default: yours)"
+            }
+          ],
+          "examples": []
+        },
+        {
+          "name": "routines pause",
+          "usage": "nexus routines pause <id>",
+          "description": "Pause a routine: its schedule stops before its next slot",
+          "flags": [],
+          "examples": []
+        },
+        {
+          "name": "routines resume",
+          "usage": "nexus routines resume <id>",
+          "description": "Resume your routine from its next slot after now; nothing missed is replayed",
+          "flags": [],
+          "examples": []
+        },
+        {
+          "name": "routines delete",
+          "usage": "nexus routines delete <id>",
+          "description": "Delete a routine and its schedule",
+          "flags": [],
+          "examples": []
+        }
+      ]
+    },
+    {
+      "name": "apps",
+      "usage": "nexus apps <command> [options]",
+      "description": "Deploy and manage Apps on Nexus. Hosting costs Vercel list price plus 8%. Each app starts with a $10 monthly cap.",
+      "flags": [],
+      "examples": [
+        "nexus apps deploy ./my-site",
+        "nexus apps deploy --name docs --framework vite",
+        "nexus apps list",
+        "nexus apps claim app_…",
+        "nexus apps delete app_… --yes"
+      ],
+      "subcommands": [
+        {
+          "name": "apps deploy",
+          "usage": "nexus apps deploy [dir] [--name N] [--framework F]",
+          "description": "Deploy a folder (default: this one) to Vercel; deploying the same name again ships its next version. Prints its URL",
+          "flags": [
+            {
+              "name": "--name",
+              "value": "<N>",
+              "description": "The app's name: lowercase words joined by dashes (default: the folder's name)"
+            },
+            {
+              "name": "--framework",
+              "value": "<F>",
+              "description": "A Vercel framework preset, such as nextjs or vite (default: Vercel detects it)"
+            }
+          ],
+          "examples": []
+        },
+        {
+          "name": "apps list",
+          "usage": "nexus apps list",
+          "description": "Your apps (owners and admins: the organization's), with what each cost Nexus",
+          "flags": [],
+          "examples": []
+        },
+        {
+          "name": "apps cap",
+          "usage": "nexus apps cap <id> <usd>",
+          "description": "Set this app's monthly hosting cap in USD",
+          "flags": [],
+          "examples": []
+        },
+        {
+          "name": "apps get",
+          "usage": "nexus apps get <id>",
+          "description": "An app: its URL, its deployment's state and its cost",
+          "flags": [],
+          "examples": []
+        },
+        {
+          "name": "apps delete",
+          "usage": "nexus apps delete <id> --yes",
+          "description": "Delete an app and its Vercel project",
+          "flags": [
+            {
+              "name": "--yes",
+              "description": "Confirm a change that deletes or sends more than one thing"
+            }
+          ],
+          "examples": []
+        },
+        {
+          "name": "apps claim",
+          "usage": "nexus apps claim <id>",
+          "description": "A link that moves the app to your own Vercel account, where it stops costing Nexus; it works for 24 hours",
+          "flags": [],
+          "examples": []
+        }
+      ]
+    },
+    {
+      "name": "claude",
+      "usage": "nexus claude [--json] [--subscription | --api | --via <route>] [--team <slug>] [--recording [<id>|latest]] [--no-skills] [--] [claude args…]",
+      "description": "Claude Code on the route you chose (nexus agents): through Nexus Gateway, metered, checked against your policies and attributed to you, or on your own Claude plan",
+      "flags": [
+        {
+          "name": "--json",
+          "description": "A JSON summary on stdout when the agent exits"
+        },
+        {
+          "name": "--subscription",
+          "description": "Use your Claude subscription (claude auth login), not Gateway: model calls are not metered or checked (also NEXUS_CLAUDE_AUTH=subscription)"
+        },
+        {
+          "name": "--api",
+          "description": "Through Gateway for this run, whatever route you saved (also NEXUS_CLAUDE_AUTH=gateway)"
+        },
+        {
+          "name": "--via",
+          "value": "<route>",
+          "description": "The route for this run: gateway or subscription; default: your saved route (nexus agents)"
+        },
+        {
+          "name": "--team",
+          "value": "<slug>",
+          "description": "The team this session's spend goes to (also NEXUS_TEAM)"
+        },
+        {
+          "name": "--recording",
+          "value": "<id>",
+          "description": "Start on a screen recording from Nexus for Mac (⌥⇧S): its id, or latest (the default); Claude Code is told how to read it"
+        },
+        {
+          "name": "--model",
+          "value": "<auto>",
+          "description": "Claude Code's own flag, read by Nexus: auto runs on the model Gateway chooses"
+        }
+      ],
+      "examples": [
+        "nexus claude -p \"hello\"",
+        "nexus claude --team web",
+        "nexus claude --subscription",
+        "nexus claude --recording latest"
+      ],
+      "exitCodes": [
+        {
+          "code": 0,
+          "meaning": "The agent's own exit code is passed through"
+        }
+      ]
+    },
+    {
+      "name": "codex",
+      "usage": "nexus codex [--json] [--subscription | --api | --via <route>] [--team <slug>] [--recording [<id>|latest]] [--no-skills] [--] [codex args…]",
+      "description": "Codex on the route you chose (nexus agents): through Nexus Gateway, metered, checked against your policies and attributed to you, or on your own ChatGPT plan",
+      "flags": [
+        {
+          "name": "--json",
+          "description": "A JSON summary on stdout when the agent exits"
+        },
+        {
+          "name": "--subscription",
+          "description": "Use your ChatGPT plan (codex login), not Gateway: model calls are not metered or checked (also NEXUS_CODEX_AUTH=subscription)"
+        },
+        {
+          "name": "--api",
+          "description": "Through Gateway for this run, whatever route you saved (also NEXUS_CODEX_AUTH=gateway)"
+        },
+        {
+          "name": "--via",
+          "value": "<route>",
+          "description": "The route for this run: gateway or subscription; default: your saved route (nexus agents)"
+        },
+        {
+          "name": "--team",
+          "value": "<slug>",
+          "description": "The team this session's spend goes to (also NEXUS_TEAM)"
+        },
+        {
+          "name": "--recording",
+          "value": "<id>",
+          "description": "Start on a screen recording from Nexus for Mac (⌥⇧S): its id, or latest (the default); Codex gets its contact sheet"
+        },
+        {
+          "name": "--model",
+          "value": "<auto>",
+          "description": "Codex's own flag, read by Nexus: auto runs on the model Gateway chooses"
+        }
+      ],
+      "examples": [
+        "nexus codex exec \"hello\"",
+        "nexus codex --team web",
+        "nexus codex --subscription",
+        "nexus codex --recording latest"
+      ],
+      "exitCodes": [
+        {
+          "code": 0,
+          "meaning": "The agent's own exit code is passed through"
+        }
+      ]
+    },
+    {
+      "name": "agy",
+      "usage": "nexus agy [--json] [--subscription] [--team <slug>] [--] [agy args…]",
+      "description": "Antigravity on your own Google AI plan: its calls go straight to Google, and Nexus records the session",
+      "flags": [
+        {
+          "name": "--json",
+          "description": "A JSON summary on stdout when the agent exits"
+        },
+        {
+          "name": "--subscription",
+          "description": "Run on your Google AI plan, the default (also NEXUS_ANTIGRAVITY_AUTH=subscription)"
+        },
+        {
+          "name": "--team",
+          "value": "<slug>",
+          "description": "The team this session is attributed to (also NEXUS_TEAM)"
+        },
+        {
+          "name": "--model",
+          "value": "<id>",
+          "description": "agy's own flag: the model it runs, by its id (auto is not available)"
+        }
+      ],
+      "examples": [
+        "nexus agy -p \"hello\"",
+        "nexus agy --team web",
+        "nexus agy -- --conversation <id>"
+      ],
+      "exitCodes": [
+        {
+          "code": 0,
+          "meaning": "The agent's own exit code is passed through"
+        },
+        {
+          "code": 2,
+          "meaning": "--api, --via gateway, --model auto or --recording: not available, and the agent does not start"
+        }
+      ]
+    },
+    {
+      "name": "cursor-agent",
+      "usage": "nexus cursor-agent [--json] [--subscription] [--team <slug>] [--] [cursor-agent args…]",
+      "description": "Cursor on your own Cursor plan: its calls go straight to Cursor, and Nexus records the session",
+      "flags": [
+        {
+          "name": "--json",
+          "description": "A JSON summary on stdout when Cursor exits"
+        },
+        {
+          "name": "--subscription",
+          "description": "Run on your Cursor plan"
+        },
+        {
+          "name": "--team",
+          "value": "<slug>",
+          "description": "The team this session is attributed to (also NEXUS_TEAM)"
+        },
+        {
+          "name": "--model",
+          "value": "<id>",
+          "description": "Cursor's own model flag"
+        }
+      ],
+      "examples": [
+        "nexus cursor-agent -p \"hello\"",
+        "nexus cursor-agent --team web",
+        "nexus cursor-agent -- --resume <id>"
+      ],
+      "exitCodes": [
+        {
+          "code": 0,
+          "meaning": "The agent's own exit code is passed through"
+        },
+        {
+          "code": 2,
+          "meaning": "--api, --via gateway, --model auto or --recording: not available, and the agent does not start"
+        }
+      ]
+    },
+    {
+      "name": "agents",
+      "usage": "nexus agents <command>",
+      "description": "Your coding agents: whether each is installed and signed in on this machine, the route each takes (through Gateway, or on your own plan), who pays on it, and what is left to set up, with the command for each step. Works signed out (this machine only). Signed in, --csv or --jsonl writes the organization's agent sessions to a file",
+      "flags": [
+        {
+          "name": "--csv",
+          "description": "Write the organization's agent sessions as CSV (its newest 500 at most); the manifest is in the audit log"
+        },
+        {
+          "name": "--jsonl",
+          "description": "Write the organization's agent sessions as JSON Lines; its last line is the manifest"
+        },
+        {
+          "name": "--from",
+          "value": "<D>",
+          "description": "With --csv or --jsonl: sessions started from this day (YYYY-MM-DD, UTC)"
+        },
+        {
+          "name": "--to",
+          "value": "<D>",
+          "description": "With --csv or --jsonl: sessions started until this day, included"
+        },
+        {
+          "name": "--team",
+          "value": "<T>",
+          "description": "With --csv or --jsonl: only this team's sessions and the teams under it"
+        },
+        {
+          "name": "--person",
+          "value": "<P>",
+          "description": "With --csv or --jsonl: only this person's sessions (a user id)"
+        },
+        {
+          "name": "--agent",
+          "value": "<A>",
+          "description": "With --csv or --jsonl: one agent's sessions (claude or codex or antigravity or cursor or opencode)"
+        },
+        {
+          "name": "--via",
+          "value": "<V>",
+          "description": "With --csv or --jsonl: nexus, subscription or ori"
+        },
+        {
+          "name": "--status",
+          "value": "<S>",
+          "description": "With --csv or --jsonl: only these statuses, comma-separated: running, succeeded, failed, interrupted"
+        },
+        {
+          "name": "--cursor",
+          "value": "<C>",
+          "description": "With --csv or --jsonl: continue a file the row limit stopped, from its manifest's nextCursor"
+        },
+        {
+          "name": "--out",
+          "value": "<F>",
+          "description": "With --csv or --jsonl: write the file here instead of stdout"
+        }
+      ],
+      "examples": [
+        "nexus agents",
+        "nexus agents use claude subscription",
+        "nexus agents use codex default",
+        "nexus agents setup claude",
+        "nexus agents share latest --org",
+        "nexus agents --json",
+        "nexus agents --jsonl --from 2026-10-01 --out sessions.jsonl"
+      ],
+      "subcommands": [
+        {
+          "name": "agents list",
+          "usage": "nexus agents list",
+          "description": "Each local launcher (also plain nexus agents): install, sign-in, route, payer, and setup steps",
+          "flags": [],
+          "examples": []
+        },
+        {
+          "name": "agents use",
+          "usage": "nexus agents use <claude|codex|agy|cursor-agent> <gateway|subscription|default>",
+          "description": "The route an agent takes when you name none, in every Nexus app you sign in to",
+          "flags": [],
+          "examples": []
+        },
+        {
+          "name": "agents setup",
+          "usage": "nexus agents setup <claude|codex>",
+          "description": "How to run an agent through Gateway, from its recipe: the limits first, then each step. Writes nothing",
+          "flags": [],
+          "examples": []
+        },
+        {
+          "name": "agents share",
+          "usage": "nexus agents share <session|latest> [--org | --team T | --people a@x,b@y] [--include-thinking]",
+          "description": "Share a Claude Code session (nexus claude) as an artifact, from its transcript on this machine: latest is this folder's newest. Again: a new version, and the earlier ones revoked",
+          "flags": [
+            {
+              "name": "--org",
+              "description": "Share with everyone in your organization"
+            },
+            {
+              "name": "--team",
+              "value": "<T>",
+              "description": "Share with these teams (slugs, comma-separated) and the teams under them"
+            },
+            {
+              "name": "--people",
+              "value": "<a@x,b@y>",
+              "description": "Share with these people in your organization (emails, comma-separated)"
+            },
+            {
+              "name": "--include-thinking",
+              "description": "Keep the agent's thinking in the shared session (left out by default)"
+            },
+            {
+              "name": "--to",
+              "value": "<a@x,b@y>",
+              "description": "Share outside your organization with these people (emails, comma-separated); they sign in with that email to open it"
+            },
+            {
+              "name": "--public",
+              "description": "Share with anyone who has the link (unguessable, not indexed by search engines)"
+            },
+            {
+              "name": "--expires",
+              "value": "<30d>",
+              "description": "When a public link stops working: 30d, 12h or a number of days"
+            },
+            {
+              "name": "--private",
+              "description": "Stop sharing: revoke every version, so only you can read it"
+            }
+          ],
+          "examples": [],
+          "variants": [
+            {
+              "usage": "nexus agents share <session|latest> --to a@x,b@y | --public [--expires 30d]",
+              "description": "Share it outside your organization, as its settings allow"
+            },
+            {
+              "usage": "nexus agents share <session|latest> --private",
+              "description": "Stop sharing a session: revoke every version, so only you can read it"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "agent",
+      "usage": "nexus agent <ask|chat> [options]",
+      "description": "Nexus, the same one as @nexus in Slack, with its memory and saved model. It never runs a write: it prints the Nexus UI page where you approve one. Needs NEXUS_AGENTS_API_URL, the agent API's address. Any other nexus agent command is nexus agents",
+      "flags": [],
+      "examples": [
+        "nexus agent ask \"What did I decide about the launch?\"",
+        "nexus agent ask --conversation <id> \"And the date?\"",
+        "nexus agent chat",
+        "nexus agent ask \"Summarize my week\" --json"
+      ],
+      "subcommands": [
+        {
+          "name": "agent ask",
+          "usage": "nexus agent ask \"<question>\" [--conversation <id>] [--model <id>]",
+          "description": "Ask Nexus, the same one as @nexus in Slack, with its memory and saved model; the answer streams, then its sources",
+          "flags": [
+            {
+              "name": "--conversation",
+              "value": "<id>",
+              "description": "Continue this conversation: the id the last answer printed (default: a new one)"
+            },
+            {
+              "name": "--model",
+              "value": "<id>",
+              "description": "A catalog model id for this answer (default: your saved model)"
+            }
+          ],
+          "examples": []
+        },
+        {
+          "name": "agent chat",
+          "usage": "nexus agent chat [--conversation <id>] [--model <id>]",
+          "description": "Talk with Nexus in one conversation; type exit or press Ctrl-D to end",
+          "flags": [
+            {
+              "name": "--conversation",
+              "value": "<id>",
+              "description": "Continue this conversation: the id the last answer printed (default: a new one)"
+            },
+            {
+              "name": "--model",
+              "value": "<id>",
+              "description": "A catalog model id for this answer (default: your saved model)"
+            }
+          ],
+          "examples": []
+        }
+      ]
+    },
+    {
+      "name": "recordings",
+      "usage": "nexus recordings [list|show|path|frames] [<id>|latest] [--json]",
+      "description": "Screen recordings Nexus for Mac makes for agents (⌥⇧S), on this computer: what an agent reads, and more frames for a closer look",
+      "examples": [
+        "nexus recordings",
+        "nexus recordings show latest",
+        "nexus recordings frames latest --from 0:10 --to 0:14",
+        "nexus claude --recording latest"
+      ],
+      "subcommands": [
+        {
+          "name": "recordings list",
+          "usage": "nexus recordings list [--json]",
+          "description": "Your screen recordings from Nexus for Mac (⌥⇧S), newest first: when, how long, keyframes and the first words said",
+          "flags": [
+            {
+              "name": "--json",
+              "description": "Print only JSON on stdout"
+            }
+          ],
+          "examples": []
+        },
+        {
+          "name": "recordings show",
+          "usage": "nexus recordings show [<id>|latest] [--json]",
+          "description": "A recording's summary.md, what an agent reads first (--json: its capture.json)",
+          "flags": [
+            {
+              "name": "--json",
+              "description": "Print only JSON on stdout"
+            }
+          ],
+          "examples": []
+        },
+        {
+          "name": "recordings path",
+          "usage": "nexus recordings path [<id>|latest]",
+          "description": "A recording's folder, for scripts and agents",
+          "flags": [],
+          "examples": []
+        },
+        {
+          "name": "recordings frames",
+          "usage": "nexus recordings frames [<id>|latest] --from <time> --to <time> [--count N]",
+          "description": "More frames from its video, at full resolution, for a closer look (Nexus for Mac draws them)",
+          "flags": [
+            {
+              "name": "--from",
+              "value": "<time>",
+              "description": "From this moment of the recording (0:12 as summary.md writes it, or seconds)"
+            },
+            {
+              "name": "--to",
+              "value": "<time>",
+              "description": "Until this moment"
+            },
+            {
+              "name": "--count",
+              "value": "<N>",
+              "description": "How many frames, evenly spread (default 8, at most 60)"
+            }
+          ],
+          "examples": []
+        }
+      ],
+      "flags": [
+        {
+          "name": "--json",
+          "description": "Print only JSON on stdout"
+        }
+      ]
+    },
+    {
+      "name": "memory",
+      "usage": "nexus memory [status|enable|disable|list|add|edit|forget|import|export]",
+      "description": "Manage the local shared memory that coding agents use across sessions and worktrees",
+      "examples": [
+        "nexus memory enable",
+        "nexus memory import claude",
+        "nexus memory list --json"
+      ],
+      "subcommands": [
+        {
+          "name": "memory status",
+          "usage": "nexus memory status [--json]",
+          "description": "Show whether shared memory is on",
+          "flags": [
+            {
+              "name": "--json",
+              "description": "Print only JSON on stdout"
+            }
+          ],
+          "examples": []
+        },
+        {
+          "name": "memory enable",
+          "usage": "nexus memory enable [--json]",
+          "description": "Turn on shared memory on this computer",
+          "flags": [
+            {
+              "name": "--json",
+              "description": "Print only JSON on stdout"
+            }
+          ],
+          "examples": []
+        },
+        {
+          "name": "memory disable",
+          "usage": "nexus memory disable [--export <path>] [--skip-export] [--repo <path>]",
+          "description": "Turn off shared memory with a Markdown export or an explicit choice to skip it",
+          "flags": [
+            {
+              "name": "--export",
+              "value": "<path>",
+              "description": "Save a Markdown copy to this path before turning off shared memory"
+            },
+            {
+              "name": "--skip-export",
+              "description": "Turn off shared memory without exporting"
+            },
+            {
+              "name": "--repo",
+              "value": "<path>",
+              "description": "Choose the repository whose notes to use"
+            }
+          ],
+          "examples": []
+        },
+        {
+          "name": "memory list",
+          "usage": "nexus memory list [--repo <path>] [--json]",
+          "description": "List personal and repository entries",
+          "flags": [
+            {
+              "name": "--repo",
+              "value": "<path>",
+              "description": "Choose the repository whose notes to use"
+            },
+            {
+              "name": "--json",
+              "description": "Print only JSON on stdout"
+            }
+          ],
+          "examples": []
+        },
+        {
+          "name": "memory add",
+          "usage": "nexus memory add <text>",
+          "description": "Save a personal note",
+          "flags": [],
+          "examples": []
+        },
+        {
+          "name": "memory edit",
+          "usage": "nexus memory edit <id> <text> [--repo <path>]",
+          "description": "Replace the text of an entry",
+          "flags": [
+            {
+              "name": "--repo",
+              "value": "<path>",
+              "description": "Choose the repository whose notes to use"
+            }
+          ],
+          "examples": []
+        },
+        {
+          "name": "memory forget",
+          "usage": "nexus memory forget <id> [--repo <path>]",
+          "description": "Delete an entry",
+          "flags": [
+            {
+              "name": "--repo",
+              "value": "<path>",
+              "description": "Choose the repository whose notes to use"
+            }
+          ],
+          "examples": []
+        },
+        {
+          "name": "memory import",
+          "usage": "nexus memory import <claude|codex> [--repo <path>]",
+          "description": "Import memory from the selected agent's local profiles",
+          "flags": [
+            {
+              "name": "--repo",
+              "value": "<path>",
+              "description": "Choose the repository whose notes to use"
+            }
+          ],
+          "examples": []
+        },
+        {
+          "name": "memory export",
+          "usage": "nexus memory export <claude|codex|markdown> [--output <path>] [--repo <path>]",
+          "description": "Export to an agent profile or Markdown. Codex loads every repository block in every session on that profile",
+          "flags": [
+            {
+              "name": "--output",
+              "value": "<path>",
+              "description": "Write a Markdown export to this path"
+            },
+            {
+              "name": "--repo",
+              "value": "<path>",
+              "description": "Choose the repository whose notes to use"
+            }
+          ],
+          "examples": []
+        }
+      ],
+      "flags": []
+    },
+    {
+      "name": "sessions",
+      "usage": "nexus sessions [list|show|start|send|stop|name|connect|disconnect|mcp] [--json]",
+      "description": "Code sessions in Nexus for desktop, on this computer: list, read, start, name, message and stop them from a script or another agent. Turn on Outside access in the app first; each client asks you once",
+      "examples": [
+        "nexus sessions list",
+        "nexus sessions start --project . \"Find why the tests are slow\"",
+        "nexus sessions send <id> \"Now fix it\"",
+        "nexus sessions show <id>",
+        "nexus sessions mcp --name \"Claude Code\""
+      ],
+      "subcommands": [
+        {
+          "name": "sessions list",
+          "usage": "nexus sessions list [--project P] [--archived] [--limit N] [--json]",
+          "description": "Code sessions in Nexus for desktop, newest first: id, status, name, title and project",
+          "flags": [
+            {
+              "name": "--project",
+              "value": "<P>",
+              "description": "The project: its folder (. is the current one), its id, or GitHub owner/repo"
+            },
+            {
+              "name": "--archived",
+              "description": "Archived sessions too"
+            },
+            {
+              "name": "--limit",
+              "value": "<N>",
+              "description": "At most this many sessions (1 to 200, default 50)"
+            },
+            {
+              "name": "--json",
+              "description": "Print only JSON on stdout"
+            }
+          ],
+          "examples": []
+        },
+        {
+          "name": "sessions show",
+          "usage": "nexus sessions show <id|name|title> [--turns N] [--json]",
+          "description": "A session's status and its latest turns: each prompt, the agent's last answer and how the turn ended. Name a session by its id (a word starting with t_), or by its name or exact title among the newest 200; a name past those goes to the app's own lookup",
+          "flags": [
+            {
+              "name": "--turns",
+              "value": "<N>",
+              "description": "How many of the latest turns (1 to 20, default 3)"
+            },
+            {
+              "name": "--json",
+              "description": "Print only JSON on stdout"
+            }
+          ],
+          "examples": []
+        },
+        {
+          "name": "sessions start",
+          "usage": "nexus sessions start \"<prompt>\" [--project P] [--agent A] [--model M] [--mode M] [--worktree] [--folder] [--name N] [--json]",
+          "description": "Start a session with its project's defaults (the current folder's project when --project is left out; - reads the prompt from stdin)",
+          "flags": [
+            {
+              "name": "--project",
+              "value": "<P>",
+              "description": "The project: its folder (. is the current one), its id, or GitHub owner/repo"
+            },
+            {
+              "name": "--agent",
+              "value": "<A>",
+              "description": "claude or codex or nexus or antigravity or cursor; default: the project's"
+            },
+            {
+              "name": "--model",
+              "value": "<M>",
+              "description": "The model; default: the project's"
+            },
+            {
+              "name": "--mode",
+              "value": "<M>",
+              "description": "The permission mode: plan, default, acceptEdits, auto or bypassPermissions; never above the project's default"
+            },
+            {
+              "name": "--worktree",
+              "description": "Work in a new worktree; default: the project's choice"
+            },
+            {
+              "name": "--folder",
+              "description": "Work in the project's folder; default: the project's choice"
+            },
+            {
+              "name": "--name",
+              "value": "<N>",
+              "description": "The session's unique name, which Claude Code's ListAgents and SendMessage reach it by"
+            },
+            {
+              "name": "--json",
+              "description": "Print only JSON on stdout"
+            }
+          ],
+          "examples": []
+        },
+        {
+          "name": "sessions send",
+          "usage": "nexus sessions send <id|name|title> \"<message>\"",
+          "description": "Message a session; a busy one gets it after its current turn (- reads stdin). Name a session by its id (a word starting with t_), or by its name or exact title among the newest 200; a name past those goes to the app's own lookup",
+          "flags": [],
+          "examples": []
+        },
+        {
+          "name": "sessions stop",
+          "usage": "nexus sessions stop <id|name|title>",
+          "description": "Stop a session's current turn. Name a session by its id (a word starting with t_), or by its name or exact title among the newest 200; a name past those goes to the app's own lookup",
+          "flags": [],
+          "examples": []
+        },
+        {
+          "name": "sessions name",
+          "usage": "nexus sessions name <id|name|title> [<new-name>] [--clear] [--json]",
+          "description": "Give a session a unique name, which Claude Code's ListAgents and SendMessage reach it by; --clear removes it. A name is 1 to 40 letters, digits, dots, dashes or underscores, and never starts with t_",
+          "flags": [
+            {
+              "name": "--clear",
+              "description": "Remove the session's name"
+            },
+            {
+              "name": "--json",
+              "description": "Print only JSON on stdout"
+            }
+          ],
+          "examples": []
+        },
+        {
+          "name": "sessions connect",
+          "usage": "nexus sessions connect [--read-only]",
+          "description": "Ask Nexus for desktop for access now (the other commands ask by themselves); you approve it in the app",
+          "flags": [
+            {
+              "name": "--read-only",
+              "description": "Ask only to read sessions"
+            }
+          ],
+          "examples": []
+        },
+        {
+          "name": "sessions disconnect",
+          "usage": "nexus sessions disconnect",
+          "description": "Forget this CLI's access on this computer (revoke it in the app: Settings, MCP servers, Outside access)",
+          "flags": [],
+          "examples": []
+        },
+        {
+          "name": "sessions mcp",
+          "usage": "nexus sessions mcp [--name N]",
+          "description": "The same tools as an MCP server on stdin and stdout, for another agent: claude mcp add nexus-sessions -- nexus sessions mcp",
+          "flags": [
+            {
+              "name": "--name",
+              "value": "<N>",
+              "description": "The name the app shows for this client (default: nexus CLI)"
+            }
+          ],
+          "examples": []
+        }
+      ],
+      "flags": [
+        {
+          "name": "--json",
+          "description": "Print only JSON on stdout"
+        }
+      ]
+    },
+    {
+      "name": "devices",
+      "usage": "nexus devices [list|pair|revoke|org-key] [--json]",
+      "description": "Your devices for end-to-end encrypted session sync: pair this computer so its nexus claude and nexus codex sessions show in Nexus UI, and revoke a device",
+      "examples": [
+        "nexus devices pair",
+        "nexus devices",
+        "nexus devices revoke dev_…"
+      ],
+      "subcommands": [
+        {
+          "name": "devices list",
+          "usage": "nexus devices list [--json]",
+          "description": "Your devices for encrypted session sync, oldest first: this computer, each one's state and pairing code",
+          "flags": [
+            {
+              "name": "--json",
+              "description": "Print only JSON on stdout"
+            }
+          ],
+          "examples": []
+        },
+        {
+          "name": "devices pair",
+          "usage": "nexus devices pair [--name N] [--new] [--no-wait] [--approver-code C] [--json]",
+          "description": "Make this computer a trusted device: it shows a code and a QR code, and you approve it from a trusted device (Settings › Devices in Nexus UI or the desktop app). Then confirm the approver's code: sync starts only after that",
+          "flags": [
+            {
+              "name": "--name",
+              "value": "<N>",
+              "description": "This computer's name in your devices (default: nexus CLI on <hostname>)"
+            },
+            {
+              "name": "--new",
+              "description": "Forget this computer's key and pair a new one"
+            },
+            {
+              "name": "--no-wait",
+              "description": "Show the code and return without waiting for the approval"
+            },
+            {
+              "name": "--approver-code",
+              "value": "<C>",
+              "description": "Confirm the approver without a prompt: the code its own screen shows"
+            },
+            {
+              "name": "--json",
+              "description": "Print only JSON on stdout"
+            }
+          ],
+          "examples": []
+        },
+        {
+          "name": "devices revoke",
+          "usage": "nexus devices revoke <device-id> [--yes]",
+          "description": "Revoke a device with this computer's key: it gets no key for anything new. Revoking this computer also deletes its key",
+          "flags": [
+            {
+              "name": "--yes",
+              "description": "Revoke without asking"
+            }
+          ],
+          "examples": []
+        },
+        {
+          "name": "devices org-key",
+          "usage": "nexus devices org-key [--fingerprint F] [--vault-public-key FILE] [--json]",
+          "description": "Your org's recovery key: compare its fingerprint with the one computed from your vault, then confirm it here. Your synced sessions are also locked for it when your org chooses so",
+          "flags": [
+            {
+              "name": "--fingerprint",
+              "value": "<F>",
+              "description": "Confirm your org's recovery key without a prompt: the fingerprint computed from your vault"
+            },
+            {
+              "name": "--vault-public-key",
+              "value": "<FILE>",
+              "description": "Compute a fingerprint offline from your vault's X25519 public-key export, raw 32 bytes or base64url"
+            },
+            {
+              "name": "--json",
+              "description": "Print only JSON on stdout"
+            }
+          ],
+          "examples": []
+        },
+        {
+          "name": "devices control",
+          "usage": "nexus devices control [on|off] [--json]",
+          "description": "Phone control for this computer's `nexus claude` and `nexus codex` sessions: off until you turn it on. With no setting, says where it stands",
+          "flags": [
+            {
+              "name": "--json",
+              "description": "Print only JSON on stdout"
+            }
+          ],
+          "examples": []
+        }
+      ],
+      "flags": [
+        {
+          "name": "--json",
+          "description": "Print only JSON on stdout"
+        }
+      ]
+    },
+    {
+      "name": "mcp",
+      "usage": "nexus mcp",
+      "description": "A local MCP server on stdin and stdout: your spend, budgets, usage, models, teams and agent sessions as tools, under your own sign-in and permissions. Owners and admins also read and change members, teams, budgets, policies and keys; the agent asks before each change. An agent starts it: claude mcp add nexus -- nexus mcp, or codex mcp add nexus -- nexus mcp",
+      "examples": [
+        "nexus mcp"
+      ],
+      "flags": []
+    },
+    {
+      "name": "update",
+      "usage": "nexus update [--check] [--rollback] [--json]",
+      "description": "Update this CLI to the version your Gateway publishes (GET /cli/version)",
+      "examples": [
+        "nexus update",
+        "nexus update --check --json",
+        "nexus update --rollback"
+      ],
+      "exitCodes": [
+        {
+          "code": 0,
+          "meaning": "Updated, already up to date, rolled back, or (--check) checked"
+        },
+        {
+          "code": 1,
+          "meaning": "Nothing changed: Gateway unreachable, a checksum mismatch, or this CLI was not installed by Nexus's installer"
+        }
+      ],
+      "flags": [
+        {
+          "name": "--check",
+          "description": "Only check; change nothing"
+        },
+        {
+          "name": "--rollback",
+          "description": "Restore the version before the last update"
+        },
+        {
+          "name": "--json",
+          "description": "Print only JSON on stdout"
+        }
+      ]
+    },
+    {
+      "name": "completion",
+      "usage": "nexus completion <bash|zsh|fish|install>",
+      "description": "Tab-completion for commands, subcommands and flags: install turns it on, a shell prints its script to source",
+      "examples": [
+        "nexus completion install",
+        "nexus completion bash",
+        "nexus completion zsh",
+        "nexus completion fish"
+      ],
+      "flags": []
+    },
+    {
+      "name": "version",
+      "usage": "nexus --version [--json]",
+      "description": "The CLI's version: semver and build, e.g. 0.2.0+abc1234",
+      "flags": [],
+      "examples": [
+        "nexus --version",
+        "nexus --version --json"
+      ]
+    },
+    {
+      "name": "help",
+      "usage": "nexus help [--json]",
+      "description": "Every command; --json: this list, for scripts and the docs",
+      "flags": [],
+      "examples": [
+        "nexus help --json"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,13 @@
+/* Shared by every test page, inlined by build.py. Dense, so a page fits one screen. */
+* { box-sizing: border-box; }
+body { margin: 0; padding: 14px; font: 13px/1.4 system-ui, sans-serif; color: #111; background: #fff; }
+h1 { font-size: 16px; margin: 0 0 8px; }
+h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: #666; margin: 12px 0 6px; }
+#score { display: flex; flex-wrap: wrap; gap: 3px; margin-bottom: 8px; }
+.chk { font: 11px/1.6 ui-monospace, monospace; padding: 0 6px; border-radius: 4px; }
+.chk.ok { background: #e3f6e3; color: #135c13; }
+.chk.bad { background: #fde2e2; color: #8a1414; font-weight: 600; }
+.chk.wait { background: #eee; color: #666; }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
+.cell { border: 1px solid #ddd; border-radius: 8px; padding: 8px; min-height: 70px; position: relative; overflow: hidden; }
+.cell > b { display: block; font-size: 11px; color: #555; margin-bottom: 4px; }

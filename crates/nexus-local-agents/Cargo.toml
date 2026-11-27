@@ -1,0 +1,24 @@
+[package]
+name = "nexus-local-agents"
+description = "What this machine has of each coding agent: its binary, its version and its sign-in. It reads them from the agent's own commands and files. Every crate that depends on nexus-client links it."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish = ["crates-io"]
+license = "MIT"
+
+[dependencies]
+nexus-agents.workspace = true
+# The credential a launch runs on (`LocalAgentT::credential_env`).
+nexus-providers.workspace = true
+nexus-agent-memory.workspace = true
+tempfile = "=3.27.0"
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+time.workspace = true
+tokio.workspace = true
+uuid.workspace = true
+
+[lints]
+workspace = true

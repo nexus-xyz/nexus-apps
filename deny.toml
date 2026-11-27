@@ -1,0 +1,79 @@
+# cargo-deny for Nexus Desktop's GPUI workspace: RustSec advisories, licenses and sources.
+# From this directory, run `cargo deny --locked check advisories licenses sources` (cargo-deny 0.20.2).
+# The release runs the advisories check before any package builds.
+
+[graph]
+all-features = true
+
+[advisories]
+# Every RustSec advisory fails the check, unless it is listed in `ignore` with its reason. Never ignore a vulnerability.
+# Each entry below is an unmaintained crate with no known vulnerability. Remove an entry when its path drops the crate.
+version = 2
+yanked = "deny"
+ignore = [
+    # chrono is unmaintained. Remove it when these paths move to jiff or time.
+    { id = "RUSTSEC-2026-0543", reason = "chrono is unmaintained, with no known vulnerability; GPUI, nexus-host and nexus-workbench use it" },
+    # The UI kit: gpui-component 0.9 reaches these through syntect (bincode 1), its own code (instant, paste),
+    # gpui-kit-assets' vendored reqwest (rustls-pemfile) and resvg/usvg (rustybuzz, ttf-parser).
+    { id = "RUSTSEC-2025-0141", reason = "bincode 1 is unmaintained, with no known vulnerability; syntect 5 (gpui-component's highlighter) uses it" },
+    { id = "RUSTSEC-2024-0384", reason = "instant is unmaintained, with no known vulnerability; gpui-base and gpui-component 0.9 use it" },
+    { id = "RUSTSEC-2024-0436", reason = "paste is unmaintained, with no known vulnerability; a compile-time macro crate, through gpui-component 0.9 and image's exr (pulp)" },
+    { id = "RUSTSEC-2025-0134", reason = "rustls-pemfile is unmaintained, with no known vulnerability; gpui-pre-reqwest 0.12 (gpui-kit-assets) uses it" },
+    { id = "RUSTSEC-2026-0206", reason = "rustybuzz is unmaintained, with no known vulnerability; usvg 0.45 and 0.46 (resvg, vendor/gpui-pre) use it" },
+    { id = "RUSTSEC-2026-0192", reason = "ttf-parser is unmaintained, with no known vulnerability; fontdb (cosmic-text in vendor/gpui-pre-wgpu, usvg) uses it" },
+    # The Linux tray: tray-icon, muda and gtk pin gtk-rs 0.18, whose glib-macros is a compile-time macro crate.
+    { id = "RUSTSEC-2024-0370", reason = "proc-macro-error is unmaintained, with no known vulnerability; gtk-rs 0.18 (tray-icon, muda, gtk) uses it" },
+    # zvariant, zvariant_derive and zbus_names are merged into zbus 6. zbus 5 still uses them, on Linux only, through
+    # accesskit_unix (vendor/gpui-pre-linux), ashpd, notify-rust and the keyring's secret-service.
+    { id = "RUSTSEC-2026-0370", reason = "zvariant is unmaintained, merged into zbus 6, with no known vulnerability; zbus 5 still uses it" },
+    { id = "RUSTSEC-2026-0371", reason = "zbus_names is unmaintained, merged into zbus 6, with no known vulnerability; zbus 5 still uses it" },
+    { id = "RUSTSEC-2026-0372", reason = "zvariant_derive is unmaintained, merged into zbus 6, with no known vulnerability; zbus 5 still uses it" },
+]
+
+[licenses]
+version = 2
+# Permissive licenses only. A new license needs a review before it goes on this list. Engineering chose the list
+# and the exceptions below; legal approved them.
+allow = [
+    "0BSD",
+    "Apache-2.0",
+    "Apache-2.0 WITH LLVM-exception",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "BSL-1.0",
+    "ISC",
+    "MIT",
+    "Unicode-3.0",
+    "Unlicense",
+    "Zlib",
+]
+confidence-threshold = 0.9
+# Copyleft and unusual licenses are allowed for the named crate only, so a new crate under one of them fails the check
+# until it is reviewed too.
+exceptions = [
+    # MPL-2.0, unmodified. option-ext ships (through dirs-sys). dwrote is a Windows dependency of zed-font-kit, which
+    # the Windows build does not use. cbindgen is a macOS build-dependency of vendor/gpui-pre-apple.
+    { allow = ["MPL-2.0"], crate = "option-ext" },
+    { allow = ["MPL-2.0"], crate = "dwrote" },
+    { allow = ["MPL-2.0"], crate = "cbindgen" },
+    # CC0-1.0: notify ships. tiny-keccak runs inside the const-random-macro proc-macro (Linux).
+    { allow = ["CC0-1.0"], crate = "notify" },
+    { allow = ["CC0-1.0"], crate = "tiny-keccak" },
+    # Build time only: download-cef fetches CEF with ureq (webpki-roots) and unpacks it with bzip2 (libbz2-rs-sys).
+    # webpki-root-certs is a wasm32 and dev dependency of rustls-platform-verifier.
+    { allow = ["CDLA-Permissive-2.0"], crate = "webpki-roots" },
+    { allow = ["CDLA-Permissive-2.0"], crate = "webpki-root-certs" },
+    { allow = ["bzip2-1.0.6"], crate = "libbz2-rs-sys" },
+]
+
+# The Nexus crates (this app, the shared desktop crates and nexus-client) are MIT, and they are checked like
+# any other crate: one that loses its `license` field, or names a license outside `allow`, fails the check.
+[licenses.private]
+ignore = false
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]
+# The lockfile has no git source today. Pin each one here, by its repository, if one is added.
+allow-git = []

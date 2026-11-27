@@ -1,0 +1,41 @@
+# The command line (apps/cli). Unsigned, no secrets. Built and tested with `-p nexus-cli` on its own, never with
+# --workspace: the desktop app turns on nexus-workbench features the CLI leaves off, and `nexus help` (checked against
+# commands.json) would list them.
+name: cli
+
+on:
+  pull_request:
+    paths: ["apps/cli/**", "crates/**", "Cargo.toml", "Cargo.lock", "rustfmt.toml", "deny.toml", ".cargo/**", "build/**", ".github/workflows/cli.yml"]
+  push:
+    branches: [main]
+    paths: ["apps/cli/**", "crates/**", "Cargo.toml", "Cargo.lock", "rustfmt.toml", "deny.toml", ".cargo/**", "build/**", ".github/workflows/cli.yml"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cli-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  cli:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          persist-credentials: false
+      - name: Install Rust
+        run: |
+          rustup toolchain install 1.94 --profile minimal --component rustfmt,clippy --no-self-update
+          rustup default 1.94
+      - uses: taiki-e/install-action@f7e5d7c961414b23f5b25b2da9294395d08513ad # v2.87.26
+        with:
+          tool: cargo-nextest@0.9.146
+      - name: cargo clippy
+        run: cargo clippy --locked -p nexus-cli --no-default-features --all-targets -- -D warnings
+      - name: cargo nextest
+        run: cargo nextest run --locked -p nexus-cli --no-default-features

@@ -1,0 +1,126 @@
+[
+  {
+    "id": "claude-code-2026-10-26-1",
+    "recipe": "claude-code",
+    "date": "2026-10-26",
+    "toolRelease": "2.1.310",
+    "cliRelease": "0.12.0+7d18f42",
+    "secondsToFirstCall": 122.5,
+    "steps": [
+      {
+        "id": "install_cli",
+        "result": "done"
+      },
+      {
+        "id": "install",
+        "result": "done"
+      },
+      {
+        "id": "nexus_login",
+        "result": "done"
+      },
+      {
+        "id": "provider_key",
+        "result": "skipped"
+      },
+      {
+        "id": "run",
+        "result": "done"
+      }
+    ],
+    "result": "pass"
+  },
+  {
+    "id": "codex-2026-10-26-1",
+    "recipe": "codex",
+    "date": "2026-10-26",
+    "toolRelease": "0.164.0",
+    "cliRelease": "0.12.0+7d18f42",
+    "secondsToFirstCall": 61.9,
+    "steps": [
+      {
+        "id": "install_cli",
+        "result": "skipped"
+      },
+      {
+        "id": "install",
+        "result": "done"
+      },
+      {
+        "id": "nexus_login",
+        "result": "skipped"
+      },
+      {
+        "id": "provider_key",
+        "result": "skipped"
+      },
+      {
+        "id": "run",
+        "result": "done"
+      }
+    ],
+    "result": "pass"
+  },
+  {
+    "id": "codex-2026-10-27-1",
+    "recipe": "codex",
+    "date": "2026-10-27",
+    "toolRelease": "0.165.0",
+    "cliRelease": "0.14.0+69e1c09",
+    "secondsToFirstCall": 170.4,
+    "steps": [
+      {
+        "id": "install_cli",
+        "result": "done"
+      },
+      {
+        "id": "install",
+        "result": "done"
+      },
+      {
+        "id": "nexus_login",
+        "result": "done"
+      },
+      {
+        "id": "provider_key",
+        "result": "skipped"
+      },
+      {
+        "id": "run",
+        "result": "done"
+      }
+    ],
+    "result": "pass"
+  },
+  {
+    "id": "claude-code-2026-10-27-1",
+    "recipe": "claude-code",
+    "date": "2026-10-27",
+    "toolRelease": "2.1.312",
+    "cliRelease": "0.14.0+69e1c09",
+    "secondsToFirstCall": 109.9,
+    "steps": [
+      {
+        "id": "install_cli",
+        "result": "done"
+      },
+      {
+        "id": "install",
+        "result": "done"
+      },
+      {
+        "id": "nexus_login",
+        "result": "done"
+      },
+      {
+        "id": "provider_key",
+        "result": "skipped"
+      },
+      {
+        "id": "run",
+        "result": "done"
+      }
+    ],
+    "result": "pass"
+  }
+]

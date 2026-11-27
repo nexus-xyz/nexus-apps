@@ -1,0 +1,17 @@
+[package]
+name = "nexus-agents"
+description = "The coding agents Nexus launches: one type per agent, the closed `Agent` enum, each agent's plain facts and the `of!` dispatch every domain crate uses. No I/O; Gateway, both CLIs and the desktop build it."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish = ["crates-io"]
+license = "MIT"
+
+[dependencies]
+serde.workspace = true
+
+[dev-dependencies]
+serde_json.workspace = true
+
+[lints]
+workspace = true

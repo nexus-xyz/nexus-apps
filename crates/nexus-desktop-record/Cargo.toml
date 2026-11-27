@@ -1,0 +1,43 @@
+# Screen recordings for agents without a UI toolkit: the gestures, the keyframes, the contact sheet, the summary and,
+# on macOS, the recording itself (screencapture, the ink overlay, AVFoundation's frames and Speech's transcript). It
+# takes no UI crate. Every dependency pinned exactly, at the app's versions.
+[package]
+name = "nexus-desktop-record"
+description = "Nexus for desktop's screen recordings for agents, shared by every desktop shell."
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.94"
+publish = false
+license = "MIT"
+
+[dependencies]
+# `capture.json` (src/model.rs).
+serde = { version = "=1.0.229", features = ["derive"] }
+serde_json = { version = "=1.0.154", features = ["preserve_order"] }
+# The keyframes and the contact sheet as PNG (src/sheet.rs).
+png = "=0.18.1"
+
+# The recording on macOS: the pointer and Shift as the ink overlay reads them (Core Graphics' event source, which needs
+# no permission), the overlay (AppKit and Core Animation), the keyframes decoded from the recording (AVFoundation), the
+# narration transcribed on this Mac (Speech), the app in front and the clipboard. The objc2 family, pinned exactly.
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2 = "=0.6.5"
+block2 = "=0.6.2"
+objc2-app-kit = { version = "=0.3.2", default-features = false, features = ["std", "NSColor", "NSGraphics", "NSPasteboard", "NSResponder", "NSRunningApplication", "NSView", "NSWindow", "NSWorkspace", "objc2-core-foundation", "objc2-quartz-core"] }
+objc2-core-foundation = { version = "=0.3.2", default-features = false, features = ["std", "CFCGTypes"] }
+objc2-core-graphics = { version = "=0.3.2", default-features = false, features = ["std", "CGBitmapContext", "CGColor", "CGColorSpace", "CGContext", "CGDirectDisplay", "CGError", "CGEvent", "CGEventSource", "CGEventTypes", "CGImage", "CGPath", "CGRemoteOperation"] }
+objc2-quartz-core = { version = "=0.3.2", default-features = false, features = ["std", "CALayer", "CAShapeLayer", "CATextLayer", "CATransaction", "objc2-core-foundation", "objc2-core-graphics"] }
+objc2-foundation = { version = "=0.3.2", default-features = false, features = ["std", "NSArray", "NSData", "NSEnumerator", "NSError", "NSLocale", "NSOperation", "NSString", "NSURL", "block2"] }
+objc2-core-media = { version = "=0.3.2", default-features = false, features = ["std", "CMTime"] }
+objc2-av-foundation = { version = "=0.3.2", default-features = false, features = ["std", "AVAsset", "AVAssetImageGenerator", "objc2-core-foundation", "objc2-core-graphics", "objc2-core-media"] }
+objc2-speech = { version = "=0.3.2", default-features = false, features = ["std", "SFSpeechRecognitionRequest", "SFSpeechRecognitionResult", "SFSpeechRecognitionTask", "SFSpeechRecognizer", "SFTranscription", "SFTranscriptionSegment", "block2"] }
+
+[lints.rust]
+# Denied, not forbidden: the macOS modules (media.rs, overlay.rs, screen.rs, system.rs) make the framework calls objc2
+# marks unsafe; allowed in those modules alone.
+unsafe_code = "deny"
+
+[lints.clippy]
+dbg_macro = "warn"
+todo = "warn"
+unwrap_used = "warn"

@@ -1,0 +1,201 @@
+# Nexus Desktop, on GPUI (Zed's GPU UI framework). It is the only desktop app.
+# It reuses the shared Rust client and the desktop crates (README.md).
+[package]
+name = "nexus-desktop-gpui"
+version = "0.11.2"
+edition = "2024"
+rust-version = "1.94"
+publish = false
+license = "MIT"
+description = "Nexus Desktop on GPUI, over nexus-client and the shared desktop core."
+
+[[bin]]
+name = "nexus-desktop-gpui"
+path = "src/main.rs"
+
+# Chromium's helper processes on macOS, a small binary instead of five copies of the app (`src/helper.rs`).
+[[bin]]
+name = "nexus-desktop-gpui-helper"
+path = "src/helper.rs"
+
+[dependencies]
+# OS idle-sleep and display inhibitors, held on one worker thread (Windows uses thread-local execution state).
+keepawake = "=0.6.1"
+keyring = "=4.2.0"
+# `mcp`: the built-in Nexus MCP server Code sessions get (`src/mcp.rs`).
+nexus-client = { path = "../../crates/nexus-client", features = ["mcp"] }
+# The Code sessions' store and events.
+nexus-agent-memory = { path = "../../crates/nexus-agent-memory" }
+nexus-providers = { path = "../../crates/nexus-providers" }
+nexus-workbench = { path = "../../crates/nexus-workbench", features = ["cursor", "opencode"] }
+# The Nexus app's settings.json (read and written), its managed policy and keychain entries, the app's version and
+# crash capture (`src/crash.rs`) and the notification rules (`src/notify.rs`).
+nexus-desktop-core = { path = "../../crates/nexus-desktop-core" }
+# The MCP list's checks and the values a save keeps (`mcp::check`, `mcp::merge`).
+nexus-desktop-mcp = { path = "../../crates/nexus-desktop-mcp" }
+# The session browser's rules (`src/side/browser/`, `src/web/handlers.rs`): the addresses it opens, the popup rule and
+# the tab limit.
+nexus-browser = { path = "../../crates/nexus-browser" }
+# Screen recordings for agents (`src/record.rs`, macOS): the recorder, overlay, keyframes, transcript and folder.
+nexus-desktop-record = { path = "../../crates/nexus-desktop-record" }
+# The pull request watch (`src/pr_watch.rs`).
+nexus-pull-requests = { path = "../../crates/nexus-pull-requests" }
+# Updates (`src/updates.rs`): the coordinator, feed format, signature check and employee check, on the app's own
+# feed. `net` adds the HTTP side.
+nexus-desktop-updates = { path = "../../crates/nexus-desktop-updates", features = ["net"] }
+# The background service's relay (`src/service.rs`, `engine`), and servers (`src/machines.rs`): install,
+# reach and update the Nexus host over SSH, its sign-in, reconnect, catch-up and the version check.
+nexus-remote = { path = "../../crates/nexus-remote" }
+# Cloud machines (`src/cloud.rs`): their list, create, wake, sleep and delete through Gateway, the relay to each one's
+# host, its setup and the Claude and GitHub sign-ins (`nexus_cloud::desktop`).
+nexus-cloud = { path = "../../crates/nexus-cloud" }
+# GPUI through GPUI Kit (Longbridge's `gpui-kit`, the maintained component library): one dependency for GPUI itself
+# (the `gpui-pre-*` snapshots of Zed's crates, pinned by gpui-kit), its platform layer, the components (text input,
+# Markdown view) and their icons. Exact pin: any snapshot may change GPUI's API.
+gpui-kit = { version = "=0.9.0", features = ["syntect"] }
+# The same versions as nexus-client's workspace pins, so nexus-client builds the same here.
+serde_json = { version = "=1.0.154", features = ["preserve_order"] }
+# The web host process's protocol (`src/web/protocol.rs`), typed on both sides.
+serde = { version = "1", features = ["derive"] }
+# `process`, `io-util` and `macros`: Nexus runs the agent's sign-in and reads it (`pages/subscriptions/login.rs`).
+tokio = { version = "=1.53.3", features = ["rt-multi-thread", "sync", "time", "process", "io-util", "macros"] }
+futures = "=0.3.34"
+# The Code store's files, watched (`src/wakeups.rs`). Renamed: `src/notify.rs` is the notification rules.
+file_watch = { package = "notify", version = "8", default-features = false, features = ["macos_fsevent"] }
+# The body of an agent API call (`src/agent.rs`), as `nexus-client` takes it.
+bytes = "=1.12.1"
+# Schedules' times in this computer's time zone (`src/pages/schedules.rs`), as nexus-workbench reads them.
+chrono = { version = "=0.4.45", default-features = false, features = ["clock", "std"] }
+# This computer's IANA time zone, for the Assistant's quiet hours (`src/pages/assistant_views/proactivity.rs`). Already in
+# the tree through chrono's clock.
+iana-time-zone = "=0.1.65"
+# Settings › Devices: the pairing QR code a new device shows (Project Nayuki's encoder, no dependencies), the `nexus`
+# CLI's pin.
+qrcodegen = "=1.8.0"
+# The interface's translations (`src/i18n.rs`, `locales/app.yml`): the crate and version gpui-kit's components use, so
+# one locale switches both. Already in the tree.
+rust-i18n = "=4.2.4"
+# The computer's language, the default before a person picks one (`src/i18n.rs`). Already in the tree through
+# cosmic-text.
+sys-locale = "=0.3.2"
+# Dictation: the microphone through cpal (the OS audio API: CoreAudio,
+# WASAPI, ALSA), streamed as 16 kHz PCM over a WebSocket to the speech-to-text address Gateway hands out
+# (`POST /v1/chat/voice-token`).
+cpal = "0.16"
+tokio-tungstenite = { version = "0.28", default-features = false, features = ["connect", "rustls-tls-native-roots"] }
+# Artifacts and Nexus Pages (and later the canvas) render in CEF, Chromium's embedding framework, off screen: Chromium
+# paints each frame into a buffer that GPUI draws as an image, so a page scrolls, clips and sits under our own menus
+# like any other element, on every platform, Wayland included (`src/web/`). Prototype: no Chromium sandbox yet.
+cef = { version = "=156.3.0", default-features = false }
+# The viewer's Download saves in the Downloads folder (`attachments::downloads_dir`). The version the lockfile already has.
+dirs = "=6.0.0"
+# A page's frame as a GPUI image: GPUI's own versions. The codecs prepare attached images as the Nexus app's composer
+# does (`src/attachments.rs`): read, drawn smaller, written again. PNG also draws the tray icon (`src/tray.rs`).
+image = { version = "0.25", default-features = false, features = ["png", "jpeg", "gif", "webp"] }
+# The Files tool's PDF preview (`side/pdf.rs`): a pure-Rust rasterizer on the CPU, Apache-2.0 OR MIT, with no system
+# library to ship on any platform.
+hayro = "=0.9.0"
+# Attachments (`src/attachments.rs`): their bytes in base64, a large file's SHA-256 and its upload id, as
+# nexus-workbench takes them. nexus-workbench's pins.
+base64 = "=0.22.1"
+sha2 = "=0.11.1"
+uuid = { version = "=1.28.0", features = ["v4"] }
+smallvec = "1"
+# CPU frames: the web host and the app map each page's frame file (`src/web/cpu.rs`). The version the lockfile already has.
+memmap2 = "=0.9.12"
+# GPUI's HTTP client (`src/http.rs`), for remote images: the same pin as nexus-client's, whose TLS setup it uses.
+reqwest = { version = "=0.13.5", default-features = false, features = ["rustls-no-provider"] }
+anyhow = "=1.0.104"
+# A crash report's text, redacted before it leaves the computer (`src/redact.rs`): the Gateway's pin.
+regex = "=1.13.1"
+# Skills promotion name warnings use the web's NFKC rule; same pin as nexus-client's workspace.
+unicode-normalization = "=0.1.26"
+# Voice mode reads an answer's Markdown as sentences to say (`src/voice/spoken.rs`): the parser GPUI Kit's Markdown
+# view already uses, the version the lockfile has.
+markdown = "=1.0.0"
+# Prompt links (`links.rs`): `nexus://new?…` and repository URLs.
+url = "=2.5.9"
+# Guest chat's Turnstile token, read from the challenge page's handoff address (`src/guest.rs`).
+percent-encoding = "=2.3.2"
+# The Code session's Terminal tab (`src/side/terminal.rs`): the person's shell in a pseudo-terminal, its output parsed into a grid by Alacritty's terminal core (as Zed's
+# terminal), drawn by GPUI.
+portable-pty = "=0.9.0"
+alacritty_terminal = "=0.26.0"
+
+# One running copy per person (`src/single_instance.rs`): a second launch
+# hands its arguments over a local socket (a Unix socket, or a named pipe on Windows) and exits.
+interprocess = "2.4"
+
+# The tray icon and the menu-bar item, with their menu (`src/tray.rs`): GPUI has none. Its Linux backend only:
+# a StatusNotifierItem through libappindicator.
+tray-icon = { version = "=0.25.1", default-features = false, features = ["libappindicator"] }
+# The global shortcut and the login item (`src/prefs.rs`). On Linux, global-hotkey grabs keys through X11 only
+# (XWayland on a Wayland desktop).
+global-hotkey = "=0.8.0"
+auto-launch = "=0.6.0"
+
+# The cloud machines' tests (`src/cloud/tests.rs`): the cloud provider's API and Gateway's `/v1/cloud/machines` in memory.
+[dev-dependencies]
+tempfile = "=3.27.0"
+# GPUI's test platform (`TestAppContext`): a window with no display, for the tests that click.
+gpui-pre = { version = "=0.3.11", features = ["test-support"] }
+nexus-cloud = { path = "../../crates/nexus-cloud", features = ["fake"] }
+
+# The web host process points its stdout at stderr and keeps a private copy for the protocol (`src/web/host.rs`).
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
+# "Keep agents running when Nexus quits": this binary is the background service too (`nexus-desktop-gpui service`,
+# `src/service.rs`). macOS and Linux only.
+nexus-host = { path = "../../crates/nexus-host" }
+
+# CEF's framework and the web host's `NSApplication` on macOS (`src/web/mac.rs`): the versions the cef crate uses.
+[target.'cfg(target_os = "macos")'.dependencies]
+# Private staging and backup folders for Restart to update, on the installed app's volume.
+tempfile = "=3.27.0"
+objc2 = "0.6.3"
+# `NSSpeechSynthesizer`: voice mode's voice, the system's (`src/voice/speaker.rs`).
+objc2-app-kit = { version = "0.3.2", features = ["NSApplication", "NSResponder", "NSRunningApplication", "NSSound", "NSSpeechSynthesizer", "NSWorkspace"] }
+objc2-foundation = "0.3.2"
+# Touch ID on the grant sheet and before a secret is shown (`src/touch_id.rs`): LocalAuthentication's `LAContext`.
+objc2-local-authentication = { version = "0.3.2", default-features = false, features = ["std", "block2", "LAContext", "LAError"] }
+block2 = "0.6.1"
+# The panel window's fade and drop (`src/panel_motion.rs`): the timing curve, and the window
+# handle that leads to its NSWindow. Both are already in the lockfile (objc2-app-kit's and GPUI's).
+objc2-quartz-core = { version = "0.3.2", default-features = false, features = ["std", "CAMediaTimingFunction"] }
+# `NEXUS_WEB_SELFTEST=surface` (`src/web/selftest.rs`): an IOSurface-backed BGRA pixel buffer GPUI draws as a surface.
+# The versions GPUI's Metal renderer uses, already in the lockfile.
+objc2-core-foundation = { version = "0.3.2", default-features = false, features = ["std", "CFDictionary", "CFNumber", "CFString"] }
+objc2-core-video = { version = "0.3.2", default-features = false, features = ["std", "CVBase", "CVBuffer", "CVImageBuffer", "CVPixelBuffer", "CVReturn"] }
+raw-window-handle = "0.6"
+
+# Exercise the macOS font prefetch without creating an application or window.
+[target.'cfg(target_os = "macos")'.dev-dependencies]
+gpui-apple = { package = "gpui-pre-apple", version = "=0.3.11", features = ["font-kit"] }
+
+# Pages' frames on the GPU (`src/web/frames/`, `src/web/dmabuf.rs`): a dma-buf imported with Vulkan (ash, the version
+# wgpu 30 uses) and copied into a wgpu texture on the device of GPUI's renderer, which draws it (`SharedTexture`, from
+# the patched copy in `vendor/`).
+[target.'cfg(target_os = "linux")'.dependencies]
+# The tray's menu is a GTK 3 menu on Linux, and GTK runs on a thread of its own (`src/tray.rs`): the version tray-icon's
+# menus use.
+gtk = "=0.18.2"
+ash = "0.38"
+gpui-wgpu = { package = "gpui-pre-wgpu", version = "=0.3.11", default-features = false }
+# The last light or dark the app saw, for windows that open before the desktop portal answers (`src/appearance.rs`,
+# the patched copy in `vendor/`).
+gpui-linux = { package = "gpui-pre-linux", version = "=0.3.11", default-features = false }
+# The panel stays on top on X11 (`src/panel.rs`, `x11`): GPUI's X11 windows have no such option.
+# The X11 crate GPUI's Linux layer already uses, and the window handle that names the panel's X11 window.
+x11rb = "0.13"
+raw-window-handle = "0.6"
+# Dictation from a chosen microphone (`src/dictation.rs`): PipeWire's ALSA device opened with the source's name. The
+# ALSA crate cpal already uses on Linux.
+alsa = "0.9"
+
+# GPUI's D3D11 renderer on Windows (the patched copy in `vendor/`), for a texture drawn as a surface
+# (`SharedTexture`), and the `windows` crate with the version and features GPUI's Windows crate already uses. Only the
+# surface self-test uses them for now (`src/web/d3d11_selftest.rs`).
+[target.'cfg(windows)'.dependencies]
+gpui-windows = { package = "gpui-pre-windows", version = "=0.3.11", default-features = false }
+windows = { version = "0.62", features = ["Win32_Graphics_Direct3D11", "Win32_Graphics_Dxgi_Common"] }
+

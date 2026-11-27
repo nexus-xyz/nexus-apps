@@ -1,0 +1,6 @@
+anthropic
+openai
+typesafe
+baseten
+deepinfra
+google

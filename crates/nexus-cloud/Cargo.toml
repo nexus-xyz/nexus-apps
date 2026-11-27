@@ -1,0 +1,71 @@
+# Cloud machines for the desktop app: a provider's API behind
+# one trait (boat.dev first: create, wake, sleep, delete, SSH key, preview and desktop links, run a command), and a
+# `nexus_remote::machine::Link` that wakes the machine and refreshes its key and host key before every connect, then
+# installs and reaches nexus-host over SSH exactly as for a person's own server; and a desktop app's cloud machines
+# through Gateway (src/desktop), which Nexus GPUI runs. No UI toolkit, and it builds
+# on Windows, macOS and Linux: each app gives it its settings, keychain, sign-in and callbacks.
+[package]
+name = "nexus-cloud"
+description = "Nexus for desktop's cloud machines: a provider client (boat.dev), and the link that wakes a machine and reaches its nexus-host over SSH."
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.94"
+publish = false
+license = "MIT"
+
+[[bin]]
+# A stand-in for boat's API on this computer, for manual end-to-end runs against a local sshd (src/fake.rs). Not
+# shipped: it needs the `fake` feature, which the app never turns on.
+name = "fake-boat"
+path = "src/bin/fake-boat.rs"
+required-features = ["fake"]
+
+[dependencies]
+# The link a cloud machine becomes (`machine::Link`), the explicit SSH address (`ssh::Target::Direct`) and the
+# install over it (`install::Installer`).
+nexus-remote = { path = "../nexus-remote" }
+# `process::async_command`: `ssh-keygen` with no console window on Windows. Already under nexus-remote.
+nexus-workbench = { path = "../nexus-workbench" }
+# The desktop cloud machines (src/desktop): Gateway's `/v1/cloud/machines` with the person's sign-in.
+nexus-client = { path = "../nexus-client" }
+# The desktop cloud machines' settings.json entries and keychain (src/desktop).
+nexus-desktop-core = { path = "../nexus-desktop-core" }
+# A sign-in's tag in settings.json (src/desktop `owner_tag`). nexus-remote's pin.
+sha2 = "=0.11.1"
+# Pinned to the desktop app's (and nexus-client's) versions.
+serde = { version = "=1.0.229", features = ["derive"] }
+serde_json = { version = "=1.0.154", features = ["preserve_order"] }
+tokio = { version = "=1.53.3", features = ["fs", "io-util", "macros", "net", "process", "rt-multi-thread", "sync", "time"] }
+futures = "=0.3.34"
+# boat's HTTPS API. The app's own pin: `rustls-no-provider`, never `rustls` (which would pull aws-lc-rs), with ring
+# installed as rustls' provider before the first client is built, as nexus-client's `install_tls` does.
+reqwest = { version = "=0.13.5", default-features = false, features = ["rustls-no-provider"] }
+rustls = { version = "=0.23.46", default-features = false, features = ["ring", "std", "tls12", "logging"] }
+# The provisioning step's secrets (agent.env, mcp.json, the stop key) on standard input, one base64 line each, so
+# their content can never end a line early. The app's pin.
+base64 = "=0.22.1"
+# The `Idempotency-Key` on create, so a retried create never starts (and bills) a second machine.
+uuid = { version = "=1.28.0", features = ["v4"] }
+# The fake boat server (feature `fake`): HTTP/1 only, the versions nexus-workbench's loopback server already locks.
+hyper = { version = "=1.12.0", features = ["server", "http1"], optional = true }
+hyper-util = { version = "=0.1.21", features = ["tokio", "server"], optional = true }
+http-body-util = { version = "=0.1.5", optional = true }
+bytes = { version = "=1.12.1", optional = true }
+
+[features]
+default = []
+# `fake`: a boat API in memory (src/fake.rs), for this crate's tests and the `fake-boat` binary.
+fake = ["dep:hyper", "dep:hyper-util", "dep:http-body-util", "dep:bytes"]
+
+[dev-dependencies]
+# The tests run against the fake boat server.
+nexus-cloud = { path = ".", features = ["fake"] }
+tokio = { version = "=1.53.3", features = ["macros", "rt-multi-thread"] }
+
+[lints.rust]
+unsafe_code = "forbid"
+
+[lints.clippy]
+dbg_macro = "warn"
+todo = "warn"
+unwrap_used = "warn"

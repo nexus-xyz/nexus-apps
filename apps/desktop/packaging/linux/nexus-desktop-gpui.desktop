@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Nexus
+Comment=Nexus for desktop, drawn with GPUI
+Exec=nexus-desktop-gpui %u
+Icon=nexus-desktop-gpui
+Terminal=false
+Categories=Development;
+MimeType=x-scheme-handler/nexus;
+StartupWMClass=nexus-desktop-gpui

@@ -1,0 +1,47 @@
+# The desktop app's side of a remote machine (a private plan doc, sections 2, 3 and 5): installs and starts
+# `nexus-host` on a person's server over the system `ssh`, reaches it through `ssh <server> nexus-host proxy`, says
+# hello, relays the `wb_*` calls and `wb:*` events, reconnects with backoff and catches up from the event log, and
+# updates an older host. It builds on Windows: the app gives it a sink for the events, and the tests (nexus-host's tests/remote.rs) drive it against a real host.
+[package]
+name = "nexus-remote"
+description = "Nexus for desktop's remote machines: installs, reaches and updates nexus-host over SSH, and relays the Code workbench's calls and events."
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.94"
+publish = false
+license = "MIT"
+
+[dependencies]
+# The wire types (`api::{Request, Reply, HostInfo, PROTOCOL}`) and `process::async_command` (no console on Windows).
+nexus-workbench = { path = "../nexus-workbench" }
+# Pinned to the desktop app's (and eng/factory/rs's) versions.
+serde = { version = "=1.0.229", features = ["derive"] }
+serde_json = { version = "=1.0.154", features = ["preserve_order"] }
+tokio = { version = "=1.53.3", features = ["fs", "io-util", "macros", "net", "process", "rt-multi-thread", "sync", "time"] }
+futures = "=0.3.34"
+# The host's WebSocket, over the SSH child's standard input and output, or through Gateway (src/relay.rs).
+tokio-tungstenite = { version = "=0.30.0", default-features = false, features = ["handshake"] }
+# TLS for the relay through Gateway (`wss://`), as reqwest has it in the app: ring as rustls' provider (never aws-lc-rs),
+# the system's roots through the platform verifier. The versions the lockfiles already have.
+rustls = { version = "=0.23.46", default-features = false, features = ["ring", "std", "tls12", "logging"] }
+tokio-rustls = { version = "=0.26.6", default-features = false, features = ["ring", "tls12", "logging"] }
+rustls-platform-verifier = "=0.7.1"
+# A host downloaded on the laptop is checked against the manifest's SHA-256 before it is copied over.
+sha2 = "=0.11.1"
+# The updater's minisign verifier: a host must carry a signature from the key the app holds.
+nexus-desktop-updates = { path = "../nexus-desktop-updates" }
+
+# The app's own background service (src/local.rs): stopped with SIGTERM, as `nexus-host stop` stops a server's host.
+[target.'cfg(unix)'.dependencies]
+nix = { version = "=0.31.3", default-features = false, features = ["signal"] }
+
+[dev-dependencies]
+tokio = { version = "=1.53.3", features = ["macros", "rt-multi-thread", "test-util"] }
+
+[lints.rust]
+unsafe_code = "forbid"
+
+[lints.clippy]
+dbg_macro = "warn"
+todo = "warn"
+unwrap_used = "warn"

@@ -1,0 +1,146 @@
+{
+  "purpose": "Public cross-runtime test keys; never credentials for a real Gateway",
+  "now": 1800000000000,
+  "scope": {
+    "gateway": "https://api.nexus.example",
+    "tenantId": "ten_computer_vector",
+    "personId": "usr_computer_vector"
+  },
+  "phoneSecret": "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8gISIjJCUmJygpKissLS4vMDEyMzQ1Njc4OTo7PD0-Pw",
+  "runnerSecret": "QEFCQ0RFRkdISUpLTE1OT1BRUlNUVVZXWFlaW1xdXl9gYWJjZGVmZ2hpamtsbW5vcHFyc3R1dnd4eXp7fH1-fw",
+  "devices": [
+    {
+      "kind": "device",
+      "state": "trusted",
+      "createdAt": "2026-11-01T00:00:00Z",
+      "approvedAt": "2026-11-01T00:01:00Z",
+      "revokedAt": null,
+      "id": "dev_runner",
+      "name": "Computer",
+      "encryptionKey": "eaYx7t4b-cmPEgMs3q3Q56B5OY_HhriMyEbsia-FpRo",
+      "signingKey": "F0VTtFbd38aQjsqxwQH-arIeK6oGF3lbfUOmNIKZP9U",
+      "approvedBy": null,
+      "approvalSignature": null
+    },
+    {
+      "kind": "device",
+      "state": "trusted",
+      "createdAt": "2026-11-01T00:00:00Z",
+      "approvedAt": "2026-11-01T00:01:00Z",
+      "revokedAt": null,
+      "id": "dev_phone",
+      "name": "Phone",
+      "encryptionKey": "j0DFrbaPJWJK5bIU6nZ6bslNgp09e14a0bpvPiE4KF8",
+      "signingKey": "Kay64UG8yvCyLhqU000LxzYeUm0L_hLIl5S8kyKWbdc",
+      "approvedBy": "dev_runner",
+      "approvalSignature": "trI9PWGgzMgTBTBQIkU7c7BDMllE3bbejXVl2CpcodaDYt-C3cNbvMxv_7SggstjmQK9WSjV4t2vw1U8Tj7JCQ"
+    }
+  ],
+  "presence": {
+    "version": 1,
+    "scope": {
+      "gateway": "https://api.nexus.example",
+      "tenantId": "ten_computer_vector",
+      "personId": "usr_computer_vector"
+    },
+    "computerId": "0192f3a4-0000-7000-8000-000000000001",
+    "runnerDeviceId": "dev_runner",
+    "name": "Ada’s laptop 台",
+    "generation": 7,
+    "issuedAt": 1800000000000,
+    "expiresAt": 1800000045000,
+    "enabled": true,
+    "capabilities": [
+      "projects",
+      "start"
+    ],
+    "signature": "KH9BHdPdZ7ScFtGKL5IWdqo8l6ys-tkXUj03ySwUUiIDrnWTXuSKB7adTA2MGitU74i-wa0Uymlg45t6FuOLCQ"
+  },
+  "request": {
+    "version": 1,
+    "scope": {
+      "gateway": "https://api.nexus.example",
+      "tenantId": "ten_computer_vector",
+      "personId": "usr_computer_vector"
+    },
+    "computerId": "0192f3a4-0000-7000-8000-000000000001",
+    "id": "0192f3a4-0000-7000-8000-000000000002",
+    "senderDeviceId": "dev_phone",
+    "runnerDeviceId": "dev_runner",
+    "generation": 7,
+    "issuedAt": 1800000000000,
+    "expiresAt": 1800000015000,
+    "lockedKey": "vfNl1nHlVhiB8yKI3vwqWmQJ56X35zDeeF5qpZ6HXXeTHojM-9toqU3_QYDqqLshXPezsbHtJC7nMi0jkIpUqRab_xxiiLiPja8UpHKlyhE",
+    "sealed": "4JZtlaEJX9DWlnX7FjjRWl55Dlr7LjPr-jcbQrvwkE1bzLb873POe8p5jPKyDFbrdEXj5o1j6ZZCiHnsDcOjfxIh0SKzBcZHgLmPpnDX6nWmbT_lvfO4eDeGZ2OQkJX86uDbDqVDhleEwu2x5QzQLQ6-AVL6NF1NH9N8jzgocA1J6bHeeESdMkoUOCuc6JSHURQkmnFViVlyCTyJENYTV3bImouCrzGUJcwOPOuU79RCtR6fj1sCGff2xUhdOTuJAFEhl_gvdARv9htf6lpX_CE8Dlbny_-42i4UDJiYISrIjoTW-E2nmVzzj_otRQEjlDqYg4mYHGNcZ5BZHvQUrZjvBLvZ204mmAiLIYV5FOXLL1s2BCyQvLty3PzgXjpqPLnMD5abr4I_pmQI2qyN3bHHkAcz7_Ox3ZytLranfmIjvJRT9VbBkXiccdhoKXtukNG9XbN76SCCTN8VqR7em1RX5OiKhsZx49wYoa7r3ui4l9a63fdzK7YC31l0zul4_KHUi7bEopn_oR4p9nUuB1jKlPDx1Aw6zJHhfMh4wWd2xsekVeK5nKa6IO5tTYD8n9oQSRSmpRMjA_ouVCo4pB0nlp914Hqs2gXVRBwujTAgyDu0viRGHMayZKSmzFHcTyxAIlH2Xq6N3g_daGciTFs2Y8C7vV9S2rlmrFpgzmYrXYxpjNPSu0BFHcxaF-kfT-SWddm3lEUmdk91PmntZO_ocUAKXaQlfVM",
+    "signature": "YBkV92bLFBakp3bfs1b94_KMSoq9iZpwr2GT2YDg2iZzWlthDjY5QMmrf2Hhf10tcg_aMJmwwQVoaRBOjEbkDQ"
+  },
+  "requestHash": "GyWm4ZVzz7zbCj2ncd_SRT-Gzkw3fjWLPufQ6cGXUrc",
+  "reply": {
+    "version": 1,
+    "scope": {
+      "gateway": "https://api.nexus.example",
+      "tenantId": "ten_computer_vector",
+      "personId": "usr_computer_vector"
+    },
+    "computerId": "0192f3a4-0000-7000-8000-000000000001",
+    "requestId": "0192f3a4-0000-7000-8000-000000000002",
+    "requestHash": "GyWm4ZVzz7zbCj2ncd_SRT-Gzkw3fjWLPufQ6cGXUrc",
+    "runnerDeviceId": "dev_runner",
+    "recipientDeviceId": "dev_phone",
+    "lockedKey": "4XLlTJIzBE5e2mo41E7u8JtoACcUiIQ-nocTTttq9k4Mw0o1gsmZqohxYyGgZOMhwlg7gcOxPhQIQ6Jyd5W3f4_6sEBAUTBb2ncGMcvGjpQ",
+    "sealed": "vinTG3fgedoI55c9Yy7ESrYJcneS0ELWw1CMRajtSjTngrUWvcyh17sbSDn8S6NkWh14g300vAql71Tpt0Y6M9dVyKCb3ikI5IIjFVDLrsQ7nCrnfUmLqSGmGUYkhLD7dYt-NMfqTUeyydrVrAryDUvB3GX4jYS7Se1c2pGlVKlEre5_aLpNa9X96lMZe1SvrjJFcbntYPDI1NBRSrxVxpXMc08cPaCtJnSnjisVdnpXPjTSpV_bCz3KrkA3qrlNlqj7gYo0NY7TewrM9sfF--dC-2CF5VX3_LIHWlfRxexJRzFPCwiKyLa88RbYEKEBGsqyQbiQwVjQST80XG4SKlvKZa3wO0jHCr1qYsEheLja8itA6WlwhZm3PU3N6E0Fi-Schc66XeaZra9VXuxQb-VGvMvXMh-eY0F39nEMDy_p1aTG_WJ1rVBA0hhwAvajNFJypiAtYrs6ClElknZ9MeIDIrWnBG5vN_5-xZRNTpUdEVH_es5iu5zTmClEZt0F1zEpme10qRqoFh4iG020PaU3z6rNSleyS6ImZ1e2dExNO9U7pwj8ZYy-8SzuIDAq7tLzdUZmwZcPDM1SCWxY8wIQHhyOUgX6Z52jio9ai0yn0d678m7LAonrcFJymaO4Rsp5-eoQbrorgbNmXWOiMlyzVFpBdC9V43EfSxGaI8xpPc0UPuG2dQGTvhzGtUeJOl5S3SOuZ9jaF9fa2Zfxj351AGwXM8jpwUSM0sx8EcmLtZPG-hn_X1-wmTY2U5d1FnNHDRddMojPfWvvXHl7BfaQYpSAsn8pZ4w1_yOJQ0-N",
+    "signature": "ZMBK495nNk6ps6ubmdC80CByInqZ1ZL4sEtzqnvEYama5d1PkAvCwP_X47MNcprFGJS-b0ZhNeR5_VV6RG8xCw"
+  },
+  "result": {
+    "kind": "created",
+    "threadId": "0192f3a4-0000-7000-8000-000000000003",
+    "origin": {
+      "kind": "computer",
+      "computerId": "0192f3a4-0000-7000-8000-000000000001",
+      "name": "Ada’s laptop 台"
+    },
+    "launch": "running"
+  },
+  "invitation": {
+    "version": 1,
+    "scope": {
+      "gateway": "https://api.nexus.example",
+      "tenantId": "ten_computer_vector",
+      "personId": "usr_computer_vector"
+    },
+    "inviteId": "0192f3a4-0000-7000-8000-000000000004",
+    "computerId": "0192f3a4-0000-7000-8000-000000000001",
+    "computerName": "Ada’s laptop 台",
+    "inviterDeviceId": "dev_runner",
+    "encryptionKey": "eaYx7t4b-cmPEgMs3q3Q56B5OY_HhriMyEbsia-FpRo",
+    "signingKey": "F0VTtFbd38aQjsqxwQH-arIeK6oGF3lbfUOmNIKZP9U",
+    "expiresAt": 1800000300000,
+    "secret": "gIGCg4SFhoeIiYqLjI2Oj5CRkpOUlZaXmJmam5ydnp8",
+    "signature": "uSaBlB_x06n1-Vm661pydLeTU99aS216CCTnkvToDFlPQTHqGspk5RFyxcYVkSIDnpo5tCP2HhRNVrgQDNbsDw"
+  },
+  "invitationLink": "xyz.nexus.app://connect#invite=eyJ2ZXJzaW9uIjoxLCJzY29wZSI6eyJnYXRld2F5IjoiaHR0cHM6Ly9hcGkubmV4dXMuZXhhbXBsZSIsInRlbmFudElkIjoidGVuX2NvbXB1dGVyX3ZlY3RvciIsInBlcnNvbklkIjoidXNyX2NvbXB1dGVyX3ZlY3RvciJ9LCJpbnZpdGVJZCI6IjAxOTJmM2E0LTAwMDAtNzAwMC04MDAwLTAwMDAwMDAwMDAwNCIsImNvbXB1dGVySWQiOiIwMTkyZjNhNC0wMDAwLTcwMDAtODAwMC0wMDAwMDAwMDAwMDEiLCJjb21wdXRlck5hbWUiOiJBZGHigJlzIGxhcHRvcCDlj7AiLCJpbnZpdGVyRGV2aWNlSWQiOiJkZXZfcnVubmVyIiwiZW5jcnlwdGlvbktleSI6ImVhWXg3dDRiLWNtUEVnTXMzcTNRNTZCNU9ZX0hocmlNeUVic2lhLUZwUm8iLCJzaWduaW5nS2V5IjoiRjBWVHRGYmQzOGFRanNxeHdRSC1hckllSzZvR0YzbGJmVU9tTklLWlA5VSIsImV4cGlyZXNBdCI6MTgwMDAwMDMwMDAwMCwic2VjcmV0IjoiZ0lHQ2c0U0Zob2VJaVlxTGpJMk9qNUNSa3BPVWxaYVhtSm1hbTV5ZG5wOCIsInNpZ25hdHVyZSI6InVTYUJsQl94MDZuMS1WbTY2MXB5ZExlVFU5OWFTMjE2Q0NUbmt2VG9ERmxQUVRIcUdzcGs1UkZ5eGNZVmtTSURucG81dENQMkhoUk5WcmdRRE5ic0R3In0",
+  "pairing": {
+    "version": 1,
+    "scope": {
+      "gateway": "https://api.nexus.example",
+      "tenantId": "ten_computer_vector",
+      "personId": "usr_computer_vector"
+    },
+    "id": "0192f3a4-0000-7000-8000-000000000005",
+    "inviteId": "0192f3a4-0000-7000-8000-000000000004",
+    "inviterDeviceId": "dev_runner",
+    "senderDeviceId": "dev_phone",
+    "expiresAt": 1800000300000,
+    "lockedKey": "V-69mhVpZj5fzDyLUAn_cgS4IdR4S8ZnQSOf55WcVTzp6i3YG7V0NiRWMFd1MaoDFUWV11wnRqHEWrRr5hw2cjELuR4OwLg1mF99L4yNmQE",
+    "sealed": "TP1CQKQ-ahs_wGlgoh-V9A-5W_5avdy4Q_4pjzOjGXOxoeMD6CsgOoTVjv2AJmkPd9EbrrMDVG8sycuXTavYL45naSysHrt3WhoDlrxbYccm7VPPKldIBRKxAQJWvNKS2LTdJv1E4rTlF4Ean0XlAd3wM8XcXWzQUxh6vVMu4u9rAko7s-UHKqawgSoAFRqopFTOgBwYziPgTCpq4ajxhJy68vKT-DxXe7TXaWBAjhdaWibaQalk9mJv4wpPCWchaSaEvbot67Aw8V8VQl8sixw-56irqtZTNLgck0u18cHOZA0yqUIYvAtfrkbuTKeuJvOMOxxBnWaOgyjPSPViLJShN00h-gX4RsFgxd045fzfIEcplMDlWEYEYAadyVuI_SggBgaFj_YaFb3t0e3oSyQTbvT2BPKqJ-bQXZ4ym35TpacJlOv_C1L0o9B4f93BytSbwrkjJ46p00Qt_Y_mL0j2DlbtSIItlcFOX29jWF9KTK8Y5STyqfpQSQPRfzXzGCik_b_RG1Wq8QJHhFMe2SjUEzDWwlMAdUCl7B2Zu7to4jk84BclP4aEoXpXnL9YS9thm9T_6mtMeVryyJu3GS7CFlfqBOHHxB-_h0jMjlm24lOw2dRy9BUS9IuuISuYd5MBkk_v1leZRdnt33J6vw3q4HQ7qJb-tb7qa9szRSZ9GMf6cOGcqs9gKn7I9DnGVQH57fjtiHiMg_NhHp_uw_GrPO4Mmr3MJbI5BhVwbscIXak2e8WDYcHqBim8yLJd5VLJoyaEpmdJ",
+    "signature": "L75HMVjRJ3k-UviC0OM6Mz6ytszC610E_sC9S5ksErAI7KhC6fASexaqkaWDr9xcMpYehJjhp72ZExeGGWu8BA"
+  },
+  "messages": {
+    "presence": "nexus-computer-presence-v1\n25:https://api.nexus.example19:ten_computer_vector19:usr_computer_vector36:0192f3a4-0000-7000-8000-00000000000110:dev_runner18:Ada’s laptop 台1:713:180000000000013:18000000450004:true14:projects,start",
+    "request": "nexus-computer-request-v1\n25:https://api.nexus.example19:ten_computer_vector19:usr_computer_vector36:0192f3a4-0000-7000-8000-00000000000136:0192f3a4-0000-7000-8000-0000000000029:dev_phone10:dev_runner1:713:180000000000013:1800000015000107:vfNl1nHlVhiB8yKI3vwqWmQJ56X35zDeeF5qpZ6HXXeTHojM-9toqU3_QYDqqLshXPezsbHtJC7nMi0jkIpUqRab_xxiiLiPja8UpHKlyhE739:4JZtlaEJX9DWlnX7FjjRWl55Dlr7LjPr-jcbQrvwkE1bzLb873POe8p5jPKyDFbrdEXj5o1j6ZZCiHnsDcOjfxIh0SKzBcZHgLmPpnDX6nWmbT_lvfO4eDeGZ2OQkJX86uDbDqVDhleEwu2x5QzQLQ6-AVL6NF1NH9N8jzgocA1J6bHeeESdMkoUOCuc6JSHURQkmnFViVlyCTyJENYTV3bImouCrzGUJcwOPOuU79RCtR6fj1sCGff2xUhdOTuJAFEhl_gvdARv9htf6lpX_CE8Dlbny_-42i4UDJiYISrIjoTW-E2nmVzzj_otRQEjlDqYg4mYHGNcZ5BZHvQUrZjvBLvZ204mmAiLIYV5FOXLL1s2BCyQvLty3PzgXjpqPLnMD5abr4I_pmQI2qyN3bHHkAcz7_Ox3ZytLranfmIjvJRT9VbBkXiccdhoKXtukNG9XbN76SCCTN8VqR7em1RX5OiKhsZx49wYoa7r3ui4l9a63fdzK7YC31l0zul4_KHUi7bEopn_oR4p9nUuB1jKlPDx1Aw6zJHhfMh4wWd2xsekVeK5nKa6IO5tTYD8n9oQSRSmpRMjA_ouVCo4pB0nlp914Hqs2gXVRBwujTAgyDu0viRGHMayZKSmzFHcTyxAIlH2Xq6N3g_daGciTFs2Y8C7vV9S2rlmrFpgzmYrXYxpjNPSu0BFHcxaF-kfT-SWddm3lEUmdk91PmntZO_ocUAKXaQlfVM",
+    "claim": "nexus-computer-claim-v1\n25:https://api.nexus.example19:ten_computer_vector19:usr_computer_vector36:0192f3a4-0000-7000-8000-00000000000136:0192f3a4-0000-7000-8000-00000000000243:GyWm4ZVzz7zbCj2ncd_SRT-Gzkw3fjWLPufQ6cGXUrc10:dev_runner",
+    "reply": "nexus-computer-reply-v1\n25:https://api.nexus.example19:ten_computer_vector19:usr_computer_vector36:0192f3a4-0000-7000-8000-00000000000136:0192f3a4-0000-7000-8000-00000000000243:GyWm4ZVzz7zbCj2ncd_SRT-Gzkw3fjWLPufQ6cGXUrc10:dev_runner9:dev_phone107:4XLlTJIzBE5e2mo41E7u8JtoACcUiIQ-nocTTttq9k4Mw0o1gsmZqohxYyGgZOMhwlg7gcOxPhQIQ6Jyd5W3f4_6sEBAUTBb2ncGMcvGjpQ812:vinTG3fgedoI55c9Yy7ESrYJcneS0ELWw1CMRajtSjTngrUWvcyh17sbSDn8S6NkWh14g300vAql71Tpt0Y6M9dVyKCb3ikI5IIjFVDLrsQ7nCrnfUmLqSGmGUYkhLD7dYt-NMfqTUeyydrVrAryDUvB3GX4jYS7Se1c2pGlVKlEre5_aLpNa9X96lMZe1SvrjJFcbntYPDI1NBRSrxVxpXMc08cPaCtJnSnjisVdnpXPjTSpV_bCz3KrkA3qrlNlqj7gYo0NY7TewrM9sfF--dC-2CF5VX3_LIHWlfRxexJRzFPCwiKyLa88RbYEKEBGsqyQbiQwVjQST80XG4SKlvKZa3wO0jHCr1qYsEheLja8itA6WlwhZm3PU3N6E0Fi-Schc66XeaZra9VXuxQb-VGvMvXMh-eY0F39nEMDy_p1aTG_WJ1rVBA0hhwAvajNFJypiAtYrs6ClElknZ9MeIDIrWnBG5vN_5-xZRNTpUdEVH_es5iu5zTmClEZt0F1zEpme10qRqoFh4iG020PaU3z6rNSleyS6ImZ1e2dExNO9U7pwj8ZYy-8SzuIDAq7tLzdUZmwZcPDM1SCWxY8wIQHhyOUgX6Z52jio9ai0yn0d678m7LAonrcFJymaO4Rsp5-eoQbrorgbNmXWOiMlyzVFpBdC9V43EfSxGaI8xpPc0UPuG2dQGTvhzGtUeJOl5S3SOuZ9jaF9fa2Zfxj351AGwXM8jpwUSM0sx8EcmLtZPG-hn_X1-wmTY2U5d1FnNHDRddMojPfWvvXHl7BfaQYpSAsn8pZ4w1_yOJQ0-N",
+    "invitation": "nexus-phone-invitation-v1\n25:https://api.nexus.example19:ten_computer_vector19:usr_computer_vector36:0192f3a4-0000-7000-8000-00000000000436:0192f3a4-0000-7000-8000-00000000000118:Ada’s laptop 台10:dev_runner43:eaYx7t4b-cmPEgMs3q3Q56B5OY_HhriMyEbsia-FpRo43:F0VTtFbd38aQjsqxwQH-arIeK6oGF3lbfUOmNIKZP9U13:180000030000043:gthkCFMLdl5G6_R4BwlQJ-gHvAhnSw3nfuXvL659BJI",
+    "pairing": "nexus-phone-pairing-v1\n25:https://api.nexus.example19:ten_computer_vector19:usr_computer_vector36:0192f3a4-0000-7000-8000-00000000000536:0192f3a4-0000-7000-8000-00000000000410:dev_runner9:dev_phone13:1800000300000107:V-69mhVpZj5fzDyLUAn_cgS4IdR4S8ZnQSOf55WcVTzp6i3YG7V0NiRWMFd1MaoDFUWV11wnRqHEWrRr5hw2cjELuR4OwLg1mF99L4yNmQE780:TP1CQKQ-ahs_wGlgoh-V9A-5W_5avdy4Q_4pjzOjGXOxoeMD6CsgOoTVjv2AJmkPd9EbrrMDVG8sycuXTavYL45naSysHrt3WhoDlrxbYccm7VPPKldIBRKxAQJWvNKS2LTdJv1E4rTlF4Ean0XlAd3wM8XcXWzQUxh6vVMu4u9rAko7s-UHKqawgSoAFRqopFTOgBwYziPgTCpq4ajxhJy68vKT-DxXe7TXaWBAjhdaWibaQalk9mJv4wpPCWchaSaEvbot67Aw8V8VQl8sixw-56irqtZTNLgck0u18cHOZA0yqUIYvAtfrkbuTKeuJvOMOxxBnWaOgyjPSPViLJShN00h-gX4RsFgxd045fzfIEcplMDlWEYEYAadyVuI_SggBgaFj_YaFb3t0e3oSyQTbvT2BPKqJ-bQXZ4ym35TpacJlOv_C1L0o9B4f93BytSbwrkjJ46p00Qt_Y_mL0j2DlbtSIItlcFOX29jWF9KTK8Y5STyqfpQSQPRfzXzGCik_b_RG1Wq8QJHhFMe2SjUEzDWwlMAdUCl7B2Zu7to4jk84BclP4aEoXpXnL9YS9thm9T_6mtMeVryyJu3GS7CFlfqBOHHxB-_h0jMjlm24lOw2dRy9BUS9IuuISuYd5MBkk_v1leZRdnt33J6vw3q4HQ7qJb-tb7qa9szRSZ9GMf6cOGcqs9gKn7I9DnGVQH57fjtiHiMg_NhHp_uw_GrPO4Mmr3MJbI5BhVwbscIXak2e8WDYcHqBim8yLJd5VLJoyaEpmdJ"
+  }
+}

@@ -1,0 +1,50 @@
+<!doctype html><html><head><meta charset="utf-8"><title>Graphics</title><!--HARNESS-->
+<style>canvas, svg { width: 100%; height: 90px; display: block; }</style></head><body>
+<h1>Graphics</h1><div id="score"></div>
+<div class="grid">
+<div class="cell"><b>canvas 2D (gradient, text, arc)</b><canvas id="c2d"></canvas></div>
+<div class="cell"><b>WebGL triangle</b><canvas id="gl"></canvas></div>
+<div class="cell"><b>WebGL2 spinning</b><canvas id="gl2"></canvas></div>
+<div class="cell"><b>OffscreenCanvas in worker</b><canvas id="oc"></canvas></div>
+<div class="cell"><b>SVG filter (blur, drop)</b><svg viewBox="0 0 100 50"><defs><filter id="f"><feGaussianBlur stdDeviation="2"/><feOffset dx="3" dy="3"/><feMerge><feMergeNode/><feMergeNode in="SourceGraphic"/></feMerge></filter><linearGradient id="lg"><stop offset="0" stop-color="#f0f"/><stop offset="1" stop-color="#0ff"/></linearGradient></defs><rect x="10" y="8" width="60" height="30" rx="6" fill="url(#lg)" filter="url(#f)"/></svg></div>
+<div class="cell"><b>SVG textPath</b><svg viewBox="0 0 100 50"><path id="p" d="M5,40 Q50,0 95,40" fill="none" stroke="#ccc"/><text font-size="9"><textPath href="#p">text along a curved path</textPath></text></svg></div>
+<div class="cell"><b>SVG SMIL animate</b><svg viewBox="0 0 100 50"><circle cx="10" cy="25" r="8" fill="#e33"><animate attributeName="cx" values="10;90;10" dur="2s" repeatCount="indefinite"/></circle></svg></div>
+<div class="cell"><b>SVG pattern + mask + stroke-dash</b><svg viewBox="0 0 100 50"><defs><pattern id="pt" width="6" height="6" patternUnits="userSpaceOnUse"><circle cx="3" cy="3" r="1.5" fill="#39f"/></pattern></defs><rect width="100" height="50" fill="url(#pt)"/><circle cx="50" cy="25" r="18" fill="none" stroke="#e33" stroke-width="4" stroke-dasharray="6 4"/></svg></div>
+<div class="cell"><b>SVG as &lt;img&gt;</b><img id="svgimg" style="height:60px" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 10'%3E%3Ccircle cx='5' cy='5' r='4' fill='%2333aa33'/%3E%3C/svg%3E"></div>
+<div class="cell"><b>canvas toDataURL roundtrip</b><img id="rt" style="height:60px"></div>
+</div>
+<script>
+function fit(c) { const r = c.getBoundingClientRect(); c.width = r.width * devicePixelRatio; c.height = r.height * devicePixelRatio; return c; }
+check("canvas 2D", () => {
+  const c = fit(document.getElementById("c2d")), x = c.getContext("2d"); const g = x.createLinearGradient(0, 0, c.width, 0);
+  g.addColorStop(0, "#f80"); g.addColorStop(1, "#08f"); x.fillStyle = g; x.fillRect(0, 0, c.width, c.height);
+  x.fillStyle = "#fff"; x.font = `${20 * devicePixelRatio}px sans-serif`; x.fillText("Canvas ✓ 😀", 8, 30 * devicePixelRatio);
+  x.beginPath(); x.arc(c.width - 40, c.height / 2, 25, 0, Math.PI * 2); x.fillStyle = "#000"; x.fill();
+  const p = x.getImageData(1, 1, 1, 1).data; return p[0] > 200 && p[2] < 100;
+});
+function prog(gl, vs, fs) { const p = gl.createProgram(); for (const [t, s] of [[gl.VERTEX_SHADER, vs], [gl.FRAGMENT_SHADER, fs]]) { const sh = gl.createShader(t); gl.shaderSource(sh, s); gl.compileShader(sh); if (!gl.getShaderParameter(sh, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(sh)); gl.attachShader(p, sh); } gl.linkProgram(p); gl.useProgram(p); return p; }
+check("WebGL", () => {
+  const c = fit(document.getElementById("gl")), gl = c.getContext("webgl", { preserveDrawingBuffer: true }); if (!gl) return false;
+  const p = prog(gl, "attribute vec2 a;varying vec2 v;void main(){v=a;gl_Position=vec4(a,0,1);}", "precision mediump float;varying vec2 v;void main(){gl_FragColor=vec4(v*.5+.5,1,1);}");
+  gl.bindBuffer(gl.ARRAY_BUFFER, gl.createBuffer()); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, 0, 1]), gl.STATIC_DRAW);
+  const l = gl.getAttribLocation(p, "a"); gl.enableVertexAttribArray(l); gl.vertexAttribPointer(l, 2, gl.FLOAT, false, 0, 0);
+  gl.clearColor(0.1, 0.1, 0.1, 1); gl.clear(gl.COLOR_BUFFER_BIT); gl.drawArrays(gl.TRIANGLES, 0, 3);
+  const px = new Uint8Array(4); gl.readPixels(c.width / 2, c.height / 3, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, px); return px[2] === 255;
+});
+check("WebGL2", () => {
+  const c = fit(document.getElementById("gl2")), gl = c.getContext("webgl2"); if (!gl) return false;
+  const p = prog(gl, "#version 300 es\nin vec2 a;uniform float t;void main(){float s=sin(t),k=cos(t);gl_Position=vec4(mat2(k,-s,s,k)*a*.8,0,1);}", "#version 300 es\nprecision mediump float;out vec4 o;void main(){o=vec4(1,.4,.1,1);}");
+  gl.bindBuffer(gl.ARRAY_BUFFER, gl.createBuffer()); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, 0, 1]), gl.STATIC_DRAW);
+  gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0); const u = gl.getUniformLocation(p, "t");
+  (function f(t) { gl.clearColor(0, 0, 0.2, 1); gl.clear(gl.COLOR_BUFFER_BIT); gl.uniform1f(u, t / 500); gl.drawArrays(gl.TRIANGLES, 0, 3); requestAnimationFrame(f); })(0);
+  return true;
+});
+check("OffscreenCanvas worker", () => new Promise((r, j) => {
+  const c = fit(document.getElementById("oc")); const off = c.transferControlToOffscreen();
+  const w = new Worker(URL.createObjectURL(new Blob([`onmessage=e=>{const x=e.data.getContext("2d");x.fillStyle="#3a3";x.fillRect(0,0,e.data.width,e.data.height);x.fillStyle="#fff";x.font="40px sans-serif";x.fillText("worker",10,60);postMessage(1)}`])));
+  w.onmessage = () => r(true); w.onerror = j; w.postMessage(off, [off]);
+}));
+check("SVG <img> decodes", () => document.getElementById("svgimg").decode().then(() => document.getElementById("svgimg").naturalWidth > 0));
+check("toDataURL", () => { const c = document.createElement("canvas"); c.width = c.height = 20; const x = c.getContext("2d"); x.fillStyle = "#e33"; x.fillRect(0, 0, 20, 20); const i = document.getElementById("rt"); i.src = c.toDataURL(); return i.decode().then(() => true); });
+check("SMIL", () => typeof SVGAnimateElement === "function");
+</script></body></html>

@@ -1,0 +1,41 @@
+<!doctype html><html><head><meta charset="utf-8"><title>JS APIs</title><!--HARNESS-->
+</head><body>
+<h1>JS APIs</h1><div id="score"></div>
+<div class="cell" id="log" style="font:11px ui-monospace,monospace;white-space:pre-wrap"></div>
+<script type="module">window.esm = 42;</script>
+<script>
+const log = (s) => (document.getElementById("log").textContent += s + "\n");
+log("UA: " + navigator.userAgent);
+log("DPR: " + devicePixelRatio + "  viewport: " + innerWidth + "x" + innerHeight);
+check("ES2022+ syntax", () => { class A { #x = 1; static y = 2; get x() { return this.#x; } } return new A().x === 1 && [1, 2].at(-1) === 2 && Object.hasOwn({ a: 1 }, "a") && (null ?? 3) === 3; });
+check("ES module", () => new Promise((r) => setTimeout(() => r(window.esm === 42), 50)));
+check("top-level await (dyn import)", () => import("data:text/javascript,export default 7").then((m) => m.default === 7));
+check("async/generators", async () => { async function* g() { yield 1; yield 2; } let s = 0; for await (const v of g()) s += v; return s === 3; });
+check("localStorage", () => { localStorage.setItem("k", "v"); return localStorage.getItem("k") === "v"; });
+check("sessionStorage", () => { sessionStorage.setItem("k", "v"); return sessionStorage.getItem("k") === "v"; });
+check("IndexedDB", () => new Promise((res, rej) => { const r = indexedDB.open("t", 1); r.onupgradeneeded = () => r.result.createObjectStore("s"); r.onsuccess = () => res(true); r.onerror = rej; }));
+check("Intl.NumberFormat", () => new Intl.NumberFormat("de-DE", { style: "currency", currency: "EUR" }).format(1234.5).includes("1.234,50"));
+check("Intl.DateTimeFormat", () => new Intl.DateTimeFormat("ja-JP", { dateStyle: "long" }).format(new Date(2026, 0, 2)).includes("2026"));
+check("Intl.RelativeTime", () => new Intl.RelativeTimeFormat("en").format(-1, "day") === "1 day ago");
+check("structuredClone", () => structuredClone({ d: new Date(0), m: new Map([[1, 2]]) }).m.get(1) === 2);
+check("WebCrypto digest", () => crypto.subtle.digest("SHA-256", new TextEncoder().encode("a")).then((b) => new Uint8Array(b)[0] === 0xca));
+check("crypto.randomUUID", () => /^[0-9a-f-]{36}$/.test(crypto.randomUUID()));
+check("ResizeObserver", () => new Promise((r) => new ResizeObserver(() => r(true)).observe(document.body)));
+check("IntersectionObserver", () => new Promise((r) => new IntersectionObserver(() => r(true)).observe(document.body)));
+check("MutationObserver", () => new Promise((r) => { const m = new MutationObserver(() => r(true)); m.observe(document.body, { childList: true }); document.body.append(document.createElement("i")); }));
+check("Worker (blob)", () => new Promise((r, j) => { const w = new Worker(URL.createObjectURL(new Blob(["postMessage(6*7)"], { type: "text/javascript" }))); w.onmessage = (e) => r(e.data === 42); w.onerror = j; }));
+check("BroadcastChannel", () => typeof BroadcastChannel === "function");
+check("fetch data: URL", () => fetch("data:text/plain,hi").then((r) => r.text()).then((t) => t === "hi"));
+check("fetch blob: URL", () => fetch(URL.createObjectURL(new Blob(["yo"]))).then((r) => r.text()).then((t) => t === "yo"));
+check("TextEncoder/Decoder", () => new TextDecoder().decode(new TextEncoder().encode("ação")) === "ação");
+check("requestAnimationFrame", () => new Promise((r) => requestAnimationFrame((t) => r(t > 0))));
+check("requestIdleCallback", () => typeof requestIdleCallback === "function");
+check("queueMicrotask", () => new Promise((r) => queueMicrotask(() => r(true))));
+check("WeakRef/FinalizationRegistry", () => typeof WeakRef === "function" && typeof FinalizationRegistry === "function");
+check("Array.groupBy / toSorted", () => [3, 1, 2].toSorted()[0] === 1 && typeof Object.groupBy === "function");
+check("Clipboard API exists", () => !!navigator.clipboard);
+check("matchMedia prefers-color-scheme", () => typeof matchMedia("(prefers-color-scheme: dark)").matches === "boolean");
+check("WebSocket ctor", () => typeof WebSocket === "function");
+check("WebAssembly", () => WebAssembly.instantiate(new Uint8Array([0, 97, 115, 109, 1, 0, 0, 0])).then(() => true));
+window.addEventListener("error", (e) => log("error: " + e.message));
+</script></body></html>

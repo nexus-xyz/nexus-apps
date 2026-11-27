@@ -1,0 +1,122 @@
+---
+title: "Continue through Nexus Gateway"
+description: "Point Continue at Nexus Gateway with a file of its own and a Nexus API key, so its model calls are metered and recorded on your organization's key."
+---
+
+{/* Generated from eng/factory/kit/recipes/continue.json (nexus-recipe/1). Do not edit: change the recipe, then run `npx vitest run kit/src/recipes.test.ts -u` in eng/factory. */}
+
+<Callout title="Status: unclaimed">
+  A recorded run, continue-2026-10-28-1 on 2026-10-28, Continue 1.5.47 and nexus 0.14.0+69e1c09, reached a first call in 2m 59s, but no claims register backs this page yet, so it makes no claim about the tool.
+</Callout>
+
+## Read this first
+
+- Nexus has no launcher for Continue. It writes one model file of its own, and Continue sends that model's calls to Gateway's OpenAI compatible API, `/v1/chat/completions`, with a Nexus API key: reserved, metered, checked against your organization's policy and attributed to you.
+- Gateway cannot tell Continue's calls from any other call on that key. `nexus spend` lists them under Nexus Gateway, direct API calls (`core`), not under `agents`, and no agent session groups them.
+- These calls run on a provider key your person, team or organization stored. Nexus credit never pays for them: without a key, Gateway refuses the call with `403`.
+- The run below uses Continue's command line, `cn`, which reads the file when you pass it. Continue's editor extension reads the same folder on its own, but it reads `NEXUS_API_KEY` from its own environment or from `~/.continue/.env`, and no run has shown it yet.
+- The API key works until you revoke it in Nexus UI, and anyone holding it spends as you. Keep it out of files and shell history.
+
+## Set up and run
+
+1. Install the nexus CLI. It needs Node.js 22.6 or later and curl. If the installer says its folder is not on your PATH, add the line it prints to your shell's profile, then open a new terminal.
+
+   ```sh
+   curl -fsSL %CORE_URL%/install.sh | bash
+   ```
+
+2. Sign in to Nexus and approve the code in Nexus UI. The code expires after ten minutes.
+
+   ```sh
+   nexus auth login
+   ```
+
+3. In Nexus UI, open Settings, then Keys, and create a key named `continue`. It is shown once: copy it.
+
+4. Install Continue's command line. Nexus never installs it for you. If `cn` is not found afterwards, add npm's global folder, `$(npm prefix -g)/bin`, to your PATH.
+
+   ```sh
+   npm i -g @continuedev/cli
+   ```
+
+5. **Owner or admin.** If `nexus keys list` shows no OpenAI key, add the organization's key, once.
+
+   ```sh
+   nexus keys add openai <key>
+   ```
+
+6. Write Nexus's model file. It holds your Gateway's URL and the name of the variable with the key, not the key. If the file is already there and differs, the last line keeps a copy first, and stops if it cannot.
+
+   ```sh
+   mkdir -p ~/.continue/models && cat > ~/.continue/models/nexus.yaml.nexus-new <<'EOF'
+   name: Nexus Gateway
+   version: 1.0.0
+   schema: v1
+   models:
+     - name: Nexus Gateway gpt-6-luna
+       provider: openai
+       model: openai/gpt-6-luna
+       apiBase: %CORE_URL%/v1
+       apiKey: ${{ secrets.NEXUS_API_KEY }}
+       roles:
+         - chat
+         - edit
+         - apply
+   EOF
+   { [ ! -e ~/.continue/models/nexus.yaml ] || cmp -s ~/.continue/models/nexus.yaml ~/.continue/models/nexus.yaml.nexus-new || cp ~/.continue/models/nexus.yaml ~/.continue/models/nexus.yaml.nexus-backup-$(date -u +%Y%m%dT%H%M%SZ); } && mv ~/.continue/models/nexus.yaml.nexus-new ~/.continue/models/nexus.yaml
+   ```
+
+7. Give this terminal the key. After you run the line, paste the API key and press Enter: nothing shows, and the key stays out of your shell history.
+
+   ```sh
+   read -rs NEXUS_API_KEY && export NEXUS_API_KEY
+   ```
+
+8. Run one prompt through Gateway on the file's small model. It runs from any folder.
+
+   ```sh
+   cn --config ~/.continue/models/nexus.yaml -p "Reply with the single word pong"
+   ```
+
+## Check it worked
+
+The call shows in your spend under Nexus Gateway, direct API calls, and first in its recent calls.
+
+```sh
+nexus spend
+```
+
+## What Nexus changes for the run
+
+Nexus writes one file of its own, `~/.continue/models/nexus.yaml`, and changes no file of yours: Continue reads it beside your own settings, or alone when you pass it. The file holds your Gateway's URL and names `NEXUS_API_KEY`, never the key itself. If the file was already there and differs, step 6 copies it first to `~/.continue/models/nexus.yaml.nexus-backup-` and the time, and writes nothing if it cannot. To go back, delete the file, or move that copy back over it, and revoke the key in Nexus UI when you no longer use it.
+
+On a computer without the file, the write is this diff:
+
+```diff
+--- /dev/null
++++ ~/.continue/models/nexus.yaml
+@@ -0,0 +1,13 @@
++name: Nexus Gateway
++version: 1.0.0
++schema: v1
++models:
++  - name: Nexus Gateway gpt-6-luna
++    provider: openai
++    model: openai/gpt-6-luna
++    apiBase: %CORE_URL%/v1
++    apiKey: ${{ secrets.NEXUS_API_KEY }}
++    roles:
++      - chat
++      - edit
++      - apply
+```
+
+## How it is tested
+
+- One prompt through Gateway's `/v1/chat/completions` by Continue's command line and the steps above, recorded in `nexus spend` under direct API calls
+
+| Run | Date | Continue | nexus | First call | Steps skipped | Result |
+| --- | --- | --- | --- | --- | --- | --- |
+| continue-2026-10-28-1 | 2026-10-28 | 1.5.47 | 0.14.0+69e1c09 | 2m 59s | `provider_key` | pass |
+
+Each run is a record in `eng/factory/kit/recipes/runs/`, with its steps' times, the call and what got in the way.

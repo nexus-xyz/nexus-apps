@@ -1,0 +1,190 @@
+{
+  "comment": "The billing glossary, for code that cannot import kit/src/billing-words.ts: the desktop app (desktop-gpui/src/pages/billing.rs) and the Rust CLI (rs/crates/nexus-cli). kit/src/billing-words.test.ts checks this file against the TypeScript, and each Rust test checks its own strings against it. afterTheFact holds one example per charge phase (kit/src/after-the-fact.ts): afterTheFactBase with the example's patch, the phase, and the notice a surface shows. receiptsEmpty holds what an empty Receipts list says: afterTheFactBase with each example's patch (null: no afterTheFact), and its text (null: plain).",
+  "terms": {
+    "freeStart": "Free start",
+    "promotionalCredit": "Promotional credit",
+    "credits": "Nexus credits",
+    "payAfterTheFact": "Pay after the fact",
+    "usageLimit": "Usage limit",
+    "changeLimit": "Change limit",
+    "autoTopup": "Auto top-up",
+    "payAsYouGo": "Pay as you go",
+    "paidByFreeStart": "Paid by the free start",
+    "datesInUtc": "Billing dates are in UTC.",
+    "payInvoice": "Pay invoice",
+    "updateCard": "Update card",
+    "fixPayment": "Fix payment",
+    "addAnotherCard": "Add another card",
+    "confirmPayment": "Confirm payment",
+    "setUpBilling": "Set up billing",
+    "buyCredits": "Buy credits",
+    "openBilling": "Open billing"
+  },
+  "payNotices": {
+    "free_start_used_up": { "title": "Your free start is used up", "action": "Set up billing" },
+    "free_start_expired": { "title": "Your free start expired", "action": "Set up billing" },
+    "billing_off": { "title": "Pay as you go isn't set up", "action": "Set up billing" },
+    "credits_out": { "title": "Your Nexus credits are used up", "action": "Buy credits" },
+    "usage_limit_reached": { "title": "This month's usage limit is used up", "action": "Change limit" },
+    "charge_failed": { "title": "A payment didn't go through", "action": "Fix payment" },
+    "card_needs_confirming": { "title": "The bank wants you to confirm a payment", "action": "Confirm payment" },
+    "card_disputed": { "title": "A payment on the card was disputed", "action": "Add another card" },
+    "past_due": { "title": "A payment is past due", "action": "Pay invoice" },
+    "charge_processing": { "title": "A payment is still going through", "action": "Buy credits" }
+  },
+  "topupOff": {
+    "closed": "Auto top-up is off: the organization was closed",
+    "declined": "Auto top-up is off: the card was declined",
+    "authentication_required": "Auto top-up is off: the bank wanted the cardholder to confirm the payment",
+    "payment_failed": "Auto top-up is off: a bank payment failed",
+    "no_payment_method": "Auto top-up is off: no payment method is on file",
+    "disputed": "Auto top-up is off: a payment on the card was disputed",
+    "refunded": "Auto top-up is off: a credit purchase was refunded"
+  },
+  "creditAmounts": ["10", "25", "50"],
+  "money": [
+    { "decimal": "50.000000", "amount": "$50.00", "setting": "$50" },
+    { "decimal": "184.209999", "amount": "$184.20", "setting": "$184.209999" },
+    { "decimal": "184.200000", "amount": "$184.20", "setting": "$184.20" },
+    { "decimal": "1180", "amount": "$1,180.00", "setting": "$1,180" },
+    { "decimal": "50000.5", "amount": "$50,000.50", "setting": "$50,000.50" },
+    { "decimal": "0.004", "amount": "$0.00", "setting": "$0.004" },
+    { "decimal": "0.000000", "amount": "$0.00", "setting": "$0" },
+    { "decimal": "-12.300000", "amount": "-$12.30", "setting": "-$12.30" },
+    { "decimal": "n/a", "amount": "n/a", "setting": "n/a" }
+  ],
+  "days": [
+    { "iso": "2026-11-10T23:30:00.000Z", "day": "10 Nov", "dayWithYear": "10 Nov 2026", "cutoff": "10 Nov, 23:30 UTC" },
+    { "iso": "2026-12-01T00:00:00.000Z", "day": "1 Dec", "dayWithYear": "1 Dec 2026", "cutoff": "1 Dec, 00:00 UTC" },
+    { "iso": "2027-01-09T00:00:00Z", "day": "9 Jan", "dayWithYear": "9 Jan 2027", "cutoff": "9 Jan, 00:00 UTC" }
+  ],
+  "resets": [
+    { "now": "2026-11-10T18:00:00.000Z", "text": "Resets on 1 Dec, 00:00 UTC" },
+    { "now": "2026-12-31T23:59:59.000Z", "text": "Resets on 1 Jan, 00:00 UTC" }
+  ],
+  "chargeProcessing": {
+    "title": "A payment is still going through",
+    "body": "Models Nexus runs on the card are paused until it's paid. A card payment takes seconds, and a bank payment can take a few days. Credits and your own keys still work.",
+    "cliAction": "An owner can buy Nexus credits: `nexus billing credits buy <usd>`."
+  },
+  "stale": { "error": "gateway answered 503.", "note": "Billing didn't refresh. Gateway answered 503. The figures shown are from the last time it loaded.", "action": "Try again" },
+  "payNoticeFallback": { "reason": "a_reason_this_build_does_not_know", "title": "Nexus can't pay for model calls now", "action": "Open billing" },
+  "refusals": [
+    { "code": "credit_exhausted", "title": "Your Nexus credits don't cover this call" },
+    { "code": "payment_failed", "title": "A payment didn't go through" },
+    { "code": "payment_failed", "reason": "declined", "title": "A payment didn't go through" },
+    { "code": "payment_failed", "reason": "authentication_required", "title": "The bank wants you to confirm a payment" },
+    { "code": "payment_failed", "reason": "disputed", "title": "A payment on the card was disputed" },
+    { "code": "payment_past_due", "title": "A payment is past due" },
+    { "code": "charge_processing", "title": "A payment is still going through" }
+  ],
+  "chargeFailedReasons": {
+    "declined": "the card was declined",
+    "authentication_required": "the bank wants the cardholder to confirm it",
+    "payment_failed": "the payment failed",
+    "no_payment_method": "no payment method is on file",
+    "disputed": "a payment on the card was disputed"
+  },
+  "afterTheFactBase": {
+    "enabled": true,
+    "limitUsd": "25.000000",
+    "monthSpentUsd": "12.000000",
+    "reservedUsd": "0.000000",
+    "leftUsd": "13.000000",
+    "owedUsd": "12.000000",
+    "thresholdUsd": "10.000000",
+    "pending": false,
+    "failed": null
+  },
+  "afterTheFact": [
+    { "case": "on", "patch": { "phase": "on", "chargeUsd": null, "unpaidUsd": "4.000000", "owedUsd": "4.000000" }, "phase": "on", "notice": null },
+    {
+      "case": "charging",
+      "patch": { "phase": "charging", "pending": true, "chargeUsd": "10.400000", "unpaidUsd": "10.400000", "owedUsd": "0.000000" },
+      "phase": "charging",
+      "notice": { "phase": "charging", "title": "A charge of $10.40 is going through", "stopsCalls": false }
+    },
+    {
+      "case": "failed",
+      "patch": { "phase": "failed", "chargeUsd": null, "unpaidUsd": "12.000000", "failed": { "at": "2026-11-12T10:00:00.000Z", "reason": "declined" } },
+      "phase": "failed",
+      "notice": { "phase": "failed", "title": "The last charge of $12.00 didn't go through: the card was declined", "body": "Nexus-run AI the card pays is paused until a charge goes through. Credits and your own keys still work", "action": "fixPayment", "stopsCalls": true }
+    },
+    {
+      "case": "retrying: the unpaid usage, never the $0.00 owed",
+      "patch": { "phase": "retrying", "pending": true, "chargeUsd": "12.000000", "unpaidUsd": "12.000000", "owedUsd": "0.000000", "failed": { "at": "2026-11-12T10:00:00.000Z", "reason": "declined" } },
+      "phase": "retrying",
+      "notice": { "phase": "retrying", "title": "The last charge of $12.00 didn't go through. Nexus is trying it again now", "body": "Nexus-run AI the card pays stays paused until it's paid. Credits and your own keys still work", "action": "fixPayment", "stopsCalls": true }
+    },
+    {
+      "case": "needs_confirmation",
+      "patch": { "phase": "needs_confirmation", "pending": true, "chargeUsd": "12.000000", "unpaidUsd": "12.000000", "owedUsd": "0.000000", "failed": { "at": "2026-11-12T10:00:00.000Z", "reason": "authentication_required" } },
+      "phase": "needs_confirmation",
+      "notice": { "phase": "needs_confirmation", "title": "The charge of $12.00 needs the cardholder's confirmation", "body": "Until then, Nexus-run AI the card pays is paused. Credits and your own keys still work", "action": "confirmPayment", "stopsCalls": true }
+    },
+    {
+      "case": "disputed",
+      "patch": { "phase": "disputed", "chargeUsd": null, "unpaidUsd": "12.000000", "failed": { "at": "2026-11-12T10:00:00.000Z", "reason": "disputed" } },
+      "phase": "disputed",
+      "notice": { "phase": "disputed", "title": "A payment on the card was disputed", "body": "Nexus-run AI the card pays is paused until an owner adds another card. Credits and your own keys still work", "action": "addAnotherCard", "stopsCalls": true }
+    },
+    {
+      "case": "off and failed: the final charge, and nothing paused",
+      "patch": { "phase": "failed", "enabled": false, "chargeUsd": null, "unpaidUsd": "3.200000", "owedUsd": "3.200000", "failed": { "at": "2026-11-12T10:00:00.000Z", "reason": "no_payment_method" } },
+      "phase": "failed",
+      "notice": { "phase": "failed", "title": "The final charge of $3.20 didn't go through: no payment method is on file", "body": "Nothing else runs on the card. An owner fixes the card so the charge goes through", "action": "fixPayment", "stopsCalls": false }
+    },
+    {
+      "case": "off_owing",
+      "patch": { "phase": "off_owing", "enabled": false, "chargeUsd": null, "unpaidUsd": "3.200000", "owedUsd": "3.200000" },
+      "phase": "off_owing",
+      "notice": { "phase": "off_owing", "title": "A final charge of $3.20 runs once open calls settle", "stopsCalls": false }
+    },
+    {
+      "case": "off_owing under the final charge's minimum",
+      "patch": { "phase": "off_owing", "enabled": false, "chargeUsd": null, "unpaidUsd": "0.300000", "owedUsd": "0.300000" },
+      "phase": "off_owing",
+      "notice": { "phase": "off_owing", "title": "Less than $0.50 of usage is unpaid. It stays unpaid until paying after the fact is on again", "stopsCalls": false }
+    },
+    { "case": "off", "patch": { "phase": "off", "enabled": false, "chargeUsd": null, "unpaidUsd": "0.000000", "owedUsd": "0.000000" }, "phase": "off", "notice": null },
+    { "case": "closed", "patch": { "phase": "closed", "enabled": false, "chargeUsd": null, "unpaidUsd": "0.000000", "owedUsd": "0.000000" }, "phase": "closed", "notice": null },
+    {
+      "case": "a failed reason this build does not know",
+      "patch": { "phase": "failed", "chargeUsd": null, "unpaidUsd": "12.000000", "failed": { "at": "2026-11-12T10:00:00.000Z", "reason": "card_expired" } },
+      "phase": "failed",
+      "notice": { "phase": "failed", "title": "The last charge of $12.00 didn't go through", "body": "Nexus-run AI the card pays is paused until a charge goes through. Credits and your own keys still work", "action": "fixPayment", "stopsCalls": true }
+    },
+    {
+      "case": "an older Gateway: no phase, and owedUsd leaves the retry out",
+      "patch": { "pending": true, "owedUsd": "0.000000", "failed": { "at": "2026-11-12T10:00:00.000Z", "reason": "declined" } },
+      "phase": "retrying",
+      "notice": { "phase": "retrying", "title": "The last charge didn't go through. Nexus is trying it again now", "body": "Nexus-run AI the card pays stays paused until it's paid. Credits and your own keys still work", "action": "fixPayment", "stopsCalls": true }
+    },
+    {
+      "case": "an older Gateway: a charge going through",
+      "patch": { "pending": true, "owedUsd": "0.000000" },
+      "phase": "charging",
+      "notice": { "phase": "charging", "title": "A charge is going through", "stopsCalls": false }
+    },
+    {
+      "case": "an older Gateway: off with usage unpaid",
+      "patch": { "enabled": false, "owedUsd": "3.200000" },
+      "phase": "off_owing",
+      "notice": { "phase": "off_owing", "title": "A final charge of $3.20 runs once open calls settle", "stopsCalls": false }
+    },
+    { "case": "a phase this build does not know", "patch": { "phase": "a_phase_this_build_does_not_know" }, "phase": "on", "notice": null }
+  ],
+  "receiptsEmpty": {
+    "plain": "No payments yet. Credits you buy and charges for usage show here.",
+    "examples": [
+      { "case": "on, with unpaid usage under the threshold", "patch": { "phase": "on", "unpaidUsd": "0.050000" }, "text": "No payments yet. $0.05 of usage is unpaid. Nexus charges the card when unpaid usage reaches $10." },
+      { "case": "an older Gateway: owedUsd stands in", "patch": { "owedUsd": "4.000000" }, "text": "No payments yet. $4.00 of usage is unpaid. Nexus charges the card when unpaid usage reaches $10." },
+      { "case": "under a cent unpaid", "patch": { "phase": "on", "unpaidUsd": "0.004000" }, "text": null },
+      { "case": "nothing unpaid", "patch": { "phase": "on", "unpaidUsd": "0.000000" }, "text": null },
+      { "case": "at the threshold: the charge runs soon", "patch": { "phase": "on", "unpaidUsd": "10.000000" }, "text": null },
+      { "case": "a charge going through", "patch": { "phase": "charging", "pending": true, "chargeUsd": "0.600000", "unpaidUsd": "0.600000" }, "text": null },
+      { "case": "off, still owing", "patch": { "phase": "off_owing", "enabled": false, "unpaidUsd": "0.300000" }, "text": null },
+      { "case": "not paying after the fact", "patch": null, "text": null }
+    ]
+  }
+}

@@ -1,0 +1,130 @@
+---
+title: "Cline through Nexus Gateway"
+description: "Run Cline's command line through Nexus Gateway on a folder of its own and a Nexus API key, so its model calls are metered and recorded on your organization's key."
+---
+
+{/* Generated from eng/factory/kit/recipes/cline.json (nexus-recipe/1). Do not edit: change the recipe, then run `npx vitest run kit/src/recipes.test.ts -u` in eng/factory. */}
+
+<Callout title="Status: unclaimed">
+  A recorded run, cline-2026-10-28-1 on 2026-10-28, Cline 3.0.74 and nexus 0.14.0+69e1c09, reached a first call in 3m 17s, but no claims register backs this page yet, so it makes no claim about the tool.
+</Callout>
+
+## Read this first
+
+- Nexus has no launcher for Cline. It writes a folder of its own, and Cline's command line, run on that folder, sends its calls to Gateway's OpenAI compatible API, `/v1/chat/completions`, with a Nexus API key: reserved, metered, checked against your organization's policy and attributed to you. Your own Cline settings in `~/.cline` are not read or changed.
+- Run it from a terminal, as the page does. When its input is not a terminal (a pipe or a file), Cline adds that input to the prompt and sends it to the model.
+- Gateway cannot tell Cline's calls from any other call on that key. `nexus spend` lists them under Nexus Gateway, direct API calls (`core`), not under `agents`, and no agent session groups them.
+- These calls run on a provider key your person, team or organization stored. Nexus credit never pays for them: without a key, Gateway refuses the call with `403`.
+- Run it as the page does, without `-y`. With `-y`, Cline keeps sending calls until the model calls its finish tool, and a short answer never does: it spends until you stop it.
+- If Cline cannot read the folder's file, it falls back to OpenAI's own API and sends the key there, which refuses it. Write the file again with the step below.
+- Cline's editor extensions are not covered: pointed at a new folder, the VS Code extension copies the keys it already stores into it, so this page does not use them.
+- The API key works until you revoke it in Nexus UI, and anyone holding it spends as you. Keep it out of files and shell history.
+
+## Set up and run
+
+1. Install the nexus CLI. It needs Node.js 22.6 or later and curl. If the installer says its folder is not on your PATH, add the line it prints to your shell's profile, then open a new terminal.
+
+   ```sh
+   curl -fsSL %CORE_URL%/install.sh | bash
+   ```
+
+2. Sign in to Nexus and approve the code in Nexus UI. The code expires after ten minutes.
+
+   ```sh
+   nexus auth login
+   ```
+
+3. In Nexus UI, open Settings, then Keys, and create a key named `cline`. It is shown once: copy it.
+
+4. Install Cline's command line. Nexus never installs it for you. If `cline` is not found afterwards, add npm's global folder, `$(npm prefix -g)/bin`, to your PATH.
+
+   ```sh
+   npm i -g cline
+   ```
+
+5. **Owner or admin.** If `nexus keys list` shows no OpenAI key, add the organization's key, once.
+
+   ```sh
+   nexus keys add openai <key>
+   ```
+
+6. Write Nexus's folder for Cline. Its one file holds your Gateway's URL and the model, not the key. If the folder is already there, it is moved aside first, and nothing is written if that fails.
+
+   ```sh
+   { [ ! -e ~/.cline-nexus ] || mv ~/.cline-nexus ~/.cline-nexus.nexus-backup-$(date -u +%Y%m%dT%H%M%SZ); } && mkdir -p ~/.cline-nexus/data/settings && cat > ~/.cline-nexus/data/settings/providers.json <<'EOF'
+   {
+     "version": 1,
+     "lastUsedProvider": "openai-compatible",
+     "modes": {},
+     "providers": {
+       "openai-compatible": {
+         "settings": {
+           "provider": "openai-compatible",
+           "baseUrl": "%CORE_URL%/v1",
+           "model": "openai/gpt-6-luna"
+         },
+         "updatedAt": "2026-10-28T00:00:00.000Z",
+         "tokenSource": "manual"
+       }
+     }
+   }
+   EOF
+   ```
+
+7. Give this terminal the key. After you run the line, paste the API key and press Enter: nothing shows, and the key stays out of your shell history.
+
+   ```sh
+   read -rs NEXUS_API_KEY && export NEXUS_API_KEY
+   ```
+
+8. Run one prompt through Gateway on the folder's small model. Cline gets the folder and the key for this command only. It runs from any folder.
+
+   ```sh
+   CLINE_DIR=~/.cline-nexus OPENAI_API_KEY="$NEXUS_API_KEY" cline --data-dir ~/.cline-nexus/data -P openai-compatible "Reply with the single word pong"
+   ```
+
+## Check it worked
+
+The call shows in your spend under Nexus Gateway, direct API calls, and first in its recent calls.
+
+```sh
+nexus spend
+```
+
+## What Nexus changes for the run
+
+Nexus writes one folder of its own, `~/.cline-nexus`, and changes no file of yours: Cline runs on that folder only when you pass it, and keeps its state for those runs there. Its `data/settings/providers.json` holds your Gateway's URL and the model, never the key: the run step hands it to Cline from `NEXUS_API_KEY`, for that command only. If the folder was already there, step 6 first moves it to `~/.cline-nexus.nexus-backup-` and the time. To go back, delete the folder, or move that copy back in its place, and revoke the key in Nexus UI when you no longer use it.
+
+On a computer without the folder, the write is this diff:
+
+```diff
+--- /dev/null
++++ ~/.cline-nexus/data/settings/providers.json
+@@ -0,0 +1,16 @@
++{
++  "version": 1,
++  "lastUsedProvider": "openai-compatible",
++  "modes": {},
++  "providers": {
++    "openai-compatible": {
++      "settings": {
++        "provider": "openai-compatible",
++        "baseUrl": "%CORE_URL%/v1",
++        "model": "openai/gpt-6-luna"
++      },
++      "updatedAt": "2026-10-28T00:00:00.000Z",
++      "tokenSource": "manual"
++    }
++  }
++}
+```
+
+## How it is tested
+
+- One prompt through Gateway's `/v1/chat/completions` by Cline's command line and the steps above, recorded in `nexus spend` under direct API calls
+
+| Run | Date | Cline | nexus | First call | Steps skipped | Result |
+| --- | --- | --- | --- | --- | --- | --- |
+| cline-2026-10-28-1 | 2026-10-28 | 3.0.74 | 0.14.0+69e1c09 | 3m 17s | `provider_key` | pass |
+
+Each run is a record in `eng/factory/kit/recipes/runs/`, with its steps' times, the call and what got in the way.

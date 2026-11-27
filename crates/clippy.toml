@@ -1,0 +1,13 @@
+# For the shared crates in this folder: clippy reads the nearest clippy.toml above each crate. The GPUI app crate one
+# folder up does not read it.
+# Every process starts from nexus_workbench::process::command or async_command, which open no console window on
+# Windows. A process that must have a console allows the lint where it starts, and says why.
+# CI enforces it on Linux: the desktop job runs clippy on these crates. #[cfg(windows)] code is checked only
+# by a local clippy run.
+[[disallowed-methods]]
+path = "std::process::Command::new"
+reason = "use nexus_workbench::process::command: no console window on Windows"
+
+[[disallowed-methods]]
+path = "tokio::process::Command::new"
+reason = "use nexus_workbench::process::async_command: no console window on Windows"

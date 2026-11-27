@@ -1,0 +1,19 @@
+[package]
+name = "nexus-providers"
+description = "The provider layer's shared values: how a coding agent's session is reached and paid, its model offers, its credential and the settings that name each provider. No I/O."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish = ["crates-io"]
+license = "MIT"
+
+[dependencies]
+nexus-agents.workspace = true
+serde.workspace = true
+zeroize.workspace = true
+
+[dev-dependencies]
+serde_json.workspace = true
+
+[lints]
+workspace = true

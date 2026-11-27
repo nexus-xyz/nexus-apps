@@ -1,0 +1,31 @@
+# Labels for the repository. Sync them with a label-sync tool, or create them by hand.
+- name: bug
+  color: d73a4a
+  description: Something does not work as it should
+- name: enhancement
+  color: a2eeef
+  description: A new feature or an improvement
+- name: good first issue
+  color: 7057ff
+  description: A good place to start
+- name: help wanted
+  color: 008672
+  description: Maintainers would welcome a contribution
+- name: docs
+  color: 0075ca
+  description: Documentation changes
+- name: security
+  color: b60205
+  description: Security related. Report vulnerabilities in private, see SECURITY.md
+- name: needs-triage
+  color: fbca04
+  description: A maintainer has not looked at this yet
+- name: platform:macos
+  color: ededed
+  description: Affects macOS
+- name: platform:linux
+  color: ededed
+  description: Affects Linux
+- name: platform:windows
+  color: ededed
+  description: Affects Windows

@@ -1,0 +1,47 @@
+{
+  "threadId": "0192f3a4-0000-7000-8000-000000000001",
+  "now": 1793959200000,
+  "action": {
+    "kind": "send",
+    "text": "Fix the retry race in decoder.py"
+  },
+  "phoneSecret": "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8gISIjJCUmJygpKissLS4vMDEyMzQ1Njc4OTo7PD0-Pw",
+  "runnerSecret": "QEFCQ0RFRkdISUpLTE1OT1BRUlNUVVZXWFlaW1xdXl9gYWJjZGVmZ2hpamtsbW5vcHFyc3R1dnd4eXp7fH1-fw",
+  "devices": [
+    {
+      "kind": "device",
+      "state": "trusted",
+      "createdAt": "2026-11-01T00:00:00Z",
+      "approvedAt": "2026-11-01T00:01:00Z",
+      "revokedAt": null,
+      "id": "dev_phone",
+      "name": "Phone",
+      "encryptionKey": "j0DFrbaPJWJK5bIU6nZ6bslNgp09e14a0bpvPiE4KF8",
+      "signingKey": "Kay64UG8yvCyLhqU000LxzYeUm0L_hLIl5S8kyKWbdc",
+      "approvedBy": null,
+      "approvalSignature": null
+    },
+    {
+      "kind": "device",
+      "state": "trusted",
+      "createdAt": "2026-11-01T00:00:00Z",
+      "approvedAt": "2026-11-01T00:01:00Z",
+      "revokedAt": null,
+      "id": "dev_runner",
+      "name": "Computer",
+      "encryptionKey": "eaYx7t4b-cmPEgMs3q3Q56B5OY_HhriMyEbsia-FpRo",
+      "signingKey": "F0VTtFbd38aQjsqxwQH-arIeK6oGF3lbfUOmNIKZP9U",
+      "approvedBy": "dev_phone",
+      "approvalSignature": "BrVTOvpUcuZ5EMyJEVbtcBmNgH0ZUB1vBMRg_06MtHZnpmHTkQBvu4yB6yVhLdk9QUbgkZs04jX_iMrByCQZCw"
+    }
+  ],
+  "command": {
+    "id": "dab7e4e4-81f7-4399-b779-32d251c88154",
+    "senderDeviceId": "dev_phone",
+    "runnerDeviceId": "dev_runner",
+    "expiresAt": 1793959260000,
+    "lockedKey": "ivI-moHxoMXj6bkYbsg-IjHIwm_YqP2cdvLJyyi0UW2B_XDLkSvnHGVpZhcIrbMHjxGdAuNMallJWUFjs6vVIuBXX-Ik4lkpaHYKwOkR16Y",
+    "sealed": "4UhEwbbjOSZaSQJnpKe8nB5_BQa54EL1ceFNcvXeHVfAIDjfvaPulknLE3vfd1Sf_zUxVuxz0JVuh5VUVTin2IFfvWQvkuPSrNiKli-XVsjdlBvzeKra2gmbrr3ereiBxd-LZljYEuApt8XzWrdMnrDkh4zhSmJO2dNcq42FFbpukBr7AV19BZvN1H-Q34O1ICNUhJKckYeiuGW3YRg",
+    "signature": "WHo5RwvohNXT2c0mSigynL1A1c80rciZkoXrI1imn0goyM3Gg6B9rEdaurL2H-8HlSJ2Zpsn5LCNQHo-N9eHBA"
+  }
+}

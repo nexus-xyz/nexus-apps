@@ -1,0 +1,39 @@
+<!doctype html><html><head><meta charset="utf-8"><title>Text</title><!--HARNESS-->
+<link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;800&family=Playfair+Display:ital@1&family=JetBrains+Mono&display=swap" rel="stylesheet">
+<style>
+.inter { font-family: Inter; font-weight: 800; font-size: 18px; }
+.play { font-family: "Playfair Display"; font-style: italic; font-size: 18px; }
+.mono { font-family: "JetBrains Mono"; }
+.emoji { font-size: 22px; }
+.vert { writing-mode: vertical-rl; height: 60px; }
+.bal { text-wrap: balance; width: 140px; }
+.clamp { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.ell { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.hy { hyphens: auto; width: 80px; }
+.feat { font-variant-numeric: tabular-nums; font-feature-settings: "zero"; }
+</style></head><body>
+<h1>Text</h1><div id="score"></div>
+<div class="grid">
+<div class="cell"><b>Google Fonts</b><div class="inter">Inter 800</div><div class="play">Playfair italic</div><div class="mono">Mono 0O1lI</div></div>
+<div class="cell"><b>emoji (color)</b><div class="emoji">😀🚀👍🏽👨‍👩‍👧 🇧🇷</div></div>
+<div class="cell" dir="rtl"><b>RTL Arabic</b><div>مرحبا بالعالم 123</div><div lang="he">שלום עולם</div></div>
+<div class="cell"><b>CJK + Hindi + Thai</b><div>日本語 中文 한국어</div><div>नमस्ते दुनिया · สวัสดี</div></div>
+<div class="cell"><b>vertical writing</b><div class="vert" lang="ja">縦書きテスト</div></div>
+<div class="cell"><b>text-wrap balance</b><div class="bal">A headline that should wrap into balanced lines</div></div>
+<div class="cell"><b>line-clamp 2</b><div class="clamp">One two three four five six seven eight nine ten eleven twelve thirteen fourteen fifteen sixteen seventeen.</div></div>
+<div class="cell"><b>ellipsis</b><div class="ell">a very long single line that should be cut off with dots</div></div>
+<div class="cell"><b>diacritics + zalgo</b><div>Ação São Paulo çé ñ ø</div><div>Z̷a̸l̴g̵o̶</div></div>
+<div class="cell"><b>tabular nums</b><div class="feat">1111.00<br>8888.00</div></div>
+<div class="cell"><b>selection (drag me)</b><div>Select this text to see the highlight colour.</div></div>
+<div class="cell"><b>&lt;pre&gt; tabs</b><pre style="margin:0;tab-size:4">a	b	c
+xx	yy	zz</pre></div>
+</div>
+<script>
+check("Google Font loads", () => document.fonts.ready.then(() => document.fonts.check("800 18px Inter") && [...document.fonts].some((f) => f.family.includes("Inter") && f.status === "loaded")));
+check("emoji width", () => { const c = document.createElement("canvas").getContext("2d"); c.font = "22px sans-serif"; return c.measureText("😀").width > 10; });
+supports("writing-mode", "writing-mode: vertical-rl");
+supports("text-wrap balance", "text-wrap: balance");
+check("line-clamp", () => CSS.supports("-webkit-line-clamp: 2") || CSS.supports("line-clamp: 2"));
+check("Intl.Segmenter", () => [...new Intl.Segmenter("en", { granularity: "grapheme" }).segment("👨‍👩‍👧")].length === 1);
+check("FontFace API", () => typeof FontFace === "function" && !!document.fonts);
+</script></body></html>

@@ -1,0 +1,255 @@
+{
+  "description": "Test vectors for nexus-client's e2e module (src/e2e.rs), for every implementation to check against: the Rust client core and the browser's WebCrypto side. Made with Node's crypto, independently of the Rust code. Byte fields are hex. A length-prefixed list is each field's byte length as 2 big-endian bytes, then its bytes; epochs and seqs are 8 big-endian bytes, ids UTF-8. An event's aad is the length-prefixed labels.event_aad, thread_id, epoch, seq; sealed is nonce || AES-256-GCM ciphertext || tag. A lock is HPKE (RFC 9180) base mode with info the length-prefixed labels.lock_info, thread_id, epoch, holder_id, and an empty aad; locked is enc || ciphertext || tag; ikm_e is the ephemeral key's input to DeriveKeyPair, as in RFC 9180's own test vectors. A device's secret is its X25519 private key || its Ed25519 seed. A fingerprint is the SHA-256 of the length-prefixed labels.fingerprint, X25519 key, Ed25519 key (empty for a recovery key); short_code is its first 10 bytes in RFC 4648 base32. Signatures are Ed25519 by signer_secret's seed over message, the text Gateway verifies; keys and locked copies in a message are base64url without padding, and key_version is epoch + 1. Recovery keys: a recovery code is 16 random bytes shown as 26 Crockford base32 digits (most significant first) and Crockford's mod-37 check symbol, grouped 5-5-5-4-4-4 with hyphens; its holder's X25519 private key (secret) is HKDF-SHA256 with ikm the 16 bytes, salt salts.recovery_code and info the length-prefixed person_id. recovery_code_typos must all be refused. A passkey's PRF input (eval.first) is the SHA-256 of passkey_prf_label; its holder's private key is HKDF-SHA256 with ikm the 32-byte PRF output, salt salts.passkey and info the length-prefixed person_id and credential_id bytes. holder_approvals are signer_secret's signatures over nexus-device-approval:v2:{holder_id}:{kind}:{encryption key in base64url}: with an empty Ed25519 field. A recovery challenge is 32 random bytes Gateway seals to one trusted recovery key, one challenge per key: HPKE base mode as a lock, with info the length-prefixed labels.recover_challenge, person_id, holder_id, and an empty aad; sealed is enc || ciphertext || tag. A handover is an approver's trusted list for the device it approves: HPKE base mode as a lock, with info the length-prefixed labels.handover, device_id, approver_id, and an empty aad; the plaintext is signer_secret's Ed25519 signature over message (nexus-device-handover:v1:{device_id}:{approver_id}:{payload in base64url}), then payload; sealed is enc || ciphertext || tag, sealed to the X25519 key of devices[device_index]. Unlike the rest, each was sealed by one of the two implementations (sealed_by), with a random ephemeral key, so both open what the other sealed.",
+  "labels": {
+    "event_aad": "nexus-event-v1",
+    "lock_info": "nexus-thread-key-v1",
+    "fingerprint": "nexus-holder-fingerprint-v1",
+    "recover_challenge": "nexus-recover-challenge-v1",
+    "handover": "nexus-device-handover-v1"
+  },
+  "hpke": {
+    "mode": 0,
+    "kem_id": 32,
+    "kdf_id": 1,
+    "aead_id": 2
+  },
+  "events": [
+    {
+      "content_key": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+      "epoch": 0,
+      "thread_id": "0192f3a4-5b6c-7d8e-9fa0-b1c2d3e4f506",
+      "seq": 0,
+      "nonce": "a0a1a2a3a4a5a6a7a8a9aaab",
+      "plaintext": "7b2274797065223a226d657373616765222c22726f6c65223a2275736572222c2274657874223a2268656c6c6f227d",
+      "aad": "000e6e657875732d6576656e742d7631002430313932663361342d356236632d376438652d396661302d6231633264336534663530360008000000000000000000080000000000000000",
+      "sealed": "a0a1a2a3a4a5a6a7a8a9aaab9d3a085435ae20854008e2a0741ba7bb52807b62fddb274ea62c53f51ad9572df0022287db00691f37f968a46658feedeb52c7ee303b3ae233c2739ec37282"
+    },
+    {
+      "content_key": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+      "epoch": 1,
+      "thread_id": "0192f3a4-5b6c-7d8e-9fa0-b1c2d3e4f506",
+      "seq": 4294967298,
+      "nonce": "b0b1b2b3b4b5b6b7b8b9babb",
+      "plaintext": "",
+      "aad": "000e6e657875732d6576656e742d7631002430313932663361342d356236632d376438652d396661302d6231633264336534663530360008000000000000000100080000000100000002",
+      "sealed": "b0b1b2b3b4b5b6b7b8b9babb9067b9716ec6deaa3fc20985697b04f2"
+    },
+    {
+      "content_key": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+      "epoch": 4294967299,
+      "thread_id": "0192f3a4-0000-7000-8000-00000000ffff",
+      "seq": 7,
+      "nonce": "c0c1c2c3c4c5c6c7c8c9cacb",
+      "plaintext": "746f6f6c206f75747075743a20c3a9",
+      "aad": "000e6e657875732d6576656e742d7631002430313932663361342d303030302d373030302d383030302d3030303030303030666666660008000000010000000300080000000000000007",
+      "sealed": "c0c1c2c3c4c5c6c7c8c9cacb7427480b5717e32ae8ac8998126f41a0b27fa1ee87e0243bad4f52ef5515eb"
+    }
+  ],
+  "locks": [
+    {
+      "holder_secret_key": "c0c1c2c3c4c5c6c7c8c9cacbcccdcecfd0d1d2d3d4d5d6d7d8d9dadbdcdddedf",
+      "holder_key": "dc2cca31e8e43bbd91dff7e475cca3347eb478107d5bd765aba4ae4a30c35d44",
+      "holder_id": "dev_7Kx3mQ9pL2vN8rT4wY6zA1",
+      "thread_id": "0192f3a4-5b6c-7d8e-9fa0-b1c2d3e4f506",
+      "epoch": 0,
+      "ikm_e": "e0e1e2e3e4e5e6e7e8e9eaebecedeeeff0f1f2f3f4f5f6f7f8f9fafbfcfdfeff",
+      "content_key": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+      "info": "00136e657875732d7468726561642d6b65792d7631002430313932663361342d356236632d376438652d396661302d62316332643365346635303600080000000000000000001a6465765f374b78336d5139704c32764e387254347759367a4131",
+      "locked": "729d6561d2f278f4d70a0410502f81249b75689a7b0dfeb4d489aed6d481e3621db6f7f21d58daf65d0a32443aa11c8ee4991a27f92758468f6fd2abe2c2fe5a12c95a342567c8085c21e70ab485865b"
+    },
+    {
+      "holder_secret_key": "606162636465666768696a6b6c6d6e6f707172737475767778797a7b7c7d7e7f",
+      "holder_key": "675dd574ed7789310b3d2e7681f3790b466c773b1521fecf36577958371ea52f",
+      "holder_id": "0192f3a4-1111-7222-8333-444455556666",
+      "thread_id": "0192f3a4-5b6c-7d8e-9fa0-b1c2d3e4f506",
+      "epoch": 2,
+      "ikm_e": "202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f",
+      "content_key": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+      "info": "00136e657875732d7468726561642d6b65792d7631002430313932663361342d356236632d376438652d396661302d62316332643365346635303600080000000000000002002430313932663361342d313131312d373232322d383333332d343434343535353536363636",
+      "locked": "693658254630f73ad8da78fb331bf976cd42f90e0e9c9e83f40c51072a6f7417382ffe0315e1b37db10aa6e6c9c2b94eda9380ae501016ba79e0aad0e3be51e18a42a752b352432b0394684c53bf253c"
+    }
+  ],
+  "devices": [
+    {
+      "secret": "c0c1c2c3c4c5c6c7c8c9cacbcccdcecfd0d1d2d3d4d5d6d7d8d9dadbdcdddedf404142434445464748494a4b4c4d4e4f505152535455565758595a5b5c5d5e5f",
+      "encryption_key": "dc2cca31e8e43bbd91dff7e475cca3347eb478107d5bd765aba4ae4a30c35d44",
+      "signing_key": "2543b92ff1095511476adc8369db6ddc933665a11978dda1404ee1066ca9559d",
+      "encryption_key_b64u": "3CzKMejkO72R3_fkdcyjNH60eBB9W9dlq6SuSjDDXUQ",
+      "signing_key_b64u": "JUO5L_EJVRFHatyDadtt3JM2ZaEZeN2hQE7hBmypVZ0",
+      "fingerprint": "97b7ae582a3384cdcdb66da8e3c02c77ffa1036ffcce05d2405eb04784448de4",
+      "short_code": "S6324WBKGOCM3TNW"
+    },
+    {
+      "secret": "808182838485868788898a8b8c8d8e8f909192939495969798999a9b9c9d9e9f101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f",
+      "encryption_key": "493e82fc74464a59268817623d2053c5eb8e2cc4a988b4fee179ec6b010d531d",
+      "signing_key": "7776e870b93354f2a0b24c23f2a36cc4e80e223218c1b97926fdd018396a2b9b",
+      "encryption_key_b64u": "ST6C_HRGSlkmiBdiPSBTxeuOLMSpiLT-4XnsawENUx0",
+      "signing_key_b64u": "d3bocLkzVPKgskwj8qNsxOgOIjIYwbl5Jv3QGDlqK5s",
+      "fingerprint": "2eb2578071daaff642b48c2b89a315bbc4591711e32dd45d77131bc5dadcd560",
+      "short_code": "F2ZFPADR3KX7MQVU"
+    }
+  ],
+  "recovery_keys": [
+    {
+      "secret": "606162636465666768696a6b6c6d6e6f707172737475767778797a7b7c7d7e7f",
+      "encryption_key": "675dd574ed7789310b3d2e7681f3790b466c773b1521fecf36577958371ea52f",
+      "fingerprint": "a2b827a71edbf80c3824dfa4c529b99acba9634452398764a50eedd0b09cb3d5",
+      "short_code": "UK4CPJY63P4AYOBE"
+    }
+  ],
+  "signer_secret": "c0c1c2c3c4c5c6c7c8c9cacbcccdcecfd0d1d2d3d4d5d6d7d8d9dadbdcdddedf404142434445464748494a4b4c4d4e4f505152535455565758595a5b5c5d5e5f",
+  "approvals": [
+    {
+      "device_id": "dev_Q2w9Ez4Rt6Yu1Io3Pa5Sd7",
+      "encryption_key": "493e82fc74464a59268817623d2053c5eb8e2cc4a988b4fee179ec6b010d531d",
+      "signing_key": "7776e870b93354f2a0b24c23f2a36cc4e80e223218c1b97926fdd018396a2b9b",
+      "message": "nexus-device-approval:v1:dev_Q2w9Ez4Rt6Yu1Io3Pa5Sd7:ST6C_HRGSlkmiBdiPSBTxeuOLMSpiLT-4XnsawENUx0:d3bocLkzVPKgskwj8qNsxOgOIjIYwbl5Jv3QGDlqK5s",
+      "signature": "ab7422aa1584c5e21f78a21edd05898160760411d22b153845e95a4c102d145052eda66da2b51a0a0d0db3a44080ff7799224df6fcea2a4c876c4bda97cb0c06"
+    }
+  ],
+  "thread_keys": [
+    {
+      "thread_id": "0192f3a4-5b6c-7d8e-9fa0-b1c2d3e4f506",
+      "epoch": 0,
+      "key_version": 1,
+      "device_id": "dev_7Kx3mQ9pL2vN8rT4wY6zA1",
+      "locked": "729d6561d2f278f4d70a0410502f81249b75689a7b0dfeb4d489aed6d481e3621db6f7f21d58daf65d0a32443aa11c8ee4991a27f92758468f6fd2abe2c2fe5a12c95a342567c8085c21e70ab485865b",
+      "message": "nexus-thread-key:v1:0192f3a4-5b6c-7d8e-9fa0-b1c2d3e4f506:1:dev_7Kx3mQ9pL2vN8rT4wY6zA1:cp1lYdLyePTXCgQQUC-BJJt1aJp7Df601Imu1tSB42IdtvfyHVja9l0KMkQ6oRyO5JkaJ_knWEaPb9Kr4sL-WhLJWjQlZ8gIXCHnCrSFhls",
+      "signature": "6c7d69dda7466c45147f26acfd29025e7b313836b9fc9697c93599dc4148e44c76e4cd4f01f77e105082095ad36d504552880038170f137953e492b25ca72906"
+    }
+  ],
+  "revocations": [
+    {
+      "device_id": "dev_Q2w9Ez4Rt6Yu1Io3Pa5Sd7",
+      "message": "nexus-device-revoke:v1:dev_Q2w9Ez4Rt6Yu1Io3Pa5Sd7",
+      "signature": "8061aa6c76d8515e85b526349e7511e6b8953cffc1f07f6f7be9de3eb287fdf663594bedcaa78544cd8b144795f0ae72341f41c6a409feebaa8d7305d21c8901"
+    }
+  ],
+  "salts": {
+    "recovery_code": "nexus-recovery-code-v1",
+    "passkey": "nexus-passkey-v1"
+  },
+  "passkey_prf_label": "nexus-passkey-prf-v1",
+  "passkey_prf_input": "287343c875195417a4b9df619b34c81506f1a5325daa34aa2a558f853a239219",
+  "recovery_codes": [
+    {
+      "bytes": "000102030405060708090a0b0c0d0e0f",
+      "text": "00041-06105-0R3GG-28A1-C60T-3GF6",
+      "person_id": "user_01JD8Q2W3E4R5T6Y7U8I9O0P",
+      "info": "001d757365725f30314a4438513257334534523554365937553849394f3050",
+      "secret": "46a84a9d9d9ca3e8bfaa2dd1d77049818b28505596e6ce699a72167d06e14a61",
+      "encryption_key": "f80dda569e53bd335260446e5b22492a66a5b80d46b2091c250e35a883f9c95a",
+      "encryption_key_b64u": "-A3aVp5TvTNSYERuWyJJKmaluA1GsgkcJQ41qIP5yVo",
+      "fingerprint": "41ace45cddf74038133b5a12db0de7f4d1c330189447810c0553f5f876d262e0"
+    },
+    {
+      "bytes": "ffffffffffffffffffffffffffffffff",
+      "text": "7ZZZZ-ZZZZZ-ZZZZZ-ZZZZ-ZZZZ-ZZZ*",
+      "person_id": "user_ada",
+      "info": "0008757365725f616461",
+      "secret": "30370e908050533af19c47ceca0f911b2736f5eb43b633e78d9e4bf07d134909",
+      "encryption_key": "f32c03e7d7d74c1e488bc6725f192cb65463602742670f7598a95d01d302ce72",
+      "encryption_key_b64u": "8ywD59fXTB5Ii8ZyXxkstlRjYCdCZw91mKldAdMCznI",
+      "fingerprint": "2c3534c99819a4b9c806110d8102520c564f005dcf7cfe7b3eca12be81b803e0"
+    },
+    {
+      "bytes": "00000000000000000000000000000000",
+      "text": "00000-00000-00000-0000-0000-0000",
+      "person_id": "u",
+      "info": "000175",
+      "secret": "548eebb063946283c68a3ac59ec6e7996bdc4b08729d10ec99abd578f2573a1b",
+      "encryption_key": "b1a416c243a647807a7107c1cc383e46ecdc866b1e64f13217858f6694be312c",
+      "encryption_key_b64u": "saQWwkOmR4B6cQfBzDg-RuzchmseZPEyF4WPZpS-MSw",
+      "fingerprint": "77df6cd483397f195f7d91afdab4476eccbf9302d430442106429d982afe87e2"
+    }
+  ],
+  "recovery_code_typos": [
+    "00041-0Z105-0R3GG-28A1-C60T-3GF6",
+    "00401-06105-0R3GG-28A1-C60T-3GF6",
+    "00041-06105-0R3GG-28A1-C60T-3GF",
+    "00041-06105-0R3GG-28A1-C60T-3GF60",
+    "80041-06105-0R3GG-28A1-C60T-3GF6"
+  ],
+  "passkeys": [
+    {
+      "prf_output": "a0a1a2a3a4a5a6a7a8a9aaabacadaeafb0b1b2b3b4b5b6b7b8b9babbbcbdbebf",
+      "person_id": "user_01JD8Q2W3E4R5T6Y7U8I9O0P",
+      "credential_id": "4f2a9c0e1b7d3a5f6e8c0b2d4f6a8c0e",
+      "info": "001d757365725f30314a4438513257334534523554365937553849394f305000104f2a9c0e1b7d3a5f6e8c0b2d4f6a8c0e",
+      "secret": "a8d79c1064da76562c4d016bd3881e106f91c78a3909f975d08fe8960c3f3bed",
+      "encryption_key": "c3afee723c891aa45b2e4af269ad911c84e6e587475d07b09077495cdc0d5009",
+      "encryption_key_b64u": "w6_ucjyJGqRbLkryaa2RHITm5YdHXQewkHdJXNwNUAk",
+      "fingerprint": "f9ad922d4c6d2e7e7e0140b6c2213ed6fec8f464a72beebabb2e537fe26f6fab"
+    },
+    {
+      "prf_output": "0000000000000000000000000000000000000000000000000000000000000001",
+      "person_id": "user_ada",
+      "credential_id": "01",
+      "info": "0008757365725f616461000101",
+      "secret": "b3ea15974e8fdd60c78f1dea3e8aeac4687ba23190c50bb25b94efb834190049",
+      "encryption_key": "a65bc9f75a9244e4160bafd7e5dccdbdcae1481e13fd642114790ac4dc5c7234",
+      "encryption_key_b64u": "plvJ91qSROQWC6_X5dzNvcrhSB4T_WQhFHkKxNxccjQ",
+      "fingerprint": "221e095214ecb8b84ed546289d47378d5379d3cdd19969b2c22f551317af7bb2"
+    }
+  ],
+  "holder_approvals": [
+    {
+      "holder_id": "dev_R3cV9kQ2mX7p",
+      "kind": "recovery_code",
+      "encryption_key": "f80dda569e53bd335260446e5b22492a66a5b80d46b2091c250e35a883f9c95a",
+      "message": "nexus-device-approval:v2:dev_R3cV9kQ2mX7p:recovery_code:-A3aVp5TvTNSYERuWyJJKmaluA1GsgkcJQ41qIP5yVo:",
+      "signature": "a75f43b87c5d07e14952e8b7cdf1dde8361d83b9a8068b60a02b0a31d6b03331dbbf16048bf6a2b6fe51f71c4bdf9277b35f6657f0744be6db470cfcf81cef02"
+    },
+    {
+      "holder_id": "dev_P4sK8yW1nB6t",
+      "kind": "passkey",
+      "encryption_key": "c3afee723c891aa45b2e4af269ad911c84e6e587475d07b09077495cdc0d5009",
+      "message": "nexus-device-approval:v2:dev_P4sK8yW1nB6t:passkey:w6_ucjyJGqRbLkryaa2RHITm5YdHXQewkHdJXNwNUAk:",
+      "signature": "cecd19408e47f37204656ab7d75bb5e9855b168decb08fcd2709905c0d74c72c7ddffd67acb22f0aebc7c4e966f9ce88cdc1049e57313d64ec0ddd9c72aabe00"
+    }
+  ],
+  "recover_challenges": [
+    {
+      "holder_secret_key": "46a84a9d9d9ca3e8bfaa2dd1d77049818b28505596e6ce699a72167d06e14a61",
+      "holder_key": "f80dda569e53bd335260446e5b22492a66a5b80d46b2091c250e35a883f9c95a",
+      "person_id": "user_01JD8Q2W3E4R5T6Y7U8I9O0P",
+      "holder_id": "dev_R3cV9kQ2mX7p",
+      "challenge": "c0ffee0000000000000000000000000000000000000000000000000000000000",
+      "ikm_e": "5050505050505050505050505050505050505050505050505050505050505050",
+      "info": "001a6e657875732d7265636f7665722d6368616c6c656e67652d7631001d757365725f30314a4438513257334534523554365937553849394f305000106465765f52336356396b51326d583770",
+      "sealed": "5c68e9aae059b5779daf0721a7c11cd25c8f124a684fee9d7d6185e901612d61f92c1dfc92a3250e714601a5d868c9aabfe4595ec15f915932225dce19642e304f285f3a27d71928296e8edb4b1d1e55"
+    },
+    {
+      "holder_secret_key": "a8d79c1064da76562c4d016bd3881e106f91c78a3909f975d08fe8960c3f3bed",
+      "holder_key": "c3afee723c891aa45b2e4af269ad911c84e6e587475d07b09077495cdc0d5009",
+      "person_id": "user_01JD8Q2W3E4R5T6Y7U8I9O0P",
+      "holder_id": "dev_P4sK8yW1nB6t",
+      "challenge": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+      "ikm_e": "5151515151515151515151515151515151515151515151515151515151515151",
+      "info": "001a6e657875732d7265636f7665722d6368616c6c656e67652d7631001d757365725f30314a4438513257334534523554365937553849394f305000106465765f5034734b387957316e423674",
+      "sealed": "fd7f78a4d47c342ba79443e5aad22978e5b9974e9686d29bda7cdc934cf9be162eb4a36f2affe6141c35a3742cbc69ab52e0f1c45a0c7a2a3519850e1453da47bc11d6074e786a09a4e0bb76b077da91"
+    }
+  ],
+  "handovers": [
+    {
+      "sealed_by": "nexus-client",
+      "device_index": 0,
+      "device_id": "dev_handover0001",
+      "approver_id": "dev_approver0001",
+      "payload": "{\"version\":1,\"holders\":[{\"id\":\"dev_approver0001\",\"encryptionKey\":\"3CzKMejkO72R3_fkdcyjNH60eBB9W9dlq6SuSjDDXUQ\",\"signingKey\":\"JUO5L_EJVRFHatyDadtt3JM2ZaEZeN2hQE7hBmypVZ0\"}],\"revoked\":[\"dev_revoked00001\"]}",
+      "info": "00186e657875732d6465766963652d68616e646f7665722d763100106465765f68616e646f7665723030303100106465765f617070726f76657230303031",
+      "message": "nexus-device-handover:v1:dev_handover0001:dev_approver0001:eyJ2ZXJzaW9uIjoxLCJob2xkZXJzIjpbeyJpZCI6ImRldl9hcHByb3ZlcjAwMDEiLCJlbmNyeXB0aW9uS2V5IjoiM0N6S01lamtPNzJSM19ma2RjeWpOSDYwZUJCOVc5ZGxxNlN1U2pERFhVUSIsInNpZ25pbmdLZXkiOiJKVU81TF9FSlZSRkhhdHlEYWR0dDNKTTJaYUVaZU4yaFFFN2hCbXlwVlowIn1dLCJyZXZva2VkIjpbImRldl9yZXZva2VkMDAwMDEiXX0",
+      "sealed": "445175191e41338a141a84851f56aeab0236134ccbf29a6fed631ebfabce1630962eece88daf18a3e2d846cc7f038eb10b887db6c7054e7880c751377f714c69a63e8b6d2355900e834cdbe640d079bd2e25d5281f3e8d3e8e5e5a92e74b8c918652431441460a8df3619e617d9ef82212ef55ff084ff7ec451c8aa10401b99cb10c0d94d8563ee70408b97081a98caee6ca283b19e1f54a596e184e94044283de02324c390886379a7bbebb376c20f3d929c3e758ae8d18a35e219972b19c637e2f389b58503f328370f4c5bd6cc1c8a69a315c5ac22c47320949fb19f3542a0aff7cef7ec12b466278cdb0021bffb89d8f8034e38f730590c4222499067b54d75930a3500970f98cc950446eca8904288008d99d1bf35ff7a5bbe61cc2f4df8c3a830cef624d889cc6241bb121fef7b163666e8371e368be2f8e"
+    },
+    {
+      "sealed_by": "kit",
+      "device_index": 1,
+      "device_id": "dev_handover0002",
+      "approver_id": "dev_approver0002",
+      "payload": "{\"version\":1,\"holders\":[{\"id\":\"dev_approver0002\",\"encryptionKey\":\"3CzKMejkO72R3_fkdcyjNH60eBB9W9dlq6SuSjDDXUQ\",\"signingKey\":\"JUO5L_EJVRFHatyDadtt3JM2ZaEZeN2hQE7hBmypVZ0\"},{\"id\":\"dev_recovery0001\",\"encryptionKey\":\"ST6C_HRGSlkmiBdiPSBTxeuOLMSpiLT-4XnsawENUx0\",\"signingKey\":null}],\"revoked\":[]}",
+      "info": "00186e657875732d6465766963652d68616e646f7665722d763100106465765f68616e646f7665723030303200106465765f617070726f76657230303032",
+      "message": "nexus-device-handover:v1:dev_handover0002:dev_approver0002:eyJ2ZXJzaW9uIjoxLCJob2xkZXJzIjpbeyJpZCI6ImRldl9hcHByb3ZlcjAwMDIiLCJlbmNyeXB0aW9uS2V5IjoiM0N6S01lamtPNzJSM19ma2RjeWpOSDYwZUJCOVc5ZGxxNlN1U2pERFhVUSIsInNpZ25pbmdLZXkiOiJKVU81TF9FSlZSRkhhdHlEYWR0dDNKTTJaYUVaZU4yaFFFN2hCbXlwVlowIn0seyJpZCI6ImRldl9yZWNvdmVyeTAwMDEiLCJlbmNyeXB0aW9uS2V5IjoiU1Q2Q19IUkdTbGttaUJkaVBTQlR4ZXVPTE1TcGlMVC00WG5zYXdFTlV4MCIsInNpZ25pbmdLZXkiOm51bGx9XSwicmV2b2tlZCI6W119",
+      "sealed": "327e12d859c6eab384c7c5c2631a90ed05f427102e0f4daabfdb964a42fec00995a7529bcc97807b6fbe8cd873448478648357d67b8c4389cafa93d3547c30846c1535c2e364886e1f9b06f2e6b74d1a9d129fcbe9081436323335f0d83a83e95dee4e5a86dab835ca9051e0ade3c3198874b45d226e72fc30bff7f68ce54c9ff611d28eddb52b427346c9318705a8de85ec942b2f4d8ec099ce00acc9ffaf9e340ad0e6717eee358860f518a3295f20b048dc086f64e2fdb6e13da0af42a142bfc3807e380476d021c0b6f40f0f8d5b71b8bb1b18ed75d401559d2c0bb894153931acd93ee9d539f9d212a5df657dda6d8f725e597c37c6de73ce0d01c5f72dd150dcbc7e9e24ad45c8f5ae65fced992accdbecda4f2481d56e210eff99e642477f828678d667e030fd57601e0e651234cda6debf316ac7ef8973435cb28efbe5423d45ee1e2cd21118fad3010474d6b310d0a7d9273245345871d4871d237a5a1904d64f04c0afacb591caefeed412542503cb90e7a50f486d4f431454bfd534402af0b14f069f4b378ee85c2e654e5c0212"
+    }
+  ]
+}

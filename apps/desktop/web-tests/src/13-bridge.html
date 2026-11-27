@@ -1,0 +1,20 @@
+<!doctype html><html><head><meta charset="utf-8"><title>Bridge</title><!--HARNESS-->
+</head><body>
+<h1>Nexus artifact bridge</h1><div id="score"></div>
+<p style="font-size:12px;color:#555">The artifact bridge (window.nexus over ReactNativeWebView.postMessage) is not wired in the GPUI app yet. These are expected to fail until it is; they are here so the gap shows.</p>
+<div class="cell" id="out" style="font:11px ui-monospace,monospace;white-space:pre-wrap"></div>
+<script>
+const out = (s) => (document.getElementById("out").textContent += s + "\n");
+out("ReactNativeWebView: " + typeof window.ReactNativeWebView);
+out("window.nexus: " + typeof window.nexus);
+out("parent === window: " + (parent === window));
+let id = 0; const call = (method, params) => new Promise((res, rej) => {
+  if (!window.ReactNativeWebView) return rej(new Error("no bridge"));
+  const my = ++id; const on = (e) => { if (e.data?.nexus === 1 && e.data.id === my) { removeEventListener("message", on); e.data.error ? rej(e.data.error) : res(e.data.result); } };
+  addEventListener("message", on); window.ReactNativeWebView.postMessage(JSON.stringify({ nexus: 1, id: my, method, params }));
+});
+check("bridge present", () => !!window.ReactNativeWebView);
+check("storage.set/get", () => call("storage.set", { key: "k", value: "v" }).then(() => call("storage.get", { key: "k" })).then((v) => v === "v"));
+check("storage.list", () => call("storage.list", {}).then(Array.isArray));
+check("fs.readFile", () => call("fs.readFile", { path: "README.md" }).then((t) => typeof t === "string"));
+</script></body></html>

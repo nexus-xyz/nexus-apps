@@ -1,0 +1,18 @@
+[package]
+name = "nexus-agent-memory"
+description = "Local coding-agent memory shared by Nexus Desktop and the CLI."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish = ["crates-io"]
+license = "MIT"
+
+[dependencies]
+hex.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+tempfile = "=3.27.0"
+time.workspace = true
+url.workspace = true
+uuid = { workspace = true, features = ["serde"] }
