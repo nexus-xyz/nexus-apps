@@ -83,11 +83,17 @@ impl SharedTerminals {
             }))
             .when(shell, |row| row.child(folder_slot(&entry.cwd, state.words, palette)))
             .when(!shell, |row| {
+                // An open one-line command learns whether the row cuts it, so its details can leave out the box that
+                // would only repeat it.
+                let probe = (state.open && more == 0 && !entry.needs_attention())
+                    .then(|| cut_probe(id.clone(), line.to_string(), self.cut.clone(), cx.entity_id()));
                 row.child(
                     div()
+                        .relative()
                         .flex_1()
                         .min_w(px(0.))
                         .truncate()
+                        .children(probe)
                         .font_family(ui::MONO)
                         .text_size(px(12.))
                         // With no name of its own, the command is the row's title.
@@ -301,7 +307,11 @@ impl SharedTerminals {
                 && editing == &id
             {
                 body = body.child(Textarea::new(input));
-            } else {
+            } else if list::shows_command(
+                list::first_line(&entry.command).1,
+                entry.needs_attention(),
+                self.cut.borrow().get(&id).copied(),
+            ) {
                 body = body.child(super::render::command_text(&id, &entry.command, palette));
             }
             // Only the path is selectable, so a copy of the line is a path the person can paste.
@@ -423,6 +433,35 @@ impl SharedTerminals {
         }
         controls.into_any_element()
     }
+}
+
+/// Measures, at paint, whether the command slot cuts `line`, and keeps the answer in `cut` under `id`. It notifies
+/// `view` only when the answer changes, so a steady row costs one cached line shape a frame and no redraw. Render
+/// cannot know the slot's width; the paint can (render rule 2).
+fn cut_probe(
+    id: String,
+    line: String,
+    cut: Rc<std::cell::RefCell<HashMap<String, bool>>>,
+    view: EntityId,
+) -> impl IntoElement {
+    let line = SharedString::from(line);
+    canvas(
+        move |bounds, window, cx| {
+            // The slot's own text style: Geist Mono at 12.
+            let style = window.text_style();
+            let size = style.font_size.to_pixels(window.rem_size());
+            let run = style.to_run(line.len());
+            let width = window.text_system().shape_line(line.clone(), size, &[run], None).width;
+            let now = width > bounds.size.width;
+            if cut.borrow().get(&id) != Some(&now) {
+                cut.borrow_mut().insert(id.clone(), now);
+                cx.notify(view);
+            }
+        },
+        |_, _, _, _| {},
+    )
+    .absolute()
+    .size_full()
 }
 
 /// A shell's folder in a row's command slot: a folder icon, then the path in mono, with home as `~`. A folder icon

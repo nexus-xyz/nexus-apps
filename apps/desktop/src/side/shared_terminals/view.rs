@@ -58,6 +58,8 @@ impl SharedTerminals {
                     output.is_some(),
                     self.editing.as_ref().is_some_and(|(id, _)| id == &entry.id),
                     open.then(|| self.submitted_inputs.get(&entry.id)).flatten(),
+                    // Whether the details show the command box, which the row's width decides.
+                    open.then(|| self.cut.borrow().get(&entry.id).copied()).flatten(),
                     !history && !self.read_only && self.lingering(&entry.id),
                 )
                     .hash(&mut hasher);

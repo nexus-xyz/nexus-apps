@@ -246,6 +246,9 @@ pub struct SharedTerminals {
     watched: HashMap<String, u64>,
     /// Each open command's output well: its height, its drag and the maximized one (`side::well`).
     wells: crate::side::well::Wells,
+    /// Whether each open row cuts its command's first line, as its last paint measured it (`rows::cut_probe`).
+    /// The details repeat the command only when the row does not show it whole.
+    cut: Rc<std::cell::RefCell<HashMap<String, bool>>>,
 }
 impl SharedTerminals {
     pub(crate) fn has_modal(&self) -> bool {
@@ -358,6 +361,7 @@ impl SharedTerminals {
             watch_next: None,
             watched: HashMap::new(),
             wells: Default::default(),
+            cut: Rc::default(),
         };
         view.start_poll(cx);
         view
