@@ -322,6 +322,9 @@ pub(super) struct SidePane {
     pub(super) side_chats: HashMap<String, (Entity<super::side_chat::SideChat>, Subscription)>,
     pub(super) side_chat_for: HashMap<String, String>,
     pub(super) side_chat_visible: bool,
+    /// The Side chat entry's turning mark while its side chat works: a view of its own, so its frames redraw only it
+    /// (`side_chat_status.rs`). None before the window made it: the mark then stands still.
+    pub(super) side_chat_arc: Option<Entity<super::side_chat_status::TurningMark>>,
     pub(super) side_chat_busy: bool,
     #[cfg(test)]
     pub(super) side_chat_fixture_runs: Option<super::runs::Runs>,
@@ -445,6 +448,7 @@ impl SidePane {
             plus_menu: false,
             side_chats: HashMap::new(),
             side_chat_for: HashMap::new(),
+            side_chat_arc: None,
             side_chat_visible: false,
             side_chat_busy: false,
             #[cfg(test)]
@@ -2725,10 +2729,17 @@ impl Workspace {
         };
         let selected = self.side.side_chat_visible;
         let icon_only = compact && !selected;
+        // The side chat's state while another tab is chosen (`side_chat_status.rs`). The chosen tab shows none.
+        let state = if selected { None } else { self.side_chat_state(cx) };
+        let tip = super::side_chat_status::tooltip("Open side chat", state);
+        let mark = self.side_chat_mark(state, p);
+        // Icon only, the mark sits on the icon's corner; named, after the name.
+        let (corner, inline) = if icon_only { (mark, None) } else { (None, mark) };
         Some(
             h_flex()
                 .id("side-chat-tab")
                 .group("side-chat-tab")
+                .relative()
                 .flex_none()
                 .h(px(26.))
                 .when(icon_only, |tab| tab.w(px(30.)).justify_center())
@@ -2739,9 +2750,13 @@ impl Workspace {
                 .cursor_pointer()
                 .when(selected, |tab| tab.bg(p.selected).text_color(p.foreground))
                 .when(!selected, |tab| {
-                    tab.text_color(p.muted)
-                        .hover(|style| style.bg(p.hover).text_color(p.foreground))
-                        .tooltip(|window, cx| Tooltip::new("Open side chat").build(window, cx))
+                    tab.text_color(if super::side_chat_status::loud(state) {
+                        p.foreground
+                    } else {
+                        p.muted
+                    })
+                    .hover(|style| style.bg(p.hover).text_color(p.foreground))
+                    .tooltip(move |window, cx| Tooltip::new(tip.clone()).build(window, cx))
                 })
                 .on_click(cx.listener(|this, _, window, cx| {
                     this.side.side_chat_visible = true;
@@ -2752,8 +2767,9 @@ impl Workspace {
                     cx.notify();
                 }))
                 .child(Icon::new(Lucide::MessageSquare).size(px(14.)))
+                .children(corner.map(|mark| div().absolute().top(px(3.)).right(px(3.)).child(mark)))
                 .when(!icon_only, |tab| {
-                    tab.child("Side chat").child(
+                    tab.child("Side chat").children(inline).child(
                         div()
                             .id("close-side-chat-tab")
                             .size(px(18.))
@@ -2967,6 +2983,9 @@ impl Workspace {
             }
             let slug = entry.slug();
             let refusal = self.entry_refusal(entry);
+            let side_state = (entry == entries::Entry::Tab(Tab::SideChat))
+                .then(|| self.side_chat_state(cx))
+                .flatten();
             rows.push(
                 h_flex()
                     .id(SharedString::from(format!("side-plus-{slug}")))
@@ -2988,7 +3007,13 @@ impl Workspace {
                             .tooltip(move |window, cx| Tooltip::new(reason).build(window, cx))
                     })
                     .child(Icon::new(entry.icon()).size(px(15.)).text_color(palette.icon))
-                    .child(div().flex_1().child(self.entry_label(entry)))
+                    .child(
+                        h_flex()
+                            .flex_1()
+                            .gap(px(8.))
+                            .child(self.entry_label(entry))
+                            .children(self.side_chat_mark(side_state, palette)),
+                    )
                     .when_some(Self::entry_keys(entry), |row, keys| row.child(key_hint(&keys, palette)))
                     .into_any_element(),
             );

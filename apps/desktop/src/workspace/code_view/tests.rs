@@ -443,6 +443,7 @@ fn session() -> CodeSession {
         source: None,
         has_worktree: false,
         side_chat: false,
+        side_chats: Vec::new(),
         compact: false,
         orchestration: false,
         at_depth_limit: false,

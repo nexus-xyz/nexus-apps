@@ -214,6 +214,9 @@ pub struct CodeSession {
     pub source: Option<String>,
     pub has_worktree: bool,
     pub side_chat: bool,
+    /// Its side chats, which the sidebar never lists: what the Workbench's Side chat entry tells
+    /// (`workspace/side_chat_status.rs`).
+    pub side_chats: Vec<SideChatActivity>,
     pub compact: bool,
     pub orchestration: bool,
     pub at_depth_limit: bool,
@@ -223,7 +226,31 @@ pub struct CodeSession {
     pub start_choices: Vec<nexus_workbench::session_choice::StartChoice>,
 }
 
+/// What a side chat's state reads, kept on its parent session.
+#[derive(Debug, Clone, PartialEq)]
+pub struct SideChatActivity {
+    pub id: String,
+    pub activity: nexus_workbench::attention::Activity,
+    /// The plan stopped its last turn at a usage limit, and nothing runs (`nexus_workbench::limit_stop`).
+    pub limited: Option<nexus_workbench::event::LimitStop>,
+}
+
+impl SideChatActivity {
+    fn of(thread: &nexus_workbench::event::ThreadSummary) -> SideChatActivity {
+        SideChatActivity {
+            id: thread.id.clone(),
+            activity: nexus_workbench::attention::Activity::of(thread),
+            limited: nexus_workbench::limit_stop::shown(thread.limited, thread.status),
+        }
+    }
+}
+
 impl CodeSession {
+    /// Its side chat `id`, as the last overview read it.
+    pub fn side_chat_activity(&self, id: &str) -> Option<&SideChatActivity> {
+        self.side_chats.iter().find(|side| side.id == id)
+    }
+
     /// How many things its agent left running that the sidebar can name: its background work and the linked
     /// sessions it waits on. 0 when only an older host's flag says it works in the background.
     pub fn background_count(&self) -> usize {
@@ -242,6 +269,7 @@ impl CodeSession {
             source: thread.source_thread_id.clone(),
             has_worktree: thread.worktree.is_some(),
             side_chat: thread.side_chat,
+            side_chats: Vec::new(),
             start_choices: thread.start_choices.clone(),
             compact: thread.capabilities.as_ref().is_some_and(|caps| caps.compact),
             orchestration: thread.orchestration,
@@ -1045,8 +1073,18 @@ pub fn group(
     machine: Option<&str>,
 ) -> Vec<CodeProject> {
     let mut sessions: HashMap<String, Vec<CodeSession>> = HashMap::new();
+    let mut sides: HashMap<String, Vec<SideChatActivity>> = HashMap::new();
     for thread in threads {
-        if thread.archived || thread.side_chat {
+        if thread.archived {
+            continue;
+        }
+        if thread.side_chat {
+            if let Some(parent) = thread.source_thread_id.as_deref() {
+                sides
+                    .entry(parent.to_string())
+                    .or_default()
+                    .push(SideChatActivity::of(&thread));
+            }
             continue;
         }
         let mut session = CodeSession::of(thread);
@@ -1054,6 +1092,9 @@ pub fn group(
         sessions.entry(session.project_id.clone()).or_default().push(session);
     }
     for list in sessions.values_mut() {
+        for session in list.iter_mut() {
+            session.side_chats = sides.remove(&session.id).unwrap_or_default();
+        }
         list.sort_by(place_order);
     }
     let mut projects: Vec<CodeProject> = projects
@@ -2012,6 +2053,28 @@ mod tests {
             matches!(&blocks[1], Block::Inside {path, block} if path == &["agent"] && matches!(block.as_ref(), Block::Page { page_id, .. } if page_id == "pag_1"))
         );
         assert!(matches!(&blocks[4], Block::Page { page_id, .. } if page_id == "pag_1"));
+    }
+
+    #[test]
+    fn a_side_chat_never_lists_but_its_parent_keeps_its_state() {
+        use nexus_workbench::event::ThreadStatus;
+        let parent = ordered_thread("parent", "p", 10, Some(10));
+        let mut side = ordered_thread("side", "p", 20, Some(20));
+        side.side_chat = true;
+        side.source_thread_id = Some("parent".into());
+        side.status = ThreadStatus::Approval;
+        let mut archived = ordered_thread("old-side", "p", 5, Some(5));
+        archived.side_chat = true;
+        archived.archived = true;
+        archived.source_thread_id = Some("parent".into());
+        let projects = group(vec![ordered_project("p")], [parent, side, archived], None);
+        let sessions = &projects[0].sessions;
+        assert_eq!(sessions.iter().map(|s| s.id.as_str()).collect::<Vec<_>>(), ["parent"]);
+        assert_eq!(sessions[0].side_chats.len(), 1);
+        let kept = sessions[0].side_chat_activity("side").expect("the side chat's state");
+        assert_eq!(kept.activity.status, ThreadStatus::Approval);
+        assert_eq!(kept.activity.updated_at, 20);
+        assert!(sessions[0].side_chat_activity("old-side").is_none());
     }
 
     fn added_project(id: &str, added_at: i64) -> nexus_workbench::event::Project {

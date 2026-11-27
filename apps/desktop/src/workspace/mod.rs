@@ -199,6 +199,7 @@ mod setup_row;
 mod shell;
 mod shortcuts_page;
 mod side_chat;
+mod side_chat_status;
 mod side_pane;
 mod sidebar;
 mod sidebar_budget;
@@ -1404,6 +1405,7 @@ impl Workspace {
             },
             onboarding: onboarding::Onboarding::new(cx),
         };
+        workspace.side.side_chat_arc = Some(cx.new(|_| side_chat_status::TurningMark));
         if remembered_local
             && matches!(workspace.auth, Auth::Restoring)
             && workspace.gateway.saved_sign_in() == Some(false)

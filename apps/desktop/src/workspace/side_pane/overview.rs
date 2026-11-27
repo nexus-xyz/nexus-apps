@@ -10,7 +10,8 @@
 //! A row's tooltip names it with its shortcut, so a row keeps no room for a hint and its name is never cut.
 //!
 //! Its rows are the Workbench's entries (`entries.rs`), as "+" offers them: the tools under their tabs' names, with
-//! their tabs' unread dot and Agents count, then New terminal under a hairline.
+//! their tabs' unread dot and Agents count, then New terminal under a hairline. Side chat carries its side chat's
+//! state (`side_chat_status.rs`).
 
 use super::entries::Entry;
 use super::*;
@@ -208,9 +209,14 @@ impl Workspace {
         let refusal = self.entry_refusal(entry);
         let dot = matches!(entry, Entry::Tab(Tab::Tool(tool)) if self.side_tab_dot(tool, cx));
         let agents = entry == Entry::Tab(Tab::Tool(Tool::Agents));
+        // The side chat's state (`side_chat_status.rs`): its mark takes the unread dot's place.
+        let side_state = (entry == Entry::Tab(Tab::SideChat))
+            .then(|| self.side_chat_state(cx))
+            .flatten();
+        let loud = crate::workspace::side_chat_status::loud(side_state);
         let tooltip: SharedString = match self.agents_live_count().filter(|_| agents && layout == Layout::Icons) {
             Some(count) => format!("{label}, {count} live").into(),
-            None => label.into(),
+            None => crate::workspace::side_chat_status::tooltip(label, side_state).into(),
         };
         let group: SharedString = format!("workbench-overview-{slug}").into();
         h_flex()
@@ -223,7 +229,7 @@ impl Workspace {
             .gap(px(10.))
             .rounded(px(8.))
             .text_size(px(13.))
-            .text_color(palette.muted)
+            .text_color(if loud { palette.foreground } else { palette.muted })
             .when(live && refusal.is_none(), |row| {
                 row.cursor_pointer()
                     .child(crate::motion::hover_fill("hover", palette.hover, 8.))
@@ -239,7 +245,7 @@ impl Workspace {
                 div()
                     .flex_none()
                     .relative()
-                    .text_color(palette.icon)
+                    .text_color(if loud { palette.foreground } else { palette.icon })
                     .group_hover(group, |style| style.text_color(palette.foreground))
                     .child(Icon::new(entry.icon()).size(px(15.)))
                     .when(dot && layout == Layout::Icons, |icon| {
@@ -252,6 +258,12 @@ impl Workspace {
                                 .rounded_full()
                                 .bg(palette.muted),
                         )
+                    })
+                    .when(layout == Layout::Icons, |icon| {
+                        icon.children(
+                            self.side_chat_mark(side_state, palette)
+                                .map(|mark| div().absolute().top(px(-4.)).right(px(-5.)).child(mark)),
+                        )
                     }),
             )
             .when(layout == Layout::Names, |row| {
@@ -259,6 +271,7 @@ impl Workspace {
                     .when(dot, |row| {
                         row.child(div().flex_none().size(px(5.)).rounded_full().bg(palette.muted))
                     })
+                    .children(self.side_chat_mark(side_state, palette))
                     .when(agents, |row| row.children(self.agents_tab_badge(palette)))
             })
     }
