@@ -4,11 +4,16 @@
     feed.py --dir <packages> --version 0.12.0-beta.1 --channel beta \
         --base https://downloads.nexus.inc/desktop-oss/beta/0.12.0-beta.1 --commit <sha> --date <RFC 3339>
 
+The channel is `beta` (`<x.y.z>-beta.<N>`, or a rehearsal's `0.0.0-test.<N>`) or `stable` (`<x.y.z>`), and the base
+must be that channel's folder for this version: `desktop-oss/beta/<version>` or `desktop/stable/<version>`.
+
 The folder holds each package and host, with its signature beside it as `<file>.sig`: the base64 of a minisign
 signature file, the format the app's updater reads (crates/nexus-desktop-updates, `verify`).
 
 The app reads `platforms["<os>-<arch>-<format>"]` for its update and `downloads["linux-<arch>-nexus-host"]` for the
-Nexus host. A download page reads `downloads`, every file by kind.
+Nexus host. A download page reads `downloads`, every file by kind. The text is laid out as Nexus's earlier release
+wrote `desktop/stable/latest.json` (its updater-manifest.mjs): each `downloads` entry on one line, so a script without
+a JSON parser can read it.
 
 The script does not check a signature against a key. It checks what a manifest can get wrong: a missing package, a
 missing signature, and a signature whose trusted comment names another file or another version. The release
@@ -25,12 +30,17 @@ from pathlib import Path
 
 # The packages a release must hold: (download kind, the app's update key, the file's name after the version).
 PACKAGES = [
-    ("linux-x86_64-tarball", "linux-x86_64-tarball", "linux-x86_64.tar.xz"),
     ("macos-arm64-dmg", "darwin-aarch64-dmg", "macos-arm64.dmg"),
     ("windows-x86_64-nsis", "windows-x86_64-exe", "windows-x86_64.exe"),
+    ("linux-x86_64-tarball", "linux-x86_64-tarball", "linux-x86_64.tar.xz"),
 ]
 HOST_ARCHES = ["x86_64", "aarch64"]
 VERSION = re.compile(r"^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$")
+# Each channel's versions, and its folder on downloads.nexus.inc. A rehearsal builds a beta.
+CHANNELS = {
+    "beta": (re.compile(r"^[0-9]+\.[0-9]+\.[0-9]+-(beta|test)\.[0-9]+$"), "desktop-oss/beta"),
+    "stable": (re.compile(r"^[0-9]+\.[0-9]+\.[0-9]+$"), "desktop/stable"),
+}
 
 
 class FeedError(Exception):
@@ -84,7 +94,14 @@ def build(folder: Path, version: str, channel: str, base: str, commit: str, date
     """The manifest and the text of SHA256SUMS."""
     if not VERSION.match(version):
         raise FeedError(f"{version!r} is not a version (MAJOR.MINOR.PATCH[-prerelease])")
+    if channel not in CHANNELS:
+        raise FeedError(f"{channel!r} is not a channel ({', '.join(CHANNELS)})")
+    versions, channel_folder = CHANNELS[channel]
+    if not versions.match(version):
+        raise FeedError(f"{version} is not a {channel} version")
     base = base.rstrip("/")
+    if not base.endswith(f"/{channel_folder}/{version}"):
+        raise FeedError(f"{base} is not the {channel} folder of {version} (…/{channel_folder}/{version})")
     expected = [package_file(version, suffix) for _, _, suffix in PACKAGES]
     expected += [host_file(version, arch) for arch in HOST_ARCHES]
     for file in expected:
@@ -124,6 +141,17 @@ def build(folder: Path, version: str, channel: str, base: str, commit: str, date
     return manifest, sums
 
 
+def render(manifest: dict) -> str:
+    """The manifest's text: indented, except that each `downloads` entry stays on one line."""
+    head = {key: value for key, value in manifest.items() if key != "downloads"}
+    body = json.dumps(head, indent=2).removesuffix("\n}")
+    entries = [
+        f"    {json.dumps(kind)}: {json.dumps(entry, separators=(',', ':'))}"
+        for kind, entry in manifest["downloads"].items()
+    ]
+    return body + ',\n  "downloads": {\n' + ",\n".join(entries) + "\n  }\n}\n"
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     for name in ("dir", "version", "channel", "base", "commit", "date"):
@@ -137,7 +165,7 @@ def main() -> int:
         return 1
     # The two files are written last, so a failed run leaves the folder as it was.
     (folder / "SHA256SUMS").write_text(sums)
-    (folder / "latest.json").write_text(json.dumps(manifest, indent=2) + "\n")
+    (folder / "latest.json").write_text(render(manifest))
     return 0
 
 

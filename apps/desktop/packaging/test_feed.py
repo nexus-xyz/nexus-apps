@@ -98,6 +98,57 @@ class FeedTest(unittest.TestCase):
         with self.assertRaisesRegex(feed.FeedError, "is not a version"):
             feed.build(self.folder, "v1.2", "beta", BASE, "0123abc", "2026-01-02T03:04:05Z")
 
+    def test_the_text_keeps_each_download_on_one_line(self):
+        manifest, _ = build(self.folder)
+        text = feed.render(manifest)
+        self.assertEqual(text, GOLDEN.read_text())
+        self.assertEqual(json.loads(text), manifest)
+        downloads = [line.rstrip(",") for line in text.split('"downloads": {\n')[1].splitlines()]
+        for kind, entry in manifest["downloads"].items():
+            self.assertIn(f'    "{kind}": {json.dumps(entry, separators=(",", ":"))}', downloads)
+
+    def test_a_version_or_folder_of_another_channel_stops_the_feed(self):
+        date = "2026-01-02T03:04:05Z"
+        with self.assertRaisesRegex(feed.FeedError, "is not a stable version"):
+            feed.build(self.folder, VERSION, "stable", BASE, "0123abc", date)
+        with self.assertRaisesRegex(feed.FeedError, "is not a channel"):
+            feed.build(self.folder, VERSION, "internal", BASE, "0123abc", date)
+        stable_base = f"https://downloads.example/desktop/stable/{VERSION}"
+        with self.assertRaisesRegex(feed.FeedError, "is not the beta folder"):
+            feed.build(self.folder, VERSION, "beta", stable_base, "0123abc", date)
+
+
+class StableFeedTest(unittest.TestCase):
+    """Stable writes the folder and the layout that Nexus's stable builds and installers already read."""
+
+    def test_the_text_is_the_earlier_release_s(self):
+        # desktop/stable/latest.json as Nexus's earlier release published it for 0.11.2, byte for byte.
+        published = (Path(__file__).parent / "testdata" / "stable-0.11.2.json").read_text()
+        self.assertEqual(feed.render(json.loads(published)), published)
+
+    def test_a_stable_release(self):
+        version = "1.3.0"
+        base = f"https://downloads.nexus.inc/desktop/stable/{version}"
+        date = "2026-01-02T03:04:05Z"
+        with tempfile.TemporaryDirectory() as temp:
+            folder = Path(temp)
+            files = [feed.package_file(version, suffix) for _, _, suffix in feed.PACKAGES]
+            files += [feed.host_file(version, arch) for arch in feed.HOST_ARCHES]
+            for file in files:
+                (folder / file).write_text(f"stand-in for {file}\n")
+                (folder / f"{file}.sig").write_text(signature(file, version) + "\n")
+            manifest, _ = feed.build(folder, version, "stable", base, "0123abc", date)
+            with self.assertRaisesRegex(feed.FeedError, "is not a beta version"):
+                feed.build(folder, version, "beta", base, "0123abc", date)
+        self.assertEqual(manifest["channel"], "stable")
+        self.assertEqual(manifest["notes"], f"Nexus {version} (stable)")
+        self.assertEqual(
+            list(manifest["platforms"]), ["darwin-aarch64-dmg", "windows-x86_64-exe", "linux-x86_64-tarball"]
+        )
+        self.assertEqual(
+            manifest["downloads"]["linux-x86_64-tarball"]["url"], f"{base}/nexus-desktop-{version}-linux-x86_64.tar.xz"
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

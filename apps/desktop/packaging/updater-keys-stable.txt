@@ -1,0 +1,12 @@
+# The public keys a stable build trusts for updates: the stable channel, desktop/stable/ on downloads.nexus.inc. The
+# release workflow reads this file into NEXUS_UPDATER_PUBKEY for a v<x.y.z> tag, and refuses to build while it lists
+# no key. The format is updater-keys.txt's: one key per line, the base64 of a minisign public key file.
+#
+# The key below is the one every installed stable build trusts: Nexus's earlier release signed stable with it (minisign
+# key id 67453CE06F6BD9D5). Its public half is compiled into Nexus 0.11.2 and verifies that release's signatures in
+# desktop/stable/0.11.2/. Its secret half is the release environment's STABLE_UPDATER_PRIVATE_KEY. It is not the
+# beta's key: a stable build never takes a beta, and a beta never takes a stable build.
+#
+# Lines that start with `#` are comments. A change to this file changes whose updates every later stable build
+# installs: review it as you review a change to the release workflow.
+dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDY3NDUzQ0UwNkY2QkQ5RDUKUldUVjJXdHY0RHhGWnhuaFQwK2hGTnV5WklLMU9GTWxNR1JxaUoyeUllaHMwYWZzNC9LVzFPb24K
