@@ -10,6 +10,7 @@ use std::{cell::RefCell, rc::Rc, sync::Arc};
 mod artifact_refs;
 mod layout;
 mod open_focus;
+mod search_column;
 fn account(org: &str, person: &str) -> Account {
     Account::from_json(&json!({"tenant":{"id":org,"slug":org,"name":"Fixture organization","kind":"company"},"user":{"id":person,"personId":person,"name":"A","email":format!("{person}@example.test")},"role":"member","permissions":[]})).expect("actual account wire fixture")
 }

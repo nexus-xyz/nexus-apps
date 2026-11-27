@@ -191,6 +191,7 @@ mod session_tree;
 mod sessions_list;
 mod settings_access;
 mod settings_registry;
+mod settings_results;
 mod settings_search;
 mod settings_shell;
 mod settings_view;
