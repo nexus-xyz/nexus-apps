@@ -1,0 +1,50 @@
+<!doctype html><html><head><meta charset="utf-8"><title>Visual</title><!--HARNESS-->
+<style>
+.v { height: 54px; border-radius: 6px; }
+#conic { background: conic-gradient(red, yellow, lime, aqua, blue, magenta, red); }
+.bd { position: relative; height: 54px; background: repeating-linear-gradient(45deg,#000 0 6px,#fff 6px 12px); }
+.bd > div { position: absolute; inset: 10px; backdrop-filter: blur(4px); background: rgb(255 255 255 / .3); }
+#filter { background: #39f; filter: blur(2px) drop-shadow(4px 4px 0 #000) hue-rotate(90deg); }
+.blend { background: #fd0; } .blend div { height: 54px; background: #0af; mix-blend-mode: multiply; width: 60%; }
+#clip { background: #e33; clip-path: polygon(50% 0, 100% 100%, 0 100%); }
+#mask { background: #3a3; -webkit-mask-image: linear-gradient(90deg,#000,transparent); mask-image: linear-gradient(90deg,#000,transparent); }
+.p3d { perspective: 200px; } #t3d { background: #96f; transform: rotateY(40deg); }
+.has:has(input:checked) { background: #9e9; }
+.nest { & span { color: rgb(0, 128, 0); font-weight: 700; } }
+#mix { background: color-mix(in oklch, red 50%, blue); }
+#oklch { background: oklch(70% 0.2 150); }
+#shadow { background: #fff; box-shadow: 0 6px 16px rgb(0 0 0 / .4), inset 0 0 0 2px #39f; }
+#radius { background: #39f; border-radius: 50% 0 50% 0 / 30% 0 30% 0; }
+#outline { outline: 3px dashed #e33; outline-offset: 4px; background: #eee; border-radius: 12px; }
+</style></head><body>
+<h1>Visual</h1><div id="score"></div>
+<div class="grid">
+<div class="cell"><b>conic-gradient (rainbow)</b><div class="v" id="conic"></div></div>
+<div class="cell"><b>backdrop-filter (blurred stripes)</b><div class="bd"><div id="bd"></div></div></div>
+<div class="cell"><b>filter (green, blurred, shadow)</b><div class="v" id="filter"></div></div>
+<div class="cell"><b>mix-blend multiply (green overlap)</b><div class="blend"><div id="blend"></div></div></div>
+<div class="cell"><b>clip-path triangle</b><div class="v" id="clip"></div></div>
+<div class="cell"><b>mask fade →</b><div class="v" id="mask"></div></div>
+<div class="cell p3d"><b>3D rotateY</b><div class="v" id="t3d"></div></div>
+<div class="cell has" id="has"><b>:has() (green when checked)</b><label><input type="checkbox" checked> on</label></div>
+<div class="cell nest"><b>CSS nesting (green bold)</b><span id="nest">nested</span></div>
+<div class="cell"><b>color-mix purple</b><div class="v" id="mix"></div></div>
+<div class="cell"><b>oklch green</b><div class="v" id="oklch"></div></div>
+<div class="cell"><b>box-shadow + inset</b><div class="v" id="shadow"></div></div>
+<div class="cell"><b>elliptical radius</b><div class="v" id="radius"></div></div>
+<div class="cell"><b>outline follows radius</b><div class="v" id="outline"></div></div>
+</div>
+<script>
+const cs = (s, p) => getComputedStyle(document.querySelector(s))[p];
+supports("conic-gradient", "background: conic-gradient(red, blue)");
+supports("backdrop-filter", "backdrop-filter: blur(2px)");
+supports("filter", "filter: drop-shadow(1px 1px 0 #000)");
+supports("mix-blend-mode", "mix-blend-mode: multiply");
+supports("clip-path", "clip-path: polygon(0 0, 1px 0, 0 1px)");
+check("mask-image", () => CSS.supports("mask-image: linear-gradient(red, blue)") || CSS.supports("-webkit-mask-image: linear-gradient(red, blue)"));
+check("3d transform", () => cs("#t3d", "transform").startsWith("matrix3d"));
+check(":has()", () => cs("#has", "backgroundColor") === "rgb(153, 238, 153)");
+check("nesting", () => cs("#nest", "color") === "rgb(0, 128, 0)");
+supports("color-mix", "color: color-mix(in oklch, red, blue)");
+supports("oklch", "color: oklch(70% 0.2 150)");
+</script></body></html>

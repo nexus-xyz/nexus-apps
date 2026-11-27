@@ -1,0 +1,37 @@
+# Nexus for desktop's pull requests: the `gh` and `glab` reads and the pull request watch, with no UI toolkit. A
+# sibling of nexus-desktop-core rather than part of it, so the core keeps no async runtime of its own. Every dependency
+# pinned exactly, at the app's versions.
+[package]
+name = "nexus-pull-requests"
+description = "Nexus for desktop's pull requests: gh and glab reads, and the watch that tells the person and the agent what changed."
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.94"
+publish = false
+license = "MIT"
+
+[dependencies]
+# The watch's notifier and the sessions' AutoWake in settings.json.
+nexus-desktop-core = { path = "../nexus-desktop-core" }
+# The sessions, their worktrees and the repository's host; `process::async_command` runs gh and glab.
+nexus-workbench = { path = "../nexus-workbench" }
+# The background service's sessions: its connection (`machine::Remote`), for the watch's changes to them.
+nexus-remote = { path = "../nexus-remote" }
+serde = { version = "=1.0.229", features = ["derive"] }
+serde_json = { version = "=1.0.154", features = ["preserve_order"] }
+tokio = { version = "=1.53.3", features = ["macros", "sync", "time"] }
+
+# Parse review previews with the same GFM parser as the native Markdown view.
+markdown = "=1.0.0"
+
+[dev-dependencies]
+tokio = { version = "=1.53.3", features = ["macros", "rt-multi-thread"] }
+uuid = { version = "=1.28.0", features = ["v4"] }
+
+[lints.rust]
+unsafe_code = "forbid"
+
+[lints.clippy]
+dbg_macro = "warn"
+todo = "warn"
+unwrap_used = "warn"

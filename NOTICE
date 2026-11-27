@@ -1,0 +1,102 @@
+Nexus Desktop
+Copyright 2025-2026 Nexus Laboratories, Inc.
+
+This product is licensed under the MIT license. See the LICENSE file.
+
+This product includes software developed by others. Each item below keeps its own license.
+The Apache-2.0 items require their attribution notices to travel with every copy, so this file stays.
+
+Patched copies of GPUI (vendor/gpui-pre, gpui-pre-apple, gpui-pre-linux, gpui-pre-macos, gpui-pre-wgpu, gpui-pre-windows)
+  Copyright 2022-2025 Zed Industries, Inc.
+  Licensed under the Apache License, Version 2.0.
+  Our changes are marked with comments that start with "Nexus" and are described in vendor/README.md.
+
+Motion code from Zeron (apps/desktop/src/workspace/launch_motion.rs)
+  https://github.com/zeronsh/zeron
+  Copyright (c) 2026 Wing
+  Licensed under the MIT license.
+  Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated
+  documentation files (the "Software"), to deal in the Software without restriction, including without limitation the
+  rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to
+  permit persons to whom the Software is furnished to do so, subject to the following conditions:
+  The above copyright notice and this permission notice shall be included in all copies or substantial portions of
+  the Software.
+  THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE
+  WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR
+  COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
+  OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+File and folder icons from Material Icon Theme 5.40.0 (apps/desktop/assets/file_icons, apps/desktop/src/file_icons/table.rs)
+  https://github.com/material-extensions/vscode-material-icon-theme
+  Copyright (c) 2025 Material Extensions
+  Licensed under the MIT license. The license text is in apps/desktop/licenses/third-party/material-icon-theme-LICENSE.
+  Some icons draw other projects' logos. Each logo is a trademark of its owner, and the MIT license does not cover it.
+
+Language file names and extensions from Visual Studio Code (apps/desktop/src/file_icons/table.rs)
+  https://github.com/microsoft/vscode
+  Copyright (c) 2015 - present Microsoft Corporation
+  Licensed under the MIT license. The license text is in apps/desktop/licenses/third-party/vscode-LICENSE.
+
+Selectable message text adapted from GPUI Base 0.9 (apps/desktop/src/workspace/message_text.rs)
+  https://github.com/longbridge/gpui-kit
+  Licensed under the Apache License, Version 2.0.
+  Copyright 2024 - 2026 Longbridge <https://longbridge.com>
+
+Backdrop blur code ported from zui (vendor/gpui-pre/src/backdrop_blur.rs, vendor/gpui-pre-wgpu/src/wgpu_backdrop.rs,
+  vendor/gpui-pre-wgpu/src/shaders.wgsl, vendor/gpui-pre-windows/src/directx_renderer/backdrop.rs,
+  vendor/gpui-pre-windows/src/directx_renderer/backdrop_tests.rs, vendor/gpui-pre-apple/src/metal_renderer.rs)
+  https://github.com/zeronsh/zui
+  Copyright 2022 - 2025 Zed Industries, Inc.
+  Licensed under the Apache License, Version 2.0. The license text is in apps/desktop/licenses/third-party/zui-LICENSE-APACHE.
+
+global-hotkey 0.8.0 (vendor/global-hotkey)
+  Copyright 2022-2022 Tauri Programme within The Commons Conservancy
+  Licensed under the Apache License, Version 2.0 or the MIT license, at your option. Used here under the MIT license.
+  The license texts are in vendor/global-hotkey.
+
+Rich-text renderer bundle (apps/desktop/rich-text/assets/renderer.js, renderer.css)
+  Built by Nexus from its own code and 66 third-party npm packages, including KaTeX, Mermaid and DOMPurify.
+  Each package keeps its own license (ISC, MIT, Apache-2.0, BSD-3-Clause, MPL-2.0 or Apache-2.0, EPL-2.0).
+  The name, version, source and full license text of every package are in
+  apps/desktop/rich-text/assets/renderer.js.packages.json, with KATEX-LICENSE.txt, MERMAID-LICENSE.txt and
+  renderer.js.LEGAL.txt beside it. KaTeX's fonts are under the SIL Open Font License 1.1.
+  elkjs 0.9.3 is under the Eclipse Public License 2.0. Its source is at https://github.com/kieler/elkjs.
+  khroma 2.1.0 declares no license field; its license file (MIT) is included in the package list.
+
+Other companies' marks (apps/desktop/assets/connectors, apps/desktop/assets/marks)
+  The app shows other companies' logos to name the service a connector reaches, or the company that made a model.
+  Each logo is a trademark of its owner. The MIT license does not cover these logos, and their use here does not
+  mean that the owner sponsors or endorses this product.
+  Airtable logo (apps/desktop/assets/connectors/airtable.svg)
+    A trademark of Airtable. The drawing is the simple-icons 16.35.0 `airtable` icon (CC0-1.0), unaltered.
+    Used under https://www.airtable.com/company/trademark-guidelines
+  GitHub mark (apps/desktop/assets/connectors/github.svg, and icons/github.svg in the gpui-kit-assets crate)
+    A trademark of GitHub, Inc. The drawing is the simple-icons 16.35.0 `github` icon (CC0-1.0), unaltered.
+    Used under https://brand.github.com/foundations/logo
+  PostHog logo (apps/desktop/assets/connectors/posthog.svg)
+    A trademark of PostHog. The drawing is the simple-icons 16.35.0 `posthog` icon (CC0-1.0), unaltered.
+    Used under https://posthog.com/handbook/company/brand-assets
+  Z.ai mark (apps/desktop/assets/marks/zai.svg)
+    A trademark of its owner. The drawing is the lobe-icons `@lobehub/icons-static-svg` Z.ai icon (MIT), unaltered.
+    https://github.com/lobehub/lobe-icons
+    Copyright (c) 2023 LobeHub
+    Licensed under the MIT license. The MIT license covers the drawing, not the trademark. The license text is in
+    apps/desktop/licenses/third-party/lobe-icons-LICENSE.
+
+Chromium Embedded Framework (CEF)
+  Release packages include CEF and Chromium. They are downloaded at build time and are not stored in this repository.
+  CEF is licensed under a BSD-style license. Chromium and its components carry their own licenses.
+  See the credits file shipped inside each package.
+  libcef contains FFmpeg and other code under the GNU Lesser General Public License (LGPL) version 2.1 or later. The
+  LGPL 2.1 text is in FFmpeg's entry in that credits file. Release packages ship the CEF project's own build, unmodified,
+  from https://cef-builds.spotifycdn.com, with its default settings, which leave the proprietary codecs (H.264, AAC)
+  out. THIRD_PARTY_NOTICES.txt names the exact CEF and Chromium version.
+  Written offer: for three years from the date you received a release package, Nexus Laboratories, Inc. will give
+  anyone who asks a complete machine-readable copy of the corresponding source code of the CEF and Chromium version in
+  that package, FFmpeg included, with the scripts used to build it, on a physical medium or by download, for no more
+  than our cost of doing so. The offer is open to anyone, not only to people who received the package from us.
+  To ask, write to trademarks@nexus.inc and say the package version and your platform.
+
+Rust crates
+  The app depends on Rust crates from crates.io under their own licenses.
+  Run `cargo tree` for the list, and `cargo deny check licenses` to check them against the project's policy.

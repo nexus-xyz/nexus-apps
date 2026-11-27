@@ -1,0 +1,568 @@
+# The interface's translations (src/i18n.rs). Each key is the English text exactly as the code passes it to `tr`;
+# an entry gives every language in i18n::LANGUAGES but English. `every_text_in_tr_is_translated` fails on a missing one.
+# Spanish is Latin American (computadora, tú). Machine-drafted: a native speaker has not reviewed them yet.
+_version: 2
+"How Nexus looks, and what it sends when something breaks.":
+  es: "Cómo se ve Nexus y qué envía cuando algo falla."
+  pt-BR: "Como o Nexus aparece e o que ele envia quando algo dá errado."
+"Theme":
+  es: "Tema"
+  pt-BR: "Tema"
+"The theme, text size and motion are kept on this computer.":
+  es: "El tema, el tamaño del texto y el movimiento se guardan en esta computadora."
+  pt-BR: "O tema, o tamanho do texto e o movimento ficam salvos neste computador."
+"Same as this computer":
+  es: "Igual que esta computadora"
+  pt-BR: "Igual a este computador"
+"Not changed.":
+  es: "No se cambió."
+  pt-BR: "Não foi alterado."
+"Language":
+  es: "Idioma"
+  pt-BR: "Idioma"
+"The language of menus, buttons and settings. Agents reply in the language you write in.":
+  es: "El idioma de los menús, los botones y la configuración. Los agentes responden en el idioma en que escribes."
+  pt-BR: "O idioma dos menus, botões e configurações. Os agentes respondem no idioma em que você escreve."
+"How much of your desktop shows through the window, blurred. Your system's reduce transparency setting keeps the window solid.":
+  es: "Cuánto del escritorio se ve a través de la ventana, desenfocado. El ajuste de reducir la transparencia de tu sistema mantiene la ventana opaca."
+  pt-BR: "Quanto da sua área de trabalho aparece através da janela, desfocada. A opção de reduzir a transparência do seu sistema mantém a janela opaca."
+"How much of your desktop shows through the window, blurred.":
+  es: "Cuánto del escritorio se ve a través de la ventana, desenfocado."
+  pt-BR: "Quanto da sua área de trabalho aparece através da janela, desfocada."
+"How much of your desktop shows through the window, blurred. This desktop can't blur behind windows, so Nexus stays opaque here.":
+  es: "Cuánto del escritorio se ve a través de la ventana, desenfocado. Este escritorio no puede desenfocar detrás de las ventanas, así que Nexus se queda opaco aquí."
+  pt-BR: "Quanto da sua área de trabalho aparece através da janela, desfocada. Esta área de trabalho não consegue desfocar atrás das janelas, então o Nexus fica opaco aqui."
+"Transparency":
+  es: "Transparencia"
+  pt-BR: "Transparência"
+"Fine-tune":
+  es: "Ajustar"
+  pt-BR: "Ajustar"
+"Custom":
+  es: "Personalizado"
+  pt-BR: "Personalizado"
+"See-through":
+  es: "Transparencia"
+  pt-BR: "Transparência"
+"Blur":
+  es: "Desenfoque"
+  pt-BR: "Desfoque"
+"Off":
+  es: "Desactivado"
+  pt-BR: "Desativado"
+"Reset to Frost":
+  es: "Volver a Frost"
+  pt-BR: "Voltar para Frost"
+"Blur off: the desktop shows sharp behind the text.":
+  es: "Sin desenfoque: el escritorio se ve nítido detrás del texto."
+  pt-BR: "Sem desfoque: a área de trabalho aparece nítida atrás do texto."
+"Opaque: nothing shows through, so nothing blurs.":
+  es: "Opaco: no se ve nada a través, así que nada se desenfoca."
+  pt-BR: "Opaco: nada aparece através, então nada é desfocado."
+"{name}: {percent}% see-through, blur {blur}.":
+  es: "{name}: {percent}% de transparencia, desenfoque {blur}."
+  pt-BR: "{name}: {percent}% de transparência, desfoque {blur}."
+"Text size":
+  es: "Tamaño del texto"
+  pt-BR: "Tamanho do texto"
+"Scales the app. Code and terminal follow it.":
+  es: "Escala la app. El código y la terminal la siguen."
+  pt-BR: "Ajusta a escala do app. O código e o terminal acompanham."
+"Reset":
+  es: "Restablecer"
+  pt-BR: "Redefinir"
+"Shows things in place, with no slides or breathing dots. Your system asks for it too.":
+  es: "Muestra todo en su lugar, sin deslizamientos ni puntos que laten. Tu sistema también lo pide."
+  pt-BR: "Mostra tudo no lugar, sem deslizes nem pontos pulsando. Seu sistema também pede isso."
+"Shows things in place, with no slides or breathing dots. Off, your system's setting still applies.":
+  es: "Muestra todo en su lugar, sin deslizamientos ni puntos que laten. Desactivado, se sigue aplicando el ajuste de tu sistema."
+  pt-BR: "Mostra tudo no lugar, sem deslizes nem pontos pulsando. Desligado, a configuração do seu sistema continua valendo."
+"Reduce motion":
+  es: "Reducir movimiento"
+  pt-BR: "Reduzir movimento"
+"Assistant sounds":
+  es: "Sonidos del asistente"
+  pt-BR: "Sons do assistente"
+"A soft sound when you send and when Nexus replies, while Nexus is in front. Quiet under Reduce motion.":
+  es: "Un sonido suave cuando envías y cuando Nexus responde, mientras Nexus está al frente. En silencio con Reducir movimiento."
+  pt-BR: "Um som suave quando você envia e quando o Nexus responde, enquanto o Nexus está em primeiro plano. Fica em silêncio com Reduzir movimento."
+"Assistant":
+  es: "Asistente"
+  pt-BR: "Assistente"
+"New session":
+  es: "Nueva sesión"
+  pt-BR: "Nova sessão"
+"Inbox":
+  es: "Bandeja de entrada"
+  pt-BR: "Caixa de entrada"
+"Artifacts":
+  es: "Artefactos"
+  pt-BR: "Artefatos"
+"Personal":
+  es: "Personal"
+  pt-BR: "Pessoal"
+"Sessions":
+  es: "Sesiones"
+  pt-BR: "Sessões"
+"No matches":
+  es: "Sin resultados"
+  pt-BR: "Nenhum resultado"
+"No sessions yet":
+  es: "Todavía no hay sesiones"
+  pt-BR: "Ainda não há sessões"
+"Sessions in no project show here":
+  es: "Las sesiones sin proyecto aparecen aquí"
+  pt-BR: "As sessões sem projeto aparecem aqui"
+"Retry":
+  es: "Reintentar"
+  pt-BR: "Tentar de novo"
+"New project":
+  es: "Nuevo proyecto"
+  pt-BR: "Novo projeto"
+"Open a folder":
+  es: "Abrir una carpeta"
+  pt-BR: "Abrir uma pasta"
+"No projects or sessions found":
+  es: "No se encontraron proyectos ni sesiones"
+  pt-BR: "Nenhum projeto ou sessão encontrado"
+"Try another name or branch.":
+  es: "Prueba con otro nombre o rama."
+  pt-BR: "Tente outro nome ou branch."
+"Clear search":
+  es: "Borrar búsqueda"
+  pt-BR: "Limpar busca"
+"New session in {project}":
+  es: "Nueva sesión en {project}"
+  pt-BR: "Nova sessão em {project}"
+"Unpin project":
+  es: "Desfijar proyecto"
+  pt-BR: "Desafixar projeto"
+"Pin project":
+  es: "Fijar proyecto"
+  pt-BR: "Fixar projeto"
+"Archive project":
+  es: "Archivar proyecto"
+  pt-BR: "Arquivar projeto"
+"Settings":
+  es: "Configuración"
+  pt-BR: "Configurações"
+"Docs":
+  es: "Documentación"
+  pt-BR: "Documentação"
+"System":
+  es: "Sistema"
+  pt-BR: "Sistema"
+"Light":
+  es: "Claro"
+  pt-BR: "Claro"
+"Dark":
+  es: "Oscuro"
+  pt-BR: "Escuro"
+"Set up Nexus":
+  es: "Configurar Nexus"
+  pt-BR: "Configurar o Nexus"
+"Sign in":
+  es: "Iniciar sesión"
+  pt-BR: "Entrar"
+"Sign out":
+  es: "Cerrar sesión"
+  pt-BR: "Sair"
+"Paused":
+  es: "En pausa"
+  pt-BR: "Pausado"
+"Needs you":
+  es: "Te necesita"
+  pt-BR: "Precisa de você"
+"{count} need you":
+  es: "{count} te necesitan"
+  pt-BR: "{count} precisam de você"
+"In {project}":
+  es: "En {project}"
+  pt-BR: "Em {project}"
+"Working":
+  es: "Trabajando"
+  pt-BR: "Trabalhando"
+"In background · {count}":
+  es: "En segundo plano · {count}"
+  pt-BR: "Em segundo plano · {count}"
+"In background":
+  es: "En segundo plano"
+  pt-BR: "Em segundo plano"
+"Search sessions":
+  es: "Buscar sesiones"
+  pt-BR: "Buscar sessões"
+"Search projects…":
+  es: "Buscar proyectos…"
+  pt-BR: "Buscar projetos…"
+"Projects":
+  es: "Proyectos"
+  pt-BR: "Projetos"
+"In messages":
+  es: "En mensajes"
+  pt-BR: "Nas mensagens"
+"Couldn't read your projects: {error}":
+  es: "No se pudieron leer tus proyectos: {error}"
+  pt-BR: "Não foi possível ler seus projetos: {error}"
+"Your projects loaded just now, so that change wasn't saved. Make it again.":
+  es: "Tus proyectos se acaban de cargar, así que ese cambio no se guardó. Hazlo de nuevo."
+  pt-BR: "Seus projetos acabaram de carregar, então essa alteração não foi salva. Faça de novo."
+"Couldn't save your projects, as they didn't read: {error}":
+  es: "No se pudieron guardar tus proyectos porque no se leyeron: {error}"
+  pt-BR: "Não foi possível salvar seus projetos, porque não foram lidos: {error}"
+"Couldn't save your projects: {error}":
+  es: "No se pudieron guardar tus proyectos: {error}"
+  pt-BR: "Não foi possível salvar seus projetos: {error}"
+"Project name":
+  es: "Nombre del proyecto"
+  pt-BR: "Nome do projeto"
+"Add a project":
+  es: "Agregar un proyecto"
+  pt-BR: "Adicionar um projeto"
+"A name for work with no code":
+  es: "Un nombre para trabajo sin código"
+  pt-BR: "Um nome para trabalho sem código"
+"A folder on this computer":
+  es: "Una carpeta en esta computadora"
+  pt-BR: "Uma pasta neste computador"
+"Remove project (its chats go to Recent)":
+  es: "Quitar proyecto (sus chats pasan a Recientes)"
+  pt-BR: "Remover projeto (os chats vão para Recentes)"
+"Move to":
+  es: "Mover a"
+  pt-BR: "Mover para"
+"Cloud":
+  es: "Nube"
+  pt-BR: "Nuvem"
+"a server":
+  es: "un servidor"
+  pt-BR: "um servidor"
+"On {name}":
+  es: "En {name}"
+  pt-BR: "Em {name}"
+"Cloud · {status}":
+  es: "Nube · {status}"
+  pt-BR: "Nuvem · {status}"
+"Cloud · {count} machines not connected":
+  es: "Nube · {count} máquinas sin conexión"
+  pt-BR: "Nuvem · {count} máquinas sem conexão"
+"Servers":
+  es: "Servidores"
+  pt-BR: "Servidores"
+"Add a server":
+  es: "Agregar un servidor"
+  pt-BR: "Adicionar um servidor"
+"Update":
+  es: "Actualizar"
+  pt-BR: "Atualizar"
+"Add a folder on {server} as a project":
+  es: "Agregar una carpeta de {server} como proyecto"
+  pt-BR: "Adicionar uma pasta de {server} como projeto"
+"New session on {server}":
+  es: "Nueva sesión en {server}"
+  pt-BR: "Nova sessão em {server}"
+"Asleep":
+  es: "Dormida"
+  pt-BR: "Dormindo"
+"Retrying…":
+  es: "Reintentando…"
+  pt-BR: "Tentando de novo…"
+"Drag to resize; double-click to reset":
+  es: "Arrastra para cambiar el tamaño; doble clic para restablecer"
+  pt-BR: "Arraste para redimensionar; clique duas vezes para redefinir"
+"Snooze":
+  es: "Posponer"
+  pt-BR: "Adiar"
+"Archive":
+  es: "Archivar"
+  pt-BR: "Arquivar"
+"Attachment":
+  es: "Adjunto"
+  pt-BR: "Anexo"
+"Loading attachments: {names}":
+  es: "Cargando adjuntos: {names}"
+  pt-BR: "Carregando anexos: {names}"
+"Some attachments are unavailable. {errors}":
+  es: "Algunos adjuntos no están disponibles. {errors}"
+  pt-BR: "Alguns anexos não estão disponíveis. {errors}"
+"Retry attachments":
+  es: "Reintentar adjuntos"
+  pt-BR: "Tentar anexos de novo"
+"Preview at this window's size: column {px} px, about {chars} characters a line.":
+  es: "Vista previa al tamaño de esta ventana: columna de {px} px, unos {chars} caracteres por línea."
+  pt-BR: "Prévia no tamanho desta janela: coluna de {px} px, cerca de {chars} caracteres por linha."
+"Conversation width":
+  es: "Ancho de la conversación"
+  pt-BR: "Largura da conversa"
+"How wide the conversation and the composer are. Standard keeps one width, as most chat apps do. The wider presets grow with the window.":
+  es: "Qué tan anchos son la conversación y el editor de mensajes. Estándar mantiene un solo ancho, como la mayoría de las apps de chat. Los ajustes más anchos crecen con la ventana."
+  pt-BR: "A largura da conversa e do editor de mensagens. Padrão mantém uma só largura, como a maioria dos apps de chat. As opções mais largas crescem com a janela."
+"Share of the room":
+  es: "Parte del espacio"
+  pt-BR: "Parte do espaço"
+"Maximum characters":
+  es: "Máximo de caracteres"
+  pt-BR: "Máximo de caracteres"
+"Queue":
+  es: "En cola"
+  pt-BR: "Na fila"
+"Preparing attachments…":
+  es: "Preparando adjuntos…"
+  pt-BR: "Preparando anexos…"
+"Drop images or files to attach them":
+  es: "Suelta imágenes o archivos para adjuntarlos"
+  pt-BR: "Solte imagens ou arquivos para anexá-los"
+"Drop files to attach them":
+  es: "Suelta archivos para adjuntarlos"
+  pt-BR: "Solte arquivos para anexá-los"
+"Enter sends into this turn · {keys} queues for after it":
+  es: "Enter envía en este turno · {keys} lo pone en cola para después"
+  pt-BR: "Enter envia neste turno · {keys} coloca na fila para depois"
+"Reply to the agent":
+  es: "Responde al agente"
+  pt-BR: "Responda ao agente"
+"Queue a follow-up while this answers":
+  es: "Pon en cola un seguimiento mientras responde"
+  pt-BR: "Coloque um acompanhamento na fila enquanto responde"
+"Reply":
+  es: "Responder"
+  pt-BR: "Responder"
+"Ask Nexus":
+  es: "Pregúntale a Nexus"
+  pt-BR: "Pergunte ao Nexus"
+"Add files and more":
+  es: "Agregar archivos y más"
+  pt-BR: "Adicionar arquivos e mais"
+"Attach images or files":
+  es: "Adjuntar imágenes o archivos"
+  pt-BR: "Anexar imagens ou arquivos"
+"Add artifacts…":
+  es: "Agregar artefactos…"
+  pt-BR: "Adicionar artefatos…"
+"Paste from clipboard":
+  es: "Pegar desde el portapapeles"
+  pt-BR: "Colar da área de transferência"
+"The clipboard has no images or files to attach":
+  es: "El portapapeles no tiene imágenes ni archivos para adjuntar"
+  pt-BR: "A área de transferência não tem imagens nem arquivos para anexar"
+"Auto":
+  es: "Automático"
+  pt-BR: "Automático"
+"Send now: the agent reads it at its next step (Enter)":
+  es: "Enviar ahora: el agente lo lee en su siguiente paso (Enter)"
+  pt-BR: "Enviar agora: o agente lê na próxima etapa (Enter)"
+"Send":
+  es: "Enviar"
+  pt-BR: "Enviar"
+"Queue: sent when this turn ends ({keys})":
+  es: "En cola: se envía cuando termine este turno ({keys})"
+  pt-BR: "Na fila: enviado quando este turno terminar ({keys})"
+"Queue: sent when this answer ends (Enter). Send now: {keys}":
+  es: "En cola: se envía cuando termine esta respuesta (Enter). Enviar ahora: {keys}"
+  pt-BR: "Na fila: enviado quando esta resposta terminar (Enter). Enviar agora: {keys}"
+"Stop (Esc)":
+  es: "Detener (Esc)"
+  pt-BR: "Parar (Esc)"
+"Cancel":
+  es: "Cancelar"
+  pt-BR: "Cancelar"
+"Remove":
+  es: "Quitar"
+  pt-BR: "Remover"
+"Open full size":
+  es: "Abrir a tamaño completo"
+  pt-BR: "Abrir em tamanho real"
+"Open · {name}":
+  es: "Abrir · {name}"
+  pt-BR: "Abrir · {name}"
+"The account changed before this message was sent. Your draft was kept.":
+  es: "La cuenta cambió antes de enviar este mensaje. Se conservó tu borrador."
+  pt-BR: "A conta mudou antes de enviar esta mensagem. Seu rascunho foi mantido."
+"Draft storage could not be opened. Your current draft stays in this window.":
+  es: "No se pudo abrir el almacenamiento de borradores. Tu borrador actual se queda en esta ventana."
+  pt-BR: "Não foi possível abrir o armazenamento de rascunhos. Seu rascunho atual fica nesta janela."
+"Draft storage could not save. Your draft stays available in this window.":
+  es: "El almacenamiento de borradores no pudo guardar. Tu borrador sigue disponible en esta ventana."
+  pt-BR: "O armazenamento de rascunhos não conseguiu salvar. Seu rascunho continua disponível nesta janela."
+"Some attachments could not be restored. Attach them again before sending.":
+  es: "No se pudieron restaurar algunos adjuntos. Adjúntalos de nuevo antes de enviar."
+  pt-BR: "Não foi possível restaurar alguns anexos. Anexe-os de novo antes de enviar."
+"Copy":
+  es: "Copiar"
+  pt-BR: "Copiar"
+"The command's answer was lost.":
+  es: "Se perdió la respuesta del comando."
+  pt-BR: "A resposta do comando foi perdida."
+"Couldn't send back to source: {error}":
+  es: "No se pudo devolver al origen: {error}"
+  pt-BR: "Não foi possível devolver à origem: {error}"
+"Received results from subsessions":
+  es: "Resultados recibidos de subsesiones"
+  pt-BR: "Resultados recebidos de subsessões"
+"Received message from ":
+  es: "Mensaje recibido de "
+  pt-BR: "Mensagem recebida de "
+"Copied":
+  es: "Copiado"
+  pt-BR: "Copiado"
+"Copy agent message":
+  es: "Copiar mensaje del agente"
+  pt-BR: "Copiar mensagem do agente"
+"Waiting for you":
+  es: "Esperándote"
+  pt-BR: "Esperando por você"
+"Starting":
+  es: "Iniciando"
+  pt-BR: "Iniciando"
+"Answering":
+  es: "Respondiendo"
+  pt-BR: "Respondendo"
+"Tell the agent what to do instead (optional)":
+  es: "Dile al agente qué hacer en su lugar (opcional)"
+  pt-BR: "Diga ao agente o que fazer em vez disso (opcional)"
+"Tell the agent what to change (optional)":
+  es: "Dile al agente qué cambiar (opcional)"
+  pt-BR: "Diga ao agente o que mudar (opcional)"
+"Write your answer…":
+  es: "Escribe tu respuesta…"
+  pt-BR: "Escreva sua resposta…"
+"Continue at reset":
+  es: "Continuar al reiniciarse"
+  pt-BR: "Continuar quando reiniciar"
+"Turn off":
+  es: "Desactivar"
+  pt-BR: "Desativar"
+"Continue now":
+  es: "Continuar ahora"
+  pt-BR: "Continuar agora"
+"The agent":
+  es: "El agente"
+  pt-BR: "O agente"
+"Sent: {agent} reads it at its next step":
+  es: "Enviado: {agent} lo lee en su siguiente paso"
+  pt-BR: "Enviado: {agent} lê na próxima etapa"
+"Save":
+  es: "Guardar"
+  pt-BR: "Salvar"
+"Send now: {agent} reads it at its next step":
+  es: "Enviar ahora: {agent} lo lee en su siguiente paso"
+  pt-BR: "Enviar agora: {agent} lê na próxima etapa"
+"Drag to reorder":
+  es: "Arrastra para reordenar"
+  pt-BR: "Arraste para reordenar"
+"Edit":
+  es: "Editar"
+  pt-BR: "Editar"
+"Take back":
+  es: "Retirar"
+  pt-BR: "Retirar"
+"{name} has {count} questions":
+  es: "{name} tiene {count} preguntas"
+  pt-BR: "{name} tem {count} perguntas"
+"{name} has a question":
+  es: "{name} tiene una pregunta"
+  pt-BR: "{name} tem uma pergunta"
+"Choose one or more.":
+  es: "Elige una o más."
+  pt-BR: "Escolha uma ou mais."
+"Question {number}":
+  es: "Pregunta {number}"
+  pt-BR: "Pergunta {number}"
+"Review":
+  es: "Revisar"
+  pt-BR: "Revisar"
+"Private answer":
+  es: "Respuesta privada"
+  pt-BR: "Resposta privada"
+"The question could not be displayed. Skip it to ask the agent to try again.":
+  es: "No se pudo mostrar la pregunta. Omítela para pedirle al agente que lo intente de nuevo."
+  pt-BR: "Não foi possível mostrar a pergunta. Pule-a para pedir ao agente que tente de novo."
+"This agent is waiting for your answer.":
+  es: "Este agente está esperando tu respuesta."
+  pt-BR: "Este agente está esperando sua resposta."
+"Work can continue while you answer.":
+  es: "El trabajo puede continuar mientras respondes."
+  pt-BR: "O trabalho pode continuar enquanto você responde."
+"Skip":
+  es: "Omitir"
+  pt-BR: "Pular"
+"Next":
+  es: "Siguiente"
+  pt-BR: "Próxima"
+"Submit answer":
+  es: "Enviar respuesta"
+  pt-BR: "Enviar resposta"
+"{name} has a plan and wants to start on it":
+  es: "{name} tiene un plan y quiere empezar"
+  pt-BR: "{name} tem um plano e quer começar"
+"The plan came with no text.":
+  es: "El plan llegó sin texto."
+  pt-BR: "O plano veio sem texto."
+"Keep planning":
+  es: "Seguir planeando"
+  pt-BR: "Continuar planejando"
+"{name} stops and waits; what you typed goes with it":
+  es: "{name} se detiene y espera; lo que escribiste va con él"
+  pt-BR: "{name} para e espera; o que você digitou vai junto"
+"Implement in a new session":
+  es: "Implementar en una nueva sesión"
+  pt-BR: "Implementar em uma nova sessão"
+"Start a new session on this plan, in auto-accept edits":
+  es: "Iniciar una nueva sesión con este plan, aceptando ediciones automáticamente"
+  pt-BR: "Iniciar uma nova sessão com este plano, aceitando edições automaticamente"
+"Implement":
+  es: "Implementar"
+  pt-BR: "Implementar"
+"Approve the plan and let it edit files (auto-accept edits)":
+  es: "Aprobar el plan y dejar que edite archivos (aceptar ediciones automáticamente)"
+  pt-BR: "Aprovar o plano e deixar que edite arquivos (aceitar edições automaticamente)"
+"Not answered":
+  es: "Sin respuesta"
+  pt-BR: "Sem resposta"
+"Image":
+  es: "Imagen"
+  pt-BR: "Imagem"
+"On queue":
+  es: "En cola"
+  pt-BR: "Na fila"
+"Queued · {count}":
+  es: "En cola · {count}"
+  pt-BR: "Na fila · {count}"
+"Remove worktree":
+  es: "Quitar worktree"
+  pt-BR: "Remover worktree"
+"Only when nothing would be lost: no uncommitted changes, no unpushed commits":
+  es: "Solo cuando no se perdería nada: sin cambios sin confirmar ni commits sin enviar"
+  pt-BR: "Só quando nada seria perdido: sem alterações não confirmadas nem commits não enviados"
+"Terminal":
+  es: "Terminal"
+  pt-BR: "Terminal"
+"Subsessions":
+  es: "Subsesiones"
+  pt-BR: "Subsessões"
+"End the agent process":
+  es: "Terminar el proceso del agente"
+  pt-BR: "Encerrar o processo do agente"
+"The update's answer was lost.":
+  es: "Se perdió la respuesta de la actualización."
+  pt-BR: "A resposta da atualização foi perdida."
+"Couldn't turn subsessions on or off: {error}":
+  es: "No se pudieron activar o desactivar las subsesiones: {error}"
+  pt-BR: "Não foi possível ativar ou desativar as subsessões: {error}"
+"Install ID:":
+  es: "ID de instalación:"
+  pt-BR: "ID da instalação:"
+"Install ID, now deleted. Copy it to ask privacy@nexus.inc to delete its data:":
+  es: "ID de instalación, ya eliminado. Cópialo para pedir a privacy@nexus.inc que elimine sus datos:"
+  pt-BR: "ID da instalação, já excluído. Copie-o para pedir a privacy@nexus.inc que exclua os dados dele:"
+"Help improve Nexus by sending usage data?":
+  es: "¿Quieres ayudar a mejorar Nexus enviando datos de uso?"
+  pt-BR: "Quer ajudar a melhorar o Nexus enviando dados de uso?"
+"Nexus would send how often it is used, its version, and errors by name. Never your prompts, code, files or keys. PRIVACY.md lists every field. Change your answer any time in Settings, Privacy.":
+  es: "Nexus enviaría con qué frecuencia se usa, su versión y los errores por nombre. Nunca tus prompts, código, archivos ni claves. PRIVACY.md lista cada campo. Cambia tu respuesta cuando quieras en Configuración, Privacidad."
+  pt-BR: "O Nexus enviaria com que frequência é usado, sua versão e os erros pelo nome. Nunca seus prompts, código, arquivos ou chaves. O PRIVACY.md lista cada campo. Mude sua resposta quando quiser em Configurações, Privacidade."
+"Don't send":
+  es: "No enviar"
+  pt-BR: "Não enviar"
+"Send usage data":
+  es: "Enviar datos de uso"
+  pt-BR: "Enviar dados de uso"

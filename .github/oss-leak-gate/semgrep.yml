@@ -1,0 +1,57 @@
+# Custom semgrep rules for the open-source export of Nexus Desktop. semgrep 1.186.
+# They run on the files the open-source export ships (in the monorepo, `.github/scripts/oss_export_paths.py` lists them).
+# Each rule covers what gitleaks' regexes cannot see: names and structure in Rust code.
+# Test code may hold fakes. Name a fake as one (`fake_`, `test_`, `dummy_`) instead of adding an exception.
+
+rules:
+  - id: rust-credential-literal
+    languages: [rust]
+    severity: ERROR
+    message: >-
+      A credential-named binding holds a long string literal. A real secret in exported code goes public.
+      Read it from the environment or the keychain. If it is a fake, name it `fake_`, `test_` or `dummy_`.
+    patterns:
+      - pattern-either:
+          - pattern: "let $NAME = $LIT;"
+          - pattern: "let $NAME: $T = $LIT;"
+          - pattern: "const $NAME: $T = $LIT;"
+          - pattern: "static $NAME: $T = $LIT;"
+      # Header, env var and field names hold a credential's name, not its value (`TOKEN_HEADER`, `CLAUDE_TOKEN_ENV`).
+      - metavariable-regex:
+          metavariable: $NAME
+          regex: (?i)^(?!.*(?:fake|test|dummy|example|placeholder|sample)).*(?:secret|token|api_?key|password|passwd|private_?key|client_?secret)(?!.*(?:header|env|var|name|field|path|file|url|kind|prefix))
+      # A value mixes letters and digits. An all-caps env var name or a lowercase header name is not one.
+      - metavariable-regex:
+          metavariable: $LIT
+          regex: ^"(?=[^"]*[0-9])(?=[^"]*[A-Za-z])(?![A-Z0-9_]+"$)(?![a-z0-9-]+"$)[A-Za-z0-9+/_.=-]{20,}"$
+    paths:
+      exclude:
+        - "**/tests/**"
+        - "**/fixtures/**"
+        - "*_tests.rs"
+
+  - id: js-credential-literal
+    languages: [javascript, typescript]
+    severity: ERROR
+    message: >-
+      A credential-named binding holds a long string literal. A real secret in exported code goes public.
+      If it is a fake, name it `fake`, `test` or `dummy`.
+    patterns:
+      - pattern-either:
+          - pattern: "const $NAME = $LIT"
+          - pattern: "let $NAME = $LIT"
+          - pattern: "var $NAME = $LIT"
+          - pattern: "{..., $NAME: $LIT, ...}"
+      - metavariable-regex:
+          metavariable: $NAME
+          regex: (?i)^["']?(?!.*(?:fake|test|dummy|example|placeholder|sample)).*(?:secret|token|api_?key|password|passwd|private_?key|client_?secret)(?!.*(?:header|env|var|name|field|path|file|url|kind|prefix))
+      - metavariable-regex:
+          metavariable: $LIT
+          regex: ^["'`](?=[^"'`]*[0-9])(?=[^"'`]*[A-Za-z])(?![A-Z0-9_]+["'`]$)(?![a-z0-9-]+["'`]$)[A-Za-z0-9+/_.=-]{20,}["'`]$
+    paths:
+      exclude:
+        - "**/tests/**"
+        - "**/fixtures/**"
+        - "*.test.ts"
+        - "*.test.tsx"
+        - "*.spec.ts"

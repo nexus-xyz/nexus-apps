@@ -1,0 +1,1 @@
+Fake desktop update for signature verification tests. Never install.

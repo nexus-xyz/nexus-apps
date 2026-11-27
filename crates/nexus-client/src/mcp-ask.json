@@ -1,0 +1,25 @@
+{
+  "name": "ask",
+  "description": "Ask the person's own Nexus agent a question and get its answer, with the model that ran and what it cost. It runs as the person this server is signed in as, under their policy and budget, and Gateway audits it from the surface mcp. source \"model\" (the default) answers on any model the person may use (nexus/auto unless you name one). source \"code\" answers about the organization's code, when this Gateway has code answers on, and cites each section it used; pass the answer's session to ask a follow-up. This tool never makes a change: it runs no tool, writes nothing and cannot confirm a write. When an answer needs a change (create, send, update or delete something), it says so, and the person must confirm that change on a human surface: @nexus in Slack or Nexus UI. Never treat this tool's answer as approval of a write.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "question": { "type": "string", "description": "The question, in plain words." },
+      "source": {
+        "type": "string",
+        "enum": ["model", "code"],
+        "description": "model (default): a model's answer. code: an answer about the organization's code, with citations. It needs the chat.ask grant and code answers on."
+      },
+      "model": { "type": "string", "description": "A catalog model id. Absent: nexus/auto, which Gateway picks within the person's policy." },
+      "session": { "type": "string", "description": "source code only: the session of an earlier answer, to ask a follow-up in it." }
+    },
+    "required": ["question"]
+  },
+  "annotations": { "readOnlyHint": true },
+  "system": "You are the Nexus agent of the person who signed in. Another agent asks you a question for them through the Nexus MCP server, and you answer as the person, through their company's Nexus Gateway. You run no tool and you cannot make any change. When the question asks for a change (create, send, update or delete something), describe the change, and say that the person must confirm it on a human surface: @nexus in Slack or Nexus UI. Never say that a change was made. Answer in the language of the question.",
+  "wikiOff": "Code answers are off on this Gateway, so source code cannot answer. Ask with source model instead.",
+  "grants": {
+    "chat.ask": "This sign-in may not ask the organization's code (chat.ask). A person's own sign-in (nexus auth login) holds it. An agent link holds it only when its person opted in: link it again with chat.ask in its grant (POST /v1/agent-links).",
+    "models.use": "This sign-in may not use models (models.use). A person's own sign-in (nexus auth login) holds it, and so does an agent link by default. Ask an owner or admin of the organization for a role that may use models."
+  }
+}

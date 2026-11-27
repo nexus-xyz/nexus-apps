@@ -1,0 +1,229 @@
+{
+  "$comment": "How both nexus CLIs turn the rows an agy run added to its conversation file (table gen_metadata) into the usage records `nexus agy` posts to POST /v1/agents/sessions/{id}/usage. Each row is agy's CortexStepGeneratorMetadata protobuf; the field paths below are its field numbers, named as agy's own message definitions name them. 1 is chat_model; 1.4 is chat_model.usage (ModelUsageStats): 1.4.1 model, 1.4.2 input_tokens (cache reads not included), 1.4.3 output_tokens (thinking included), 1.4.4 cache_write_tokens, 1.4.5 cache_read_tokens, 1.4.9 thinking_output_tokens, 1.4.10 response_output_tokens. 1.17 is chat_model.retry_infos, one entry per attempt, each with that attempt's usage at 1.17.2; the readers never read 1.17. A record carries 1.4.2 as input_tokens, 1.4.3 as output_tokens, 1.4.5 as cache_read_tokens and 1.4.4 as cache_creation_tokens, a missing cache count read as 0. The CLIs' tests write each row as protobuf bytes, or a row's hex as those raw bytes. Rows at or below the baseline are never decoded. A row above it without 1.4.2 or 1.4.3 makes usage unknown; 1.4.1, 1.4.4, 1.4.5, 1.4.9 and 1.4.10 may be missing. When both 1.4.9 and 1.4.10 are present, 1.4.3 must equal their sum. A count above 10,000,000, or rows that end below the baseline, also make usage unknown. baseline is the highest idx before the run: -1 for a new conversation, null when the CLI could not read it. Gateway counts a request_id once among a session's last 512, so a body holds at most 512 records. The CLIs read any agy version, as they do for Claude Code and Codex: the usage readers do not run `agy --version` or check a version, because agy updates itself between runs, and the checks above are the only guards. verifiedOn records the agy version this format was verified on; nothing reads it. The numbers follow that format; they are made up, not a person's data. nexus-gateway's tests/subscription_usage_days.rs posts the records of \"two calls\".",
+  "verifiedOn": "1.5.8",
+  "cases": [
+    {
+      "name": "one call in a new conversation",
+      "baseline": -1,
+      "rows": [
+        {
+          "idx": 0,
+          "fields": { "1.4.1": 312, "1.4.2": 8878, "1.4.3": 123, "1.4.9": 114, "1.4.10": 9, "1.17.2.1": 312, "1.17.2.2": 8878, "1.17.2.3": 123 }
+        }
+      ],
+      "expect": {
+        "usage": "known",
+        "records": [{ "idx": 0, "input_tokens": 8878, "output_tokens": 123, "cache_read_tokens": 0, "cache_creation_tokens": 0 }]
+      }
+    },
+    {
+      "name": "two calls",
+      "baseline": -1,
+      "rows": [
+        {
+          "idx": 0,
+          "fields": { "1.4.1": 312, "1.4.2": 8882, "1.4.3": 96, "1.4.9": 95, "1.4.10": 1 }
+        },
+        {
+          "idx": 1,
+          "fields": { "1.4.1": 312, "1.4.2": 9185, "1.4.3": 104, "1.4.4": 120, "1.4.5": 6838, "1.4.9": 103, "1.4.10": 1 }
+        }
+      ],
+      "expect": {
+        "usage": "known",
+        "records": [
+          { "idx": 0, "input_tokens": 8882, "output_tokens": 96, "cache_read_tokens": 0, "cache_creation_tokens": 0 },
+          { "idx": 1, "input_tokens": 9185, "output_tokens": 104, "cache_read_tokens": 6838, "cache_creation_tokens": 120 }
+        ]
+      }
+    },
+    {
+      "name": "resumed conversation: only the rows above the baseline",
+      "baseline": 1,
+      "rows": [
+        {
+          "idx": 0,
+          "fields": { "1.4.1": 312, "1.4.2": 8882, "1.4.3": 96, "1.4.9": 95, "1.4.10": 1 }
+        },
+        {
+          "idx": 1,
+          "fields": { "1.4.1": 312, "1.4.2": 9185, "1.4.3": 104, "1.4.9": 103, "1.4.10": 1 }
+        },
+        {
+          "idx": 2,
+          "fields": { "1.4.1": 312, "1.4.2": 2444, "1.4.3": 375, "1.4.5": 6838, "1.4.9": 341, "1.4.10": 34 }
+        }
+      ],
+      "expect": {
+        "usage": "known",
+        "records": [{ "idx": 2, "input_tokens": 2444, "output_tokens": 375, "cache_read_tokens": 6838, "cache_creation_tokens": 0 }]
+      }
+    },
+    {
+      "name": "resumed conversation with no new call",
+      "baseline": 0,
+      "rows": [
+        {
+          "idx": 0,
+          "fields": { "1.4.1": 312, "1.4.2": 8878, "1.4.3": 123, "1.4.9": 114, "1.4.10": 9 }
+        }
+      ],
+      "expect": { "usage": "known", "records": [] }
+    },
+    {
+      "name": "new conversation with no call",
+      "baseline": -1,
+      "rows": [],
+      "expect": { "usage": "known", "records": [] }
+    },
+    {
+      "name": "count of exactly 10,000,000",
+      "baseline": -1,
+      "rows": [
+        {
+          "idx": 0,
+          "fields": { "1.4.1": 312, "1.4.2": 10000000, "1.4.3": 123, "1.4.5": 10000000, "1.4.9": 114, "1.4.10": 9 }
+        }
+      ],
+      "expect": {
+        "usage": "known",
+        "records": [{ "idx": 0, "input_tokens": 10000000, "output_tokens": 123, "cache_read_tokens": 10000000, "cache_creation_tokens": 0 }]
+      }
+    },
+    {
+      "name": "no baseline",
+      "baseline": null,
+      "rows": [
+        {
+          "idx": 0,
+          "fields": { "1.4.1": 312, "1.4.2": 8878, "1.4.3": 123, "1.4.9": 114, "1.4.10": 9 }
+        }
+      ],
+      "expect": { "usage": "unknown", "reason": "the conversation's rows before the run are not known" }
+    },
+    {
+      "name": "retried call: retry_infos is never read",
+      "baseline": -1,
+      "rows": [
+        {
+          "idx": 0,
+          "fields": { "1.4.1": 312, "1.4.2": 9185, "1.4.3": 104, "1.4.9": 103, "1.4.10": 1, "1.17.2.1": 312, "1.17.2.2": 4011, "1.17.2.3": 0 }
+        }
+      ],
+      "expect": {
+        "usage": "known",
+        "records": [{ "idx": 0, "input_tokens": 9185, "output_tokens": 104, "cache_read_tokens": 0, "cache_creation_tokens": 0 }]
+      }
+    },
+    {
+      "name": "output is not thinking plus response",
+      "baseline": -1,
+      "rows": [
+        {
+          "idx": 0,
+          "fields": { "1.4.1": 312, "1.4.2": 8882, "1.4.3": 96, "1.4.9": 95, "1.4.10": 1 }
+        },
+        {
+          "idx": 1,
+          "fields": { "1.4.1": 312, "1.4.2": 9185, "1.4.3": 104, "1.4.9": 103, "1.4.10": 2 }
+        }
+      ],
+      "expect": { "usage": "unknown", "reason": "row 1's output count is not its thinking plus response counts" }
+    },
+    {
+      "name": "missing input count",
+      "baseline": -1,
+      "rows": [
+        {
+          "idx": 0,
+          "fields": { "1.4.1": 312, "1.4.3": 123, "1.4.9": 114, "1.4.10": 9 }
+        }
+      ],
+      "expect": { "usage": "unknown", "reason": "row 0 has no input count (1.4.2)" }
+    },
+    {
+      "name": "missing output count",
+      "baseline": -1,
+      "rows": [
+        {
+          "idx": 0,
+          "fields": { "1.4.1": 312, "1.4.2": 8878, "1.4.9": 114, "1.4.10": 9 }
+        }
+      ],
+      "expect": { "usage": "unknown", "reason": "row 0 has no output count (1.4.3)" }
+    },
+    {
+      "name": "missing thinking count: output is not checked",
+      "baseline": -1,
+      "rows": [
+        {
+          "idx": 0,
+          "fields": { "1.4.1": 312, "1.4.2": 8878, "1.4.3": 123, "1.4.10": 9 }
+        }
+      ],
+      "expect": {
+        "usage": "known",
+        "records": [{ "idx": 0, "input_tokens": 8878, "output_tokens": 123, "cache_read_tokens": 0, "cache_creation_tokens": 0 }]
+      }
+    },
+    {
+      "name": "missing model number",
+      "baseline": -1,
+      "rows": [
+        {
+          "idx": 0,
+          "fields": { "1.4.2": 8878, "1.4.3": 123, "1.4.9": 114, "1.4.10": 9 }
+        }
+      ],
+      "expect": {
+        "usage": "known",
+        "records": [{ "idx": 0, "input_tokens": 8878, "output_tokens": 123, "cache_read_tokens": 0, "cache_creation_tokens": 0 }]
+      }
+    },
+    {
+      "name": "malformed row at the baseline",
+      "baseline": 1,
+      "rows": [
+        {
+          "idx": 0,
+          "fields": { "1.4.1": 312, "1.4.2": 8882, "1.4.3": 96, "1.4.9": 95, "1.4.10": 1 }
+        },
+        { "idx": 1, "hex": "ffffffff" },
+        {
+          "idx": 2,
+          "fields": { "1.4.1": 312, "1.4.2": 2444, "1.4.3": 375, "1.4.5": 6838, "1.4.9": 341, "1.4.10": 34 }
+        }
+      ],
+      "expect": {
+        "usage": "known",
+        "records": [{ "idx": 2, "input_tokens": 2444, "output_tokens": 375, "cache_read_tokens": 6838, "cache_creation_tokens": 0 }]
+      }
+    },
+    {
+      "name": "count above 10,000,000",
+      "baseline": -1,
+      "rows": [
+        {
+          "idx": 0,
+          "fields": { "1.4.1": 312, "1.4.2": 8878, "1.4.3": 123, "1.4.5": 10000001, "1.4.9": 114, "1.4.10": 9 }
+        }
+      ],
+      "expect": { "usage": "unknown", "reason": "row 0 has a count above 10,000,000" }
+    },
+    {
+      "name": "rows end below the baseline",
+      "baseline": 3,
+      "rows": [
+        {
+          "idx": 0,
+          "fields": { "1.4.1": 312, "1.4.2": 8882, "1.4.3": 96, "1.4.9": 95, "1.4.10": 1 }
+        },
+        {
+          "idx": 1,
+          "fields": { "1.4.1": 312, "1.4.2": 9185, "1.4.3": 104, "1.4.9": 103, "1.4.10": 1 }
+        }
+      ],
+      "expect": { "usage": "unknown", "reason": "the conversation's rows end below the baseline" }
+    }
+  ]
+}

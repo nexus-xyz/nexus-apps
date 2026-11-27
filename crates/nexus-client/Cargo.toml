@@ -1,0 +1,54 @@
+[package]
+name = "nexus-client"
+description = "The Nexus API's client core, shared by the native clients (the `nexus` CLI and Nexus Desktop): the HTTP client (blocking and async), the device-code sign-in, the config file and streaming chat. No printing, no terminal: callers decide what a person sees."
+version = "0.1.0" # Independent of the workspace version.
+edition.workspace = true
+rust-version.workspace = true
+publish = ["crates-io"]
+license = "MIT"
+# One test binary (`tests/it.rs`), not one per file.
+autotests = false
+
+[features]
+default = []
+# The synchronous client (`blocking::Client`), for the CLI. The async client (`Client`) is always built.
+blocking = ["reqwest/blocking"]
+# The Nexus MCP server's core (`mcp`), for `nexus mcp` and Nexus for desktop. It embeds the crate's copies of the contract
+# and the MCP tool list (`contract/`).
+mcp = []
+
+[dependencies]
+nexus-agents.workspace = true
+nexus-local-agents.workspace = true
+# The provider layer's values: `auto_route::Room` is its `Room`.
+nexus-providers.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+reqwest = { workspace = true, features = ["rustls-no-provider"] }
+rustls.workspace = true
+uuid.workspace = true
+futures.workspace = true
+bytes.workspace = true
+tokio = { workspace = true, features = ["time"] }
+# End-to-end encryption (`e2e`): AES-256-GCM for events, its round keys wiped on drop; HPKE for content keys; ring
+# (already in the tree through rustls) for Ed25519 and SHA-256, as Gateway verifies them; base64url as Gateway reads it.
+aes-gcm = { workspace = true, features = ["zeroize"] }
+hpke.workspace = true
+getrandom.workspace = true
+zeroize.workspace = true
+ring.workspace = true
+base64.workspace = true
+# `qr`: a QR code in a terminal.
+qrcodegen.workspace = true
+
+[dev-dependencies]
+axum.workspace = true
+hex.workspace = true
+tokio.workspace = true
+
+[[test]]
+name = "it"
+path = "tests/it.rs"
+
+[lints]
+workspace = true

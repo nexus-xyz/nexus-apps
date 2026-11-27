@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- The hardened runtime's entitlements of Nexus.app's own binary (packaging/package.sh). The microphone, for
+     dictation (src/dictation.rs, through CoreAudio), as the Nexus app's Entitlements.plist. This process is CEF's
+     browser process (src/web/host.rs), so it also gets JIT and writable executable memory, as an Electron app's main
+     process does. -->
+<plist version="1.0">
+<dict>
+	<key>com.apple.security.device.audio-input</key>
+	<true/>
+	<key>com.apple.security.cs.allow-jit</key>
+	<true/>
+	<key>com.apple.security.cs.allow-unsigned-executable-memory</key>
+	<true/>
+</dict>
+</plist>

@@ -1,0 +1,42 @@
+{
+  "schema": "nexus-recipe/1",
+  "id": "cline",
+  "kind": "config",
+  "tool": "Cline",
+  "title": "Cline through Nexus Gateway",
+  "description": "Run Cline's command line through Nexus Gateway on a folder of its own and a Nexus API key, so its model calls are metered and recorded on your organization's key.",
+  "route": "gateway",
+  "config": {
+    "directory": "~/.cline-nexus",
+    "path": "~/.cline-nexus/data/settings/providers.json",
+    "contents": "{\n  \"version\": 1,\n  \"lastUsedProvider\": \"openai-compatible\",\n  \"modes\": {},\n  \"providers\": {\n    \"openai-compatible\": {\n      \"settings\": {\n        \"provider\": \"openai-compatible\",\n        \"baseUrl\": \"%CORE_URL%/v1\",\n        \"model\": \"openai/gpt-6-luna\"\n      },\n      \"updatedAt\": \"2026-10-28T00:00:00.000Z\",\n      \"tokenSource\": \"manual\"\n    }\n  }\n}\n",
+    "keyVariable": "NEXUS_API_KEY"
+  },
+  "limits": [
+    "Nexus has no launcher for Cline. It writes a folder of its own, and Cline's command line, run on that folder, sends its calls to Gateway's OpenAI compatible API, `/v1/chat/completions`, with a Nexus API key: reserved, metered, checked against your organization's policy and attributed to you. Your own Cline settings in `~/.cline` are not read or changed.",
+    "Run it from a terminal, as the page does. When its input is not a terminal (a pipe or a file), Cline adds that input to the prompt and sends it to the model.",
+    "Gateway cannot tell Cline's calls from any other call on that key. `nexus spend` lists them under Nexus Gateway, direct API calls (`core`), not under `agents`, and no agent session groups them.",
+    "These calls run on a provider key your person, team or organization stored. Nexus credit never pays for them: without a key, Gateway refuses the call with `403`.",
+    "Run it as the page does, without `-y`. With `-y`, Cline keeps sending calls until the model calls its finish tool, and a short answer never does: it spends until you stop it.",
+    "If Cline cannot read the folder's file, it falls back to OpenAI's own API and sends the key there, which refuses it. Write the file again with the step below.",
+    "Cline's editor extensions are not covered: pointed at a new folder, the VS Code extension copies the keys it already stores into it, so this page does not use them.",
+    "The API key works until you revoke it in Nexus UI, and anyone holding it spends as you. Keep it out of files and shell history."
+  ],
+  "steps": [
+    { "id": "install_cli", "who": "you", "text": "Install the nexus CLI. It needs Node.js 22.6 or later and curl. If the installer says its folder is not on your PATH, add the line it prints to your shell's profile, then open a new terminal.", "command": "curl -fsSL %CORE_URL%/install.sh | bash" },
+    { "id": "nexus_login", "who": "you", "text": "Sign in to Nexus and approve the code in Nexus UI. The code expires after ten minutes.", "command": "nexus auth login" },
+    { "id": "api_key", "who": "you", "text": "In Nexus UI, open Settings, then Keys, and create a key named `cline`. It is shown once: copy it." },
+    { "id": "install", "who": "you", "text": "Install Cline's command line. Nexus never installs it for you. If `cline` is not found afterwards, add npm's global folder, `$(npm prefix -g)/bin`, to your PATH.", "command": "npm i -g cline" },
+    { "id": "provider_key", "who": "admin", "text": "If `nexus keys list` shows no OpenAI key, add the organization's key, once.", "command": "nexus keys add openai <key>" },
+    { "id": "config", "who": "you", "text": "Write Nexus's folder for Cline. Its one file holds your Gateway's URL and the model, not the key. If the folder is already there, it is moved aside first, and nothing is written if that fails." },
+    { "id": "environment", "who": "you", "text": "Give this terminal the key. After you run the line, paste the API key and press Enter: nothing shows, and the key stays out of your shell history.", "command": "read -rs NEXUS_API_KEY && export NEXUS_API_KEY" },
+    { "id": "run", "who": "you", "text": "Run one prompt through Gateway on the folder's small model. Cline gets the folder and the key for this command only. It runs from any folder.", "command": "CLINE_DIR=~/.cline-nexus OPENAI_API_KEY=\"$NEXUS_API_KEY\" cline --data-dir ~/.cline-nexus/data -P openai-compatible \"Reply with the single word pong\"" }
+  ],
+  "verify": { "text": "The call shows in your spend under Nexus Gateway, direct API calls, and first in its recent calls.", "command": "nexus spend" },
+  "test": {
+    "features": ["One prompt through Gateway's `/v1/chat/completions` by Cline's command line and the steps above, recorded in `nexus spend` under direct API calls"]
+  },
+  "claim": { "state": "tested", "registerRow": null },
+  "owner": "factory-services-frontend-capabilities-integrations-capabilities",
+  "retireWhen": "Gateway drops its OpenAI compatible `/v1/chat/completions`, or Cline's command line stops reading `CLINE_DIR`, `--data-dir` and `OPENAI_API_KEY`."
+}

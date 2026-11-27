@@ -1,0 +1,21 @@
+<!doctype html><html><head><meta charset="utf-8"><title>Math+Markdown</title><!--HARNESS-->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
+<script src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/marked@14.1.2/marked.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@11.4.0/dist/mermaid.min.js"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.10.0/styles/github.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.10.0/highlight.min.js"></script>
+</head><body>
+<h1>Math, Markdown, diagrams, code</h1><div id="score"></div>
+<div class="cell"><b>native MathML</b><math display="block"><mrow><mi>x</mi><mo>=</mo><mfrac><mrow><mo>−</mo><mi>b</mi><mo>±</mo><msqrt><msup><mi>b</mi><mn>2</mn></msup><mo>−</mo><mn>4</mn><mi>a</mi><mi>c</mi></msqrt></mrow><mrow><mn>2</mn><mi>a</mi></mrow></mfrac></mrow></math></div>
+<div class="cell" style="margin-top:8px"><b>KaTeX</b><div id="katex"></div></div>
+<div class="cell" style="margin-top:8px"><b>marked (Markdown)</b><div id="md"></div></div>
+<div class="cell" style="margin-top:8px"><b>mermaid flowchart</b><pre class="mermaid">graph LR; A[Ask] --> B{Gateway}; B -->|ok| C[Model]; B -->|deny| D[Policy]</pre></div>
+<div class="cell" style="margin-top:8px"><b>highlight.js</b><pre><code class="language-rust">fn main() { let x: u32 = 42; println!("{x}"); }</code></pre></div>
+<script>
+check("MathML", () => typeof MathMLElement === "function" && document.querySelector("math").getBoundingClientRect().height > 24);
+check("KaTeX", () => { katex.render("\\int_0^\\infty e^{-x^2}\\,dx = \\frac{\\sqrt{\\pi}}{2} \\quad \\sum_{n=1}^\\infty \\frac1{n^2}=\\frac{\\pi^2}6", document.getElementById("katex"), { displayMode: true }); return document.fonts.ready.then(() => document.fonts.check("16px KaTeX_Main")); });
+check("marked", () => { document.getElementById("md").innerHTML = marked.parse("**bold** _it_ `code`\n\n| a | b |\n|---|---|\n| 1 | 2 |\n\n- [x] task"); return !!document.querySelector("#md table"); });
+check("mermaid", () => { mermaid.initialize({ startOnLoad: false }); return mermaid.run().then(() => !!document.querySelector(".mermaid svg")); });
+check("highlight.js", () => { document.querySelectorAll("pre code").forEach((e) => hljs.highlightElement(e)); return !!document.querySelector(".hljs-keyword"); });
+</script></body></html>

@@ -1,0 +1,96 @@
+# The Code workbench's core: runs Claude Code and Codex as child processes, turns their output into the
+# provider-neutral events the desktop app shows, relays approvals and interrupts, and keeps every session's event
+# log in SQLite. No window toolkit: the app gives it a `Host` for Gateway calls and for events,
+# and the tests drive it with a stand-in `claude` and `codex` (src/bin/fake-*.rs). a private plan doc has the
+# design.
+[package]
+name = "nexus-workbench"
+description = "Nexus for desktop's Code workbench: drives Claude Code and Codex sessions, relays approvals, keeps their event logs."
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.94"
+publish = false
+license = "MIT"
+
+[[bin]]
+# The stand-in `claude` the tests drive: the same stream-json control protocol, scripted by the prompt. Not shipped.
+name = "fake-claude"
+path = "src/bin/fake-claude.rs"
+test = false
+
+[[bin]]
+# The stand-in `codex app-server`: the same JSON-RPC lines, scripted by the message. Not shipped.
+name = "fake-codex"
+path = "src/bin/fake-codex.rs"
+test = false
+
+[[bin]]
+# The stand-in `nexus __agent`: the same JSON lines, scripted by the prompt. Not shipped.
+name = "fake-nexus"
+path = "src/bin/fake-nexus.rs"
+test = false
+
+[[bin]]
+# The stand-in `agy acp`: the same ACP lines, scripted by the prompt. Not shipped.
+name = "fake-agy"
+path = "src/bin/fake-agy.rs"
+test = false
+
+[features]
+# Optional parts that GPUI and the Rust CLI opt in to.
+cursor = []
+opencode = []
+memory-mcp = ["nexus-client/mcp"]
+
+[dependencies]
+base64 = "=0.22.1"
+# The same URL parser/version the native browser uses.
+url = "=2.5.9"
+# Session sync's Gateway adapter (src/session_sync/gateway.rs): the HTTP client and the crypto core (`e2e`).
+nexus-client = { path = "../nexus-client" }
+reqwest = { version = "=0.13.5", default-features = false, features = ["rustls-no-provider"] }
+# The coding agents and their facts: a session agent's `coding()` (src/event.rs).
+nexus-agent-memory = { path = "../nexus-agent-memory" }
+nexus-local-agents = { path = "../nexus-local-agents" }
+nexus-agents = { path = "../nexus-agents" }
+# The provider layer's shared values: kinds, offers, credentials and settings (src/provider/).
+nexus-providers = { path = "../nexus-providers" }
+# Pinned to the desktop app's (and eng/factory/rs's) versions.
+serde = { version = "=1.0.229", features = ["derive"] }
+serde_json = { version = "=1.0.154", features = ["preserve_order"] }
+toml = { version = "=1.1.8", default-features = false, features = ["std", "parse", "serde"] }
+tokio = { version = "=1.53.3", features = ["io-util", "macros", "net", "process", "rt-multi-thread", "sync", "time"] }
+futures = "=0.3.34"
+rusqlite = { version = ">=0.40.2, <0.42", features = ["bundled"] }
+uuid = { version = "=1.28.0", features = ["v4", "v5", "v7"] }
+# The loopback MCP server the agents call for linked sessions (src/orchestra/): HTTP/1 only, the versions the app's
+# lockfile already has.
+hyper = { version = "=1.12.0", features = ["server", "http1"] }
+hyper-util = { version = "=0.1.21", features = ["tokio", "server"] }
+http-body-util = "=0.1.5"
+bytes = "=1.12.1"
+portable-pty = "=0.9.0"
+# The native nexus CLI's download, checked against the SHA-256 the Gateway publishes (src/nexus_runtime.rs). The
+# version nexus-remote already pins.
+sha2 = "=0.11.1"
+# Scheduled sessions' times on chosen weekdays, in this computer's time zone (src/schedules/when.rs). The version and
+# features the app's lockfile already has.
+chrono = { version = "=0.4.45", default-features = false, features = ["clock", "std"] }
+
+[dev-dependencies]
+# RustCrypto AES-GCM exercises encrypted replay in tests. Production crypto stays in the shared client core.
+aes-gcm = "=0.11.1"
+tokio = { version = "=1.53.3", features = ["test-util"] }
+
+[target.'cfg(unix)'.dependencies]
+# Signals to the agent's whole process group (its MCP servers and shells die with it), and a pseudo-terminal's
+# settings (`pty.rs`).
+nix = { version = "=0.31.3", default-features = false, features = ["signal", "hostname", "term", "user"] }
+
+[lints.rust]
+unsafe_code = "forbid"
+
+[lints.clippy]
+dbg_macro = "warn"
+todo = "warn"
+unwrap_used = "warn"

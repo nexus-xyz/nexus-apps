@@ -1,0 +1,38 @@
+# Nexus for desktop's agent tools: the MCP server list, the built-in server's routing, request_secret and outside
+# access, with no UI toolkit. A sibling of nexus-desktop-core: it needs the pull request watch's tool list
+# (nexus-pull-requests), which itself depends on the core. Every dependency pinned exactly, at the app's versions.
+[package]
+name = "nexus-desktop-mcp"
+description = "Nexus for desktop's agent tools: the MCP server list, the built-in server's routing, request_secret and outside access."
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.94"
+publish = false
+license = "MIT"
+
+[dependencies]
+# McpServer, the keychain vault, the app's version and the Notifier.
+nexus-desktop-core = { path = "../nexus-desktop-core" }
+# The pull request tools the built-in server lists and routes to the app.
+nexus-pull-requests = { path = "../nexus-pull-requests" }
+# The agents, the sessions and the linked sessions' server.
+nexus-agent-memory = { path = "../nexus-agent-memory" }
+nexus-workbench = { path = "../nexus-workbench", features = ["memory-mcp"] }
+# Outside access's tools on the app's workbench or its background service (`engine::Engine`).
+nexus-remote = { path = "../nexus-remote" }
+serde = { version = "=1.0.229", features = ["derive"] }
+serde_json = { version = "=1.0.154", features = ["preserve_order"] }
+tokio = { version = "=1.53.3", features = ["sync", "time"] }
+# request_secret's request ids and file names.
+uuid = { version = "=1.28.0", features = ["v4"] }
+
+[dev-dependencies]
+tokio = { version = "=1.53.3", features = ["macros", "rt"] }
+
+[lints.rust]
+unsafe_code = "forbid"
+
+[lints.clippy]
+dbg_macro = "warn"
+todo = "warn"
+unwrap_used = "warn"

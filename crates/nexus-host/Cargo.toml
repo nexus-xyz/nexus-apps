@@ -1,0 +1,64 @@
+# The headless host for Code sessions on a person's own server: the same workbench as the
+# desktop app (nexus-workbench), its `wb_*` commands and `wb:*` events served as JSON over a WebSocket on a private
+# Unix socket, reached through SSH. No window toolkit: it builds on a bare Linux server.
+[package]
+name = "nexus-host"
+description = "Nexus for desktop's headless host: runs Code sessions on a server and serves them to the desktop app over a private WebSocket."
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.94"
+publish = false
+license = "MIT"
+build = "build.rs"
+
+[[bin]]
+name = "nexus-host"
+path = "src/main.rs"
+
+[[bin]]
+# The workbench's stand-in `claude`, built here too so this crate's tests can launch it (`CARGO_BIN_EXE_fake-claude`
+# names only this package's binaries). Not shipped: release builds take `--bin nexus-host`.
+name = "fake-claude"
+path = "../nexus-workbench/src/bin/fake-claude.rs"
+test = false
+
+[dependencies]
+# `mcp`: the built-in `nexus` server a server's agents get (`src/mcp.rs`).
+nexus-client = { path = "../nexus-client", features = ["mcp"] }
+nexus-agent-memory = { path = "../nexus-agent-memory" }
+nexus-workbench = { path = "../nexus-workbench", features = ["opencode"] }
+nexus-desktop-core = { path = "../nexus-desktop-core" }
+# Which calls are the person using the machine (`activity::background`), shared with the desktop app's cloud machines.
+nexus-remote = { path = "../nexus-remote" }
+# A cloud machine's heartbeat sends its times as RFC 3339. The workbench's own version.
+chrono = { version = "=0.4.45", default-features = false, features = ["clock", "std"] }
+# Pinned to the desktop app's (and eng/factory/rs's) versions.
+serde = { version = "=1.0.229", features = ["derive"] }
+serde_json = { version = "=1.0.154", features = ["preserve_order"] }
+tokio = { version = "=1.53.3", features = ["io-std", "io-util", "macros", "net", "rt-multi-thread", "signal", "sync", "time"] }
+futures = "=0.3.34"
+# The WebSocket, over the Unix socket (or the loopback port), and a cloud machine's line out to Gateway (its TLS is
+# nexus-remote's src/relay.rs).
+tokio-tungstenite = { version = "=0.30.0", default-features = false, features = ["handshake"] }
+# One host per person (flock), the root warning (geteuid), the machine's name (gethostname), `stop` (kill).
+nix = { version = "=0.31.3", default-features = false, features = ["fs", "hostname", "signal", "user"] }
+# Session sync (src/session_sync.rs): the device key file is base64url, and its text is wiped after use.
+base64 = "=0.22.1"
+zeroize = "=1.9.1"
+# Codex's own config.toml, read to hand a native session's fence to the person's MCP servers (src/agent_files.rs).
+# eng/factory/rs's version.
+toml = { version = "=1.1.8", default-features = false, features = ["std", "parse", "serde"] }
+
+[dev-dependencies]
+# tests/remote.rs: a file attached in pieces is checked by its SHA-256.
+sha2 = "=0.11.1"
+# Paused time: src/server.rs's write stall tests run their 30 seconds at once.
+tokio = { version = "=1.53.3", features = ["test-util"] }
+
+[lints.rust]
+unsafe_code = "forbid"
+
+[lints.clippy]
+dbg_macro = "warn"
+todo = "warn"
+unwrap_used = "warn"

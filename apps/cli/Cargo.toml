@@ -1,0 +1,79 @@
+[package]
+name = "nexus-cli"
+description = "The `nexus` CLI as one Rust binary (phase E): every command of commands.json, the same config, output and exit codes as the TypeScript CLI (@nexus/cli), and `nexus update` for a native binary."
+# The CLI's semver is the Factory's, eng/VERSION (eng/RELEASES.md); build.rs reads it and adds the git sha.
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+license = "MIT"
+# One test binary (`tests/it.rs`), not one per file.
+autotests = false
+build = "build.rs"
+
+[lib]
+name = "nexus_cli"
+path = "src/lib.rs"
+
+[[bin]]
+name = "nexus"
+path = "src/main.rs"
+
+[features]
+# Every build Nexus ships today keeps `staff` (the release, nightly and CI builds, and `cargo install`, take the defaults).
+# The open-source build is `--no-default-features`: it leaves staff-only commands out.
+default = []
+# Staff-only commands, for Nexus's own people: `nexus triage` (`src/triage.rs`). The Gateway refuses anyone else.
+staff = []
+# Plans (`src/plans.rs`): `billing plans`, `billing plan` and the "Plan" row. Off: pricing v2.0 sells no plans.
+plans = []
+
+[dependencies]
+# Client crates only: tests/dependencies.rs fails if the tree reaches a Gateway server crate.
+# The providers an organization may bring a key for (`nexus keys`), and the agent routes (`agent_routes.rs`).
+# `nexus chat --image`: the files as base64 (the workspace's pin, which nexus-client already builds).
+base64.workspace = true
+nexus-client = { workspace = true, features = ["blocking", "mcp"] }
+serde.workspace = true
+serde_json.workspace = true
+reqwest = { workspace = true, features = ["blocking", "rustls-no-provider"] }
+yaml_serde.workspace = true
+sha2.workspace = true
+hex.workspace = true
+uuid.workspace = true
+time.workspace = true
+rand.workspace = true
+crossterm.workspace = true
+unicode-width.workspace = true
+# `nexus claude` and `nexus codex` keep a session log and sync it end-to-end encrypted, with the desktop's own log
+# and engine (src/session_log.rs); `nexus devices pair` shows a QR code.
+nexus-agent-memory.workspace = true
+nexus-workbench = { workspace = true, features = ["cursor", "memory-mcp"] }
+# `nexus agy` reads its calls' token counts from agy's conversation file (src/antigravity_usage.rs). nexus-workbench's
+# range and features, so the lock keeps the one rusqlite it already has.
+rusqlite = { version = ">=0.40.2, <0.42", features = ["bundled"] }
+tokio.workspace = true
+# `openable` parses links as browsers do.
+url.workspace = true
+
+# Windows opens links with ShellExecuteW, never through cmd.exe, which reads `&`, `|`, `^` and `%NAME%` in a link.
+# The workspace forbids unsafe code, so the call is this crate's.
+[target.'cfg(windows)'.dependencies]
+opener = { version = "=0.8.5", default-features = false }
+
+[target.'cfg(unix)'.dependencies]
+signal-hook.workspace = true
+nix.workspace = true
+# `nexus codex` with phone control speaks to Codex's app-server: a WebSocket on a Unix socket (src/codex_remote.rs).
+futures.workspace = true
+tokio-tungstenite.workspace = true
+
+[dev-dependencies]
+axum.workspace = true
+
+[[test]]
+name = "it"
+path = "tests/it.rs"
+
+[lints]
+workspace = true

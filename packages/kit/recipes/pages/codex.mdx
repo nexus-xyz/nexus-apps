@@ -1,0 +1,72 @@
+---
+title: "Codex through Nexus Gateway"
+description: "Set up Codex so every model call goes through Nexus Gateway on your organization's key, metered and recorded."
+---
+
+{/* Generated from eng/factory/kit/recipes/codex.json (nexus-recipe/1). Do not edit: change the recipe, then run `npx vitest run kit/src/recipes.test.ts -u` in eng/factory. */}
+
+<Callout title="Status: unclaimed">
+  A recorded run, codex-2026-10-27-1 on 2026-10-27, Codex 0.165.0 and nexus 0.14.0+69e1c09, reached a first call in 2m 50s, but no claims register backs this page yet, so it makes no claim about the tool.
+</Callout>
+
+## Read this first
+
+- This is the Gateway route. Every call goes through Nexus Gateway on your organization's OpenAI key: reserved, metered, checked against your organization's policy and attributed to you. Nexus credit never pays for it. Your own ChatGPT plan is not used.
+- Plain `nexus codex`, with no route flag, runs on your own ChatGPT plan instead, unless you saved another route. Every command below names `--api`.
+- Every call reserves the most it could cost before it is sent. Codex names no output limit, so a call reserves the model's own. On a large model one call can reserve more than a small monthly limit has left, and Gateway refuses it with `402` before it runs. Name a smaller model with `-m`, or ask an owner or admin about your limit.
+- Codex refuses to start outside a git repository. Run it from inside one, or add `--skip-git-repo-check` at the end of the command.
+
+## Set up and run
+
+1. Install the nexus CLI. It needs Node.js 22.6 or later and curl. If the installer says its folder is not on your PATH, add the line it prints to your shell's profile, then open a new terminal.
+
+   ```sh
+   curl -fsSL %CORE_URL%/install.sh | bash
+   ```
+
+2. Install Codex. Nexus never installs it for you. If `codex` is not found afterwards, add npm's global folder, `$(npm prefix -g)/bin`, to your PATH.
+
+   ```sh
+   npm install -g @openai/codex
+   ```
+
+3. Sign in to Nexus and approve the code in Nexus UI. The code expires after ten minutes.
+
+   ```sh
+   nexus auth login
+   ```
+
+4. **Owner or admin.** If `nexus keys list` shows no OpenAI key, add the organization's key, once. Without a key, Gateway refuses the call with `403`.
+
+   ```sh
+   nexus keys add openai <key>
+   ```
+
+5. Run one prompt through Gateway, on a small model so even a $1 monthly limit covers the call. It runs from any folder.
+
+   ```sh
+   nexus codex --api exec -m gpt-6-luna --skip-git-repo-check "Reply with the single word pong"
+   ```
+
+## Check it worked
+
+The call shows in your spend under `agents › codex`, and the session in Nexus UI.
+
+```sh
+nexus spend
+```
+
+## What Nexus changes for the run
+
+For each run with `--api`, Nexus points Codex at your Gateway's `/v1/openai/v1` with your Nexus sign-in as `NEXUS_API_KEY`, and changes no file. It removes `OPENAI_API_KEY` from Codex's environment, so its calls can only go through Nexus.
+
+## How it is tested
+
+- One prompt through Gateway by the steps above, recorded in `nexus spend`
+
+| Run | Date | Codex | nexus | First call | Steps skipped | Result |
+| --- | --- | --- | --- | --- | --- | --- |
+| codex-2026-10-26-1 | 2026-10-26 | 0.164.0 | 0.12.0+7d18f42 | 1m 02s | `install_cli`, `nexus_login`, `provider_key` | pass |
+| codex-2026-10-27-1 | 2026-10-27 | 0.165.0 | 0.14.0+69e1c09 | 2m 50s | `provider_key` | pass |
+
+Each run is a record in `eng/factory/kit/recipes/runs/`, with its steps' times, the call and what got in the way.

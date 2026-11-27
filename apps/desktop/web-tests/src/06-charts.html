@@ -1,0 +1,27 @@
+<!doctype html><html><head><meta charset="utf-8"><title>Charts</title><!--HARNESS-->
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/d3@7.9.0/dist/d3.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+</head><body>
+<h1>Charts and libs</h1><div id="score"></div>
+<div class="cell"><b>Chart.js line + bar (animated)</b><canvas id="chart" height="140"></canvas></div>
+<div class="cell" style="margin-top:8px"><b>D3 axis + area</b><svg id="d3" width="100%" height="120"></svg></div>
+<div class="cell" style="margin-top:8px"><b>three.js spinning cube</b><div id="three" style="height:120px"></div></div>
+<script>
+check("Chart.js", () => { const ch = new Chart(document.getElementById("chart"), { type: "bar", data: { labels: ["Mon", "Tue", "Wed", "Thu", "Fri"], datasets: [{ type: "line", label: "trend", data: [3, 5, 4, 7, 9], borderColor: "#e33", tension: .4 }, { label: "vol", data: [4, 6, 3, 8, 7], backgroundColor: "#7aa7ff" }] }, options: { plugins: { legend: { position: "bottom" } } } }); return !!ch.canvas; });
+check("D3", () => {
+  const svg = d3.select("#d3"), W = svg.node().getBoundingClientRect().width, H = 120;
+  const data = d3.range(40).map((i) => [i, Math.sin(i / 5) * 40 + 50 + Math.random() * 10]);
+  const x = d3.scaleLinear([0, 39], [30, W - 10]), y = d3.scaleLinear([0, 110], [H - 20, 5]);
+  svg.append("path").attr("fill", "#cfe3ff").attr("stroke", "#39f").attr("d", d3.area().x((d) => x(d[0])).y0(y(0)).y1((d) => y(d[1])).curve(d3.curveCatmullRom)(data));
+  svg.append("g").attr("transform", `translate(0,${H - 20})`).call(d3.axisBottom(x).ticks(5));
+  svg.append("g").attr("transform", "translate(30,0)").call(d3.axisLeft(y).ticks(4));
+  return svg.selectAll("path").size() > 1;
+});
+check("three.js WebGL", () => {
+  const el = document.getElementById("three"), r = new THREE.WebGLRenderer({ antialias: true }); r.setPixelRatio(devicePixelRatio); r.setSize(el.clientWidth, 120); el.append(r.domElement);
+  const sc = new THREE.Scene(), cam = new THREE.PerspectiveCamera(50, el.clientWidth / 120, .1, 10); cam.position.z = 3;
+  const cube = new THREE.Mesh(new THREE.BoxGeometry(), new THREE.MeshNormalMaterial()); sc.add(cube);
+  (function f() { cube.rotation.x += .01; cube.rotation.y += .013; r.render(sc, cam); requestAnimationFrame(f); })(); return true;
+});
+</script></body></html>

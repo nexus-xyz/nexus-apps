@@ -1,0 +1,59 @@
+# Secrets gate for this repository. gitleaks 8.30.1. Read README.md in this folder first.
+#
+# An allowlist entry names files and a rule, never a value. Add one only with a written reason: what the matched
+# text is and why it is not a secret. trufflehog has no allowlist on purpose: it reports only secrets a provider
+# confirmed live, and those are rotated, not allowed.
+
+title = "Nexus: secrets"
+
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Crypto test vectors, read only by test-gated conformance checks"
+targetRules = ["generic-api-key"]
+paths = [
+  '''(^|/)nexus-client/tests/e2e-vectors\.json$''',
+  '''(^|/)nexus-workbench/tests/fixtures/computer-v1\.json$''',
+  '''(^|/)nexus-workbench/tests/fixtures/phone-command\.json$''',
+  '''(^|/)kit/src/fixtures/computer-v1\.json$''',
+]
+
+[[allowlists]]
+description = "Modifier-key prose in global-hotkey's docs"
+targetRules = ["generic-api-key"]
+paths = ['''(^|/)vendor/global-hotkey/src/hotkey\.rs$''']
+
+[[allowlists]]
+description = "A key count in the minified rich-text renderer's statistics"
+targetRules = ["generic-api-key"]
+paths = ['''(^|/)rich-text/assets/renderer\.js$''']
+
+[[allowlists]]
+description = "An item reference passed to read_secret against a fake runner, in vault_op.rs's test module"
+targetRules = ["generic-api-key"]
+condition = "AND"
+paths = ['''(^|/)nexus-desktop-core/src/vault_op\.rs$''']
+regexTarget = "line"
+regexes = ['''read_secret\(&fake, &auth, "''']
+
+[[allowlists]]
+description = "One fake key, the same in four CLI tests, sent to the tests' local mock server"
+targetRules = ["generic-api-key"]
+condition = "AND"
+paths = ['''(^|/)apps/cli/tests/[a-z_]+\.rs$''']
+regexTarget = "line"
+regexes = ['''json!\(\{ "url": url, "apiKey": "''']
+
+[[allowlists]]
+description = "A fake encrypted PEM (body pem-s3cret) in the CLI's connections test"
+targetRules = ["private-key"]
+condition = "AND"
+paths = ['''(^|/)apps/cli/tests/connections\.rs$''']
+regexTarget = "line"
+regexes = ['''const PEM: &str = "-----BEGIN ENCRYPTED PRIVATE KEY-----''']
+
+[[allowlists]]
+description = "Synthetic credential-shaped literals in semgrep.rs and semgrep.ts, the cases semgrep.yml is tested against"
+targetRules = ["generic-api-key"]
+paths = ['''(^|/)oss-leak-gate/semgrep\.(rs|ts)$''']

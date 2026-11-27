@@ -1,0 +1,33 @@
+{
+  "schema": "nexus-recipe/1",
+  "id": "codex",
+  "agent": "codex",
+  "title": "Codex through Nexus Gateway",
+  "description": "Set up Codex so every model call goes through Nexus Gateway on your organization's key, metered and recorded.",
+  "route": "gateway",
+  "launch": {
+    "baseUrlPath": "/v1/openai/v1",
+    "credentialVariable": "NEXUS_API_KEY",
+    "removedVariables": ["OPENAI_API_KEY"]
+  },
+  "gitRepo": { "outsideFlag": "--skip-git-repo-check" },
+  "limits": [
+    "This is the Gateway route. Every call goes through Nexus Gateway on your organization's OpenAI key: reserved, metered, checked against your organization's policy and attributed to you. Nexus credit never pays for it. Your own ChatGPT plan is not used.",
+    "Plain `nexus codex`, with no route flag, runs on your own ChatGPT plan instead, unless you saved another route. Every command below names `--api`.",
+    "Every call reserves the most it could cost before it is sent. Codex names no output limit, so a call reserves the model's own. On a large model one call can reserve more than a small monthly limit has left, and Gateway refuses it with `402` before it runs. Name a smaller model with `-m`, or ask an owner or admin about your limit."
+  ],
+  "steps": [
+    { "id": "install_cli", "who": "you", "text": "Install the nexus CLI. It needs Node.js 22.6 or later and curl. If the installer says its folder is not on your PATH, add the line it prints to your shell's profile, then open a new terminal.", "command": "curl -fsSL %CORE_URL%/install.sh | bash" },
+    { "id": "install", "who": "you", "text": "Install Codex. Nexus never installs it for you. If `codex` is not found afterwards, add npm's global folder, `$(npm prefix -g)/bin`, to your PATH.", "command": "npm install -g @openai/codex" },
+    { "id": "nexus_login", "who": "you", "text": "Sign in to Nexus and approve the code in Nexus UI. The code expires after ten minutes.", "command": "nexus auth login" },
+    { "id": "provider_key", "who": "admin", "text": "If `nexus keys list` shows no OpenAI key, add the organization's key, once. Without a key, Gateway refuses the call with `403`.", "command": "nexus keys add openai <key>" },
+    { "id": "run", "who": "you", "text": "Run one prompt through Gateway, on a small model so even a $1 monthly limit covers the call. It runs from any folder.", "command": "nexus codex --api exec -m gpt-6-luna --skip-git-repo-check \"Reply with the single word pong\"" }
+  ],
+  "verify": { "text": "The call shows in your spend under `agents › codex`, and the session in Nexus UI.", "command": "nexus spend" },
+  "test": {
+    "features": ["One prompt through Gateway by the steps above, recorded in `nexus spend`"]
+  },
+  "claim": { "state": "tested", "registerRow": null },
+  "owner": "factory-services-frontend-capabilities-integrations-capabilities",
+  "retireWhen": "The launcher drops the Gateway route for Codex, or Codex stops taking a custom model provider."
+}

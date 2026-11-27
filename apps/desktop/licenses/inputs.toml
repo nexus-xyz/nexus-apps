@@ -1,0 +1,115 @@
+# The inputs of THIRD_PARTY_NOTICES.txt and the SBOM. This is the one list to edit when what ships changes.
+# Every path is relative to the GPUI workspace (the folder that holds Cargo.toml), so the list moves with it.
+
+# The Cargo manifests whose dependency graphs ship. Path dependencies are followed; a crate with `publish = false`
+# is first-party and is left out of the notices.
+cargo_manifests = ["Cargo.toml"]
+# The targets the app ships for. Only dependencies built for one of them go in.
+targets = ["x86_64-unknown-linux-gnu", "aarch64-apple-darwin", "x86_64-pc-windows-msvc"]
+# cargo-about's configuration: the accepted licenses and what it skips.
+about_config = "licenses/about.toml"
+# The license every Nexus crate in those graphs declares (a path dependency outside vendor/). The script fails
+# otherwise, in every mode, --check included.
+first_party_license = "MIT"
+
+# The npm code bundled into the app. rich-text/build.mjs writes the inventory (every package in the bundle, with its
+# license text) each time it rebuilds the bundle.
+[[npm_bundles]]
+name = "rich-text/assets/renderer.js"
+inventory = "rich-text/assets/renderer.js.packages.json"
+# Legal comments esbuild moved out of the bundle, and license files kept beside it. They go in verbatim.
+legal_files = [
+    "rich-text/assets/renderer.js.LEGAL.txt",
+    "rich-text/assets/KATEX-LICENSE.txt",
+    "rich-text/assets/MERMAID-LICENSE.txt",
+]
+
+# CEF, which the packages ship beside the app. Its version is the build metadata of the `cef` crate in Cargo.lock.
+[cef]
+# The full version of the CEF build that download-cef fetches (CEF_VERSION in cef-dll-sys, and the archive name on
+# cef-builds.spotifycdn.com). The written offer names it. notices.py fails when it no longer starts with the version
+# in Cargo.lock, so a CEF update must update it too.
+full_version = "156.0.15+gcf671c0+chromium-156.0.8078.80"
+license_file = "packaging/CEF-LICENSE.txt"
+# Chromium's credits, a file of the CEF distribution. With --out, the script copies it from $CEF_PATH when it is there.
+credits_file = "CREDITS.html"
+
+# Fonts and marks compiled into the app from outside Cargo's view. `license_file` is relative to this workspace and
+# is printed verbatim. `notice` is printed before it. An entry needs one or both; notices.py fails otherwise.
+[[assets]]
+name = "DM Sans (Regular, Medium, SemiBold, Bold)"
+license = "OFL-1.1"
+license_file = "licenses/fonts/DMSans-OFL.txt"
+
+[[assets]]
+name = "Geist Mono (Regular, Medium)"
+license = "OFL-1.1"
+license_file = "licenses/fonts/GeistMono-OFL.txt"
+
+[[assets]]
+name = "Foxit standard PDF fonts (14 faces, in the hayro-font crate's assets/, compiled into the PDF viewer)"
+license = "BSD-3-Clause"
+license_file = "licenses/third-party/foxit-fonts-LICENSE"
+
+[[assets]]
+name = "KaTeX math fonts (20 faces, inside rich-text/assets/renderer.css)"
+license = "OFL-1.1"
+# Copyright lines and reserved names from the fonts' own name tables (katex 0.18 dist/fonts); the OFL body as for DM Sans.
+license_file = "licenses/fonts/KaTeX-OFL.txt"
+
+[[assets]]
+name = "simple-icons 16.35 marks (assets/marks/)"
+license = "CC0-1.0"
+notice = """The drawings are CC0-1.0. Each mark is a trademark of its owner. CC0 does not cover the trademark, and its use
+here does not mean that the owner sponsors or endorses this product. See NOTICE."""
+# simple-icons 16.35.0's LICENSE.md, byte for byte.
+license_file = "licenses/third-party/simple-icons-LICENSE.md"
+
+[[assets]]
+name = "Z.ai mark from lobe-icons, @lobehub/icons-static-svg (assets/marks/)"
+license = "MIT"
+notice = """The drawing is MIT. The Z.ai mark is a trademark of its owner, and the MIT license does not cover it."""
+# lobehub/lobe-icons' LICENSE (the static-svg package ships none), byte for byte.
+license_file = "licenses/third-party/lobe-icons-LICENSE"
+
+[[assets]]
+name = "OpenAI mark, from OpenAI's brand kit (assets/marks/openai.svg)"
+# No open-source license covers it. Legal approved it on 2026-11-26: unchanged, uniform rescale only.
+license = "trademark of OpenAI, no license"
+notice = """A trademark of OpenAI, drawn from OpenAI's brand kit and rescaled. No license covers it, including this project's.
+It names the company that made a model, and its use here does not mean that OpenAI sponsors or endorses
+this product."""
+
+[[assets]]
+name = "Material Icon Theme 5.40.0 file and folder icons and their associations (assets/file_icons/, src/file_icons/table.rs)"
+license = "MIT"
+license_file = "licenses/third-party/material-icon-theme-LICENSE"
+
+[[assets]]
+name = "VS Code's built-in language file names and extensions (src/file_icons/table.rs)"
+license = "MIT"
+license_file = "licenses/third-party/vscode-LICENSE"
+
+# Code ported from projects that are not crates in the graph above, so cargo-about cannot see them. Each keeps its own
+# license; `license_file` is a byte-for-byte copy of the project's file at `source`. Crates that are in the graph
+# (gpui-base for src/workspace/message_text.rs, cef for src/web/dmabuf.rs) are covered by part 1.
+[[ported]]
+name = "zui backdrop blur"
+license = "Apache-2.0"
+source = "https://github.com/zeronsh/zui (LICENSE-APACHE at 361ff20b919f)"
+paths = ["vendor/gpui-pre/src/backdrop_blur.rs", "vendor/gpui-pre-wgpu/src/wgpu_backdrop.rs",
+         "vendor/gpui-pre-wgpu/src/shaders.wgsl", "vendor/gpui-pre-windows/src/directx_renderer/backdrop.rs",
+         "vendor/gpui-pre-windows/src/directx_renderer/backdrop_tests.rs", "vendor/gpui-pre-apple/src/metal_renderer.rs"]
+license_file = "licenses/third-party/zui-LICENSE-APACHE"
+
+[[ported]]
+name = "Zeron motion code"
+license = "MIT"
+source = "https://github.com/zeronsh/zeron (LICENSE at 8fe624f842e3)"
+paths = ["src/workspace/launch_motion.rs", "src/motion.rs", "src/motion/*.rs", "src/workspace/glass.rs",
+         "src/workspace/floating_dock.rs"]
+license_file = "licenses/third-party/zeron-LICENSE"
+
+[outputs]
+notices = "THIRD_PARTY_NOTICES.txt"
+sbom = "sbom.cdx.json"

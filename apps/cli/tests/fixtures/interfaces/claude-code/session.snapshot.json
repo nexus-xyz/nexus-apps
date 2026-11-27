@@ -1,0 +1,159 @@
+{
+  "session": {
+    "source": "claude-code",
+    "id": "5f0c2b1e-0000-4000-8000-000000000001",
+    "agent": "claude",
+    "title": "Fix the failing build",
+    "model": "claude-sonnet-5-5",
+    "costUsd": 0.4321,
+    "startedAt": 1792490400000,
+    "events": [
+      {
+        "at": 1792490400000,
+        "kind": "user",
+        "text": "Why does the build fail?"
+      },
+      {
+        "at": 1792490401100,
+        "kind": "text",
+        "text": "I'll run the build."
+      },
+      {
+        "at": 1792490401200,
+        "kind": "tool",
+        "id": "toolu_1",
+        "name": "Bash",
+        "input": {
+          "command": "npm run build",
+          "description": "Build"
+        }
+      },
+      {
+        "at": 1792490403000,
+        "kind": "toolResult",
+        "id": "toolu_1",
+        "output": "error TS2304: Cannot find name 'foo'.",
+        "isError": true
+      },
+      {
+        "at": 1792490404000,
+        "kind": "tool",
+        "id": "toolu_2",
+        "name": "Edit",
+        "input": {
+          "file_path": "src/a.ts",
+          "old_string": "foo",
+          "new_string": "bar"
+        }
+      },
+      {
+        "at": 1792490406000,
+        "kind": "approval",
+        "requestId": "toolu_2",
+        "toolUseId": "toolu_2",
+        "tool": "Edit"
+      },
+      {
+        "at": 1792490406000,
+        "kind": "approvalResolved",
+        "requestId": "toolu_2",
+        "decision": "allow"
+      },
+      {
+        "at": 1792490406000,
+        "kind": "toolResult",
+        "id": "toolu_2",
+        "output": "The file src/a.ts has been updated."
+      },
+      {
+        "at": 1792490407000,
+        "kind": "tool",
+        "id": "toolu_3",
+        "name": "Bash",
+        "input": {
+          "command": "rm -rf dist"
+        }
+      },
+      {
+        "at": 1792490408000,
+        "kind": "approval",
+        "requestId": "toolu_3",
+        "toolUseId": "toolu_3",
+        "tool": "Bash"
+      },
+      {
+        "at": 1792490408000,
+        "kind": "approvalResolved",
+        "requestId": "toolu_3",
+        "decision": "deny"
+      },
+      {
+        "at": 1792490408000,
+        "kind": "toolResult",
+        "id": "toolu_3",
+        "output": "The user doesn't want to proceed with this tool use. The tool use was rejected (eg. if it was a file edit, the new_string was NOT written to the file). STOP what you are doing and wait for the user to tell you how to proceed.",
+        "isError": true
+      },
+      {
+        "at": 1792490408001,
+        "kind": "notice",
+        "text": "Interrupted by the user."
+      },
+      {
+        "at": 1792490460000,
+        "kind": "user",
+        "text": "Here is the screen. Keep dist.",
+        "images": [
+          "img_1"
+        ]
+      },
+      {
+        "at": 1792490461000,
+        "kind": "tool",
+        "id": "toolu_4",
+        "name": "mcp__browser__screenshot",
+        "input": {}
+      },
+      {
+        "at": 1792490462000,
+        "kind": "toolResult",
+        "id": "toolu_4",
+        "output": "Took a screenshot.",
+        "images": [
+          "img_2"
+        ]
+      },
+      {
+        "at": 1792490463000,
+        "kind": "text",
+        "text": "Fixed: `foo` was renamed to `bar`. The build passes."
+      },
+      {
+        "at": 1792490520000,
+        "kind": "notice",
+        "text": "Earlier messages were summarized to free up context."
+      },
+      {
+        "at": 1792490580000,
+        "kind": "user",
+        "text": "Thanks. Anything else?"
+      },
+      {
+        "at": 1792490581000,
+        "kind": "error",
+        "text": "API Error: 529 Overloaded"
+      }
+    ]
+  },
+  "images": [
+    {
+      "id": "img_1",
+      "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=="
+    },
+    {
+      "id": "img_2",
+      "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=="
+    }
+  ],
+  "skipped": 3
+}

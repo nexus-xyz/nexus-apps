@@ -1,0 +1,37 @@
+{
+  "schema": "nexus-recipe/1",
+  "id": "aider",
+  "kind": "environment",
+  "tool": "Aider",
+  "title": "Aider through Nexus Gateway",
+  "description": "Point Aider at Nexus Gateway with a Nexus API key, so its model calls are metered and recorded on your organization's key.",
+  "route": "gateway",
+  "environment": {
+    "baseUrlPath": "/v1",
+    "baseUrlVariable": "OPENAI_API_BASE",
+    "keyVariable": "OPENAI_API_KEY"
+  },
+  "limits": [
+    "Nexus has no launcher for Aider. You set two variables in your terminal, and Aider sends its calls to Gateway's OpenAI compatible API, `/v1/chat/completions`, with a Nexus API key: reserved, metered, checked against your organization's policy and attributed to you.",
+    "Gateway cannot tell Aider's calls from any other call on that key. `nexus spend` lists them under Nexus Gateway, direct API calls (`core`), not under `agents`, and no agent session groups them.",
+    "These calls run on a provider key your person, team or organization stored. Nexus credit never pays for them: without a key, Gateway refuses the call with `403`.",
+    "Aider writes the model as `openai/` followed by Gateway's model id, so `openai/gpt-6-luna` becomes `openai/openai/gpt-6-luna`. `nexus models` lists the ids you may use. A call that names no output limit reserves the model's own, so name a small model.",
+    "The API key works until you revoke it in Nexus UI, and anyone holding it spends as you. Keep it out of files and shell history."
+  ],
+  "steps": [
+    { "id": "install_cli", "who": "you", "text": "Install the nexus CLI. It needs Node.js 22.6 or later and curl. If the installer says its folder is not on your PATH, add the line it prints to your shell's profile, then open a new terminal.", "command": "curl -fsSL %CORE_URL%/install.sh | bash" },
+    { "id": "nexus_login", "who": "you", "text": "Sign in to Nexus and approve the code in Nexus UI. The code expires after ten minutes.", "command": "nexus auth login" },
+    { "id": "api_key", "who": "you", "text": "In Nexus UI, open Settings, then Keys, and create a key named `aider`. It is shown once: copy it." },
+    { "id": "install", "who": "you", "text": "Install Aider with its own installer. Nexus never installs it for you. If `aider` is not found afterwards, open a new terminal.", "command": "curl -LsSf https://aider.chat/install.sh | sh" },
+    { "id": "provider_key", "who": "admin", "text": "If `nexus keys list` shows no OpenAI key, add the organization's key, once.", "command": "nexus keys add openai <key>" },
+    { "id": "environment", "who": "you", "text": "Point Aider at Gateway for this terminal only. After the second line, paste the API key and press Enter: nothing shows, and the key stays out of your shell history.", "command": "export OPENAI_API_BASE=%CORE_URL%/v1\nread -rs OPENAI_API_KEY && export OPENAI_API_KEY" },
+    { "id": "run", "who": "you", "text": "Run one prompt through Gateway on a small model. It runs from any folder.", "command": "aider --model openai/openai/gpt-6-luna --no-git --yes-always --message \"Reply with the single word pong\"" }
+  ],
+  "verify": { "text": "The call shows in your spend under Nexus Gateway, direct API calls, and first in its recent calls.", "command": "nexus spend" },
+  "test": {
+    "features": ["One prompt through Gateway's `/v1/chat/completions` by the steps above, recorded in `nexus spend` under direct API calls"]
+  },
+  "claim": { "state": "tested", "registerRow": null },
+  "owner": "factory-services-frontend-capabilities-integrations-capabilities",
+  "retireWhen": "Gateway drops its OpenAI compatible `/v1/chat/completions`, or Aider stops reading `OPENAI_API_BASE`."
+}

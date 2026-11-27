@@ -1,0 +1,190 @@
+{
+  "regenerate": "cd eng/factory/rs && AGENT_CAPABILITIES_BLESS=1 cargo test --locked -p nexus-cli --lib agent_capabilities",
+  "agents": [
+    {
+      "access": {
+        "agent": "claude",
+        "name": "Claude Code",
+        "install": "curl -fsSL https://claude.ai/install.sh | bash",
+        "route": "subscription",
+        "from": "default",
+        "routes": [
+          {
+            "route": "gateway",
+            "access": null,
+            "available": true,
+            "provider": "anthropic"
+          },
+          {
+            "route": "subscription",
+            "access": "subscription",
+            "available": true,
+            "plan": "Claude",
+            "vendor": "Anthropic",
+            "login": "claude auth login",
+            "loginStatus": "claude auth status --text"
+          }
+        ]
+      },
+      "executable": "claude",
+      "cliLauncher": true,
+      "configuredProvider": null,
+      "logout": "claude auth logout",
+      "resume": "--resume",
+      "capabilities": {
+        "gateway": "anthropic",
+        "usageReporting": "otel",
+        "sessionLog": true,
+        "promptArgument": true
+      }
+    },
+    {
+      "access": {
+        "agent": "codex",
+        "name": "Codex",
+        "install": "npm install -g @openai/codex",
+        "route": "subscription",
+        "from": "default",
+        "routes": [
+          {
+            "route": "gateway",
+            "access": null,
+            "available": true,
+            "provider": "openai"
+          },
+          {
+            "route": "subscription",
+            "access": "subscription",
+            "available": true,
+            "plan": "ChatGPT",
+            "vendor": "OpenAI",
+            "login": "codex login",
+            "loginStatus": "codex login status"
+          }
+        ]
+      },
+      "executable": "codex",
+      "cliLauncher": true,
+      "configuredProvider": null,
+      "logout": "codex logout",
+      "resume": "resume",
+      "capabilities": {
+        "gateway": "openai",
+        "usageReporting": "otel",
+        "sessionLog": true,
+        "promptArgument": true
+      }
+    },
+    {
+      "access": {
+        "agent": "antigravity",
+        "name": "Antigravity",
+        "install": "curl -fsSL https://antigravity.google/cli/install.sh | bash",
+        "route": "subscription",
+        "from": "default",
+        "routes": [
+          {
+            "route": "gateway",
+            "access": null,
+            "available": false,
+            "reason": "Antigravity runs only on your Google AI plan through Nexus for now"
+          },
+          {
+            "route": "subscription",
+            "access": "subscription",
+            "available": true,
+            "plan": "Google AI",
+            "vendor": "Google",
+            "login": "agy",
+            "loginStatus": "agy"
+          }
+        ]
+      },
+      "executable": "agy",
+      "cliLauncher": true,
+      "configuredProvider": null,
+      "logout": "remove \"modelProvider\" from ~/.gemini/antigravity-cli/settings.json",
+      "resume": "--conversation",
+      "capabilities": {
+        "gateway": null,
+        "usageReporting": "conversation_db",
+        "sessionLog": false,
+        "promptArgument": false
+      }
+    },
+    {
+      "access": {
+        "agent": "cursor",
+        "name": "Cursor",
+        "install": "curl https://cursor.com/install -fsS | bash",
+        "route": "subscription",
+        "from": "default",
+        "routes": [
+          {
+            "route": "gateway",
+            "access": null,
+            "available": false,
+            "reason": "Cursor runs only on your Cursor plan through Nexus for now"
+          },
+          {
+            "route": "subscription",
+            "access": "subscription",
+            "available": true,
+            "plan": "Cursor",
+            "vendor": "Cursor",
+            "login": "cursor-agent login",
+            "loginStatus": "cursor-agent status"
+          }
+        ]
+      },
+      "executable": "cursor-agent",
+      "cliLauncher": true,
+      "configuredProvider": null,
+      "logout": "cursor-agent logout",
+      "resume": "--resume",
+      "capabilities": {
+        "gateway": null,
+        "usageReporting": null,
+        "sessionLog": false,
+        "promptArgument": false
+      }
+    },
+    {
+      "access": {
+        "agent": "opencode",
+        "name": "OpenCode",
+        "install": "curl -fsSL https://opencode.ai/install | bash",
+        "route": "subscription",
+        "from": "default",
+        "routes": [
+          {
+            "route": "gateway",
+            "access": null,
+            "available": false,
+            "reason": "OpenCode uses its configured provider."
+          },
+          {
+            "route": "subscription",
+            "access": "subscription",
+            "available": true,
+            "plan": "configured provider",
+            "vendor": "OpenCode",
+            "login": "opencode auth login",
+            "loginStatus": "opencode auth list"
+          }
+        ]
+      },
+      "executable": "opencode",
+      "cliLauncher": false,
+      "configuredProvider": "OpenCode provider",
+      "logout": "opencode auth logout",
+      "resume": "--session",
+      "capabilities": {
+        "gateway": null,
+        "usageReporting": null,
+        "sessionLog": false,
+        "promptArgument": false
+      }
+    }
+  ]
+}

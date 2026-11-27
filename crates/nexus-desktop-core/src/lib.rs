@@ -1,0 +1,69 @@
+//! Nexus for desktop's core, with no UI toolkit: what the app keeps in `settings.json` and how it reads and writes it,
+//! the administrator's managed policy, the sign-in and this computer's device key in the OS keychain, the preferences
+//! that need no plugin, the panel's geometry, the page the app window opens at launch, the background service's rules,
+//! what a title bar's double click does, and the terminal window that resumes a conversation. Nexus
+//! GPUI uses it. Nothing here takes an `AppHandle`: what needs the toolkit comes in through a seam the shell provides
+//! ([`app::set_version`], [`notify::Notifier`]).
+
+pub mod agent;
+pub mod agent_approvals;
+pub mod agent_brief;
+pub mod agent_cards;
+pub mod agent_composer;
+pub mod agent_discover;
+pub mod agent_errands;
+pub mod agent_memory;
+pub mod agent_privacy;
+pub mod agent_proactivity;
+pub mod agent_projects;
+pub mod agent_thread;
+pub mod agent_vault;
+pub mod agent_watches;
+pub mod app;
+pub mod atomic_file;
+pub mod cache;
+pub mod chat;
+pub mod chat_rewind;
+pub mod chat_width;
+pub mod cloud;
+pub mod crash;
+pub mod daily_active;
+pub mod device_key;
+pub mod home_bench;
+pub mod hooks;
+pub mod key_bindings;
+pub mod last_path;
+pub mod links;
+pub mod metrics;
+pub mod notice;
+pub mod notify;
+pub mod own_keychain;
+pub mod page_links;
+pub mod pane_layout;
+pub mod pane_resize;
+pub mod panel;
+pub mod path_notices;
+pub mod policy;
+pub mod prefs;
+pub mod presence;
+pub mod prompt_link;
+pub mod provider_keys;
+pub mod provider_settings;
+pub mod quit;
+pub mod secrets;
+pub mod servers;
+pub mod service;
+pub mod session_history;
+pub mod session_readiness;
+pub mod session_sync;
+pub mod settings;
+pub mod setup_line;
+pub mod sharing;
+pub mod signals;
+pub mod terminal_window;
+pub mod title_bar;
+pub mod usage;
+pub mod vault_import;
+pub mod vault_local;
+pub mod vault_op;
+pub mod web_url;

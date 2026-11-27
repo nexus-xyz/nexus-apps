@@ -1,0 +1,69 @@
+# Nexus for desktop's core without a UI toolkit: settings.json, the managed policy, the keychain (the sign-in and the
+# device key) and the preferences that need no plugin. It takes no UI crate. Every dependency pinned exactly, at the
+# app's versions.
+[package]
+name = "nexus-desktop-core"
+description = "Nexus for desktop's core: settings, managed policy, keychain secrets and the device key, shared by every desktop shell."
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.94"
+publish = false
+license = "MIT"
+
+[dependencies]
+# Persisted query answers.
+rusqlite = { version = "=0.41.1", features = ["bundled"] }
+# The managed config (`config`) and the device key's crypto (`e2e`).
+nexus-client = { path = "../nexus-client" }
+nexus-local-agents = { path = "../nexus-local-agents" }
+# Settings' orchestration limits and worktree cleanup rules.
+nexus-workbench = { path = "../nexus-workbench" }
+nexus-providers = { path = "../nexus-providers" }
+# Settings' check of an SSH destination before a server is added (`ssh::valid_destination`).
+nexus-remote = { path = "../nexus-remote" }
+serde = { version = "=1.0.229", features = ["derive"] }
+serde_json = { version = "=1.0.154", features = ["preserve_order"] }
+base64 = "=0.22.1"
+# The token in the OS credential store: Keychain (macOS), Credential Manager (Windows), Secret Service (Linux).
+keyring = "=4.2.0"
+# The device key is wiped from memory after use: nexus-client's pin.
+zeroize = "=1.9.1"
+# The OS's config folder (src/settings.rs `config_dir`).
+dirs = "=7.0.0"
+# The agent API's base URL and the links a reply carries (src/agent.rs).
+url = "=2.5.9"
+# The organization's notifications loop (src/path_notices.rs): its waits, its lock and its wake-up.
+tokio = { version = "=1.53.3", features = ["macros", "sync", "time"] }
+# This computer's notification device token (src/path_notices.rs).
+uuid = { version = "=1.28.0", features = ["v4"] }
+# The Assistant's times in the person's own zone (src/agent_privacy.rs, src/agent_vault.rs): the version both apps lock.
+chrono = { version = "=0.4.45", default-features = false, features = ["clock", "std"] }
+
+# Managed preferences on macOS (src/policy.rs): CFPreferences, the API configuration profiles write to.
+[target.'cfg(target_os = "macos")'.dependencies]
+core-foundation = "=0.10.1"
+core-foundation-sys = "=0.8.7"
+# The native Keychain error wrapped by keyring on macOS.
+security-framework = "=3.7.0"
+
+# Linux: whether a tray host shows the tray icon (src/quit.rs). The version keyring's Secret Service store already
+# builds, with its features.
+[target.'cfg(target_os = "linux")'.dependencies]
+zbus = "=5.19.0"
+
+# Group Policy on Windows (src/policy.rs): HKLM\Software\Policies\Nexus.
+[target.'cfg(windows)'.dependencies]
+winreg = "=0.56.0"
+
+[dev-dependencies]
+# src/path_notices.rs's and src/signals.rs's tests run against a fake Gateway on a local port.
+tokio = { version = "=1.53.3", features = ["io-util", "macros", "net", "rt-multi-thread", "sync", "time"] }
+
+[lints.rust]
+# Denied, not forbidden: src/policy.rs's macOS reader calls CFPreferences (two FFI calls), allowed in that module alone.
+unsafe_code = "deny"
+
+[lints.clippy]
+dbg_macro = "warn"
+todo = "warn"
+unwrap_used = "warn"

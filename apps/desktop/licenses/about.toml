@@ -1,0 +1,28 @@
+# cargo-about's configuration for THIRD_PARTY_NOTICES.txt. `notices.py` passes it, with the targets from inputs.toml.
+# The accepted list matches deny.toml's allow list and its per-crate exceptions. deny.toml is the license gate; this
+# list only lets cargo-about pick a license from each crate's expression.
+accepted = [
+    "Apache-2.0",
+    "Apache-2.0 WITH LLVM-exception",
+    "BSD-3-Clause",
+    "BSL-1.0",
+    "CDLA-Permissive-2.0",
+    "ISC",
+    "MIT",
+    "Unicode-3.0",
+    "Unlicense",
+    "Zlib",
+    # deny.toml allows these for named crates only (its `exceptions`).
+    "MPL-2.0",
+    "0BSD",
+    "CC0-1.0",
+    "BSD-2-Clause",
+    "bzip2-1.0.6",
+]
+# Build scripts' dependencies and dev-dependencies do not ship in the app.
+ignore-build-dependencies = true
+ignore-dev-dependencies = true
+
+# The Nexus crates (`publish = false`) are not third-party code.
+[private]
+ignore = true

@@ -1,0 +1,86 @@
+# Internal-reference blocklist. gitleaks 8.30.1. These are not secrets: they are names and links that point at
+# private systems and mean nothing to a reader of this repository. The gate reports them and never fails on them.
+# Read README.md in this folder before adding a rule or an exception.
+
+title = "Nexus: internal references"
+
+[[rules]]
+id = "internal-ticket-id"
+description = "An internal tracker id (ENG-n)."
+regex = '''\bENG-[0-9]+\b'''
+keywords = ["eng-"]
+
+[[rules]]
+id = "linear-link"
+description = "A link to a Linear workspace."
+regex = '''(?i)\blinear\.app/'''
+keywords = ["linear.app"]
+
+# A fake issue link: the issues view turns a Linear issue into a prompt, and its test uses a made-up
+# workspace `x` and issue ACME-12. Line scoped, so any other Linear link in the file still fires.
+[[rules.allowlists]]
+condition = "AND"
+paths = ['''(^|/)src/workspace/issues_view\.rs$''']
+regexTarget = "line"
+regexes = ['''linear\.app/x/issue/ACME-12''']
+
+# Linear's own public OAuth endpoint: the Linear connector's test feeds it to `authorize_url` as the provider's
+# answer. A vendor URL, not a workspace. Line scoped, so a workspace link in the file still fires.
+[[rules.allowlists]]
+condition = "AND"
+paths = ['''(^|/)src/pages/connectors/tests\.rs$''']
+regexTarget = "line"
+regexes = ['''https://linear\.app/oauth/authorize\?x=1''']
+
+[[rules]]
+id = "slack-link"
+description = "A link to a Slack workspace, channel or archive."
+regex = '''(?i)\b(?:[a-z0-9-]+\.slack\.com|slack\.com/(?:archives|app_redirect|team)/)'''
+keywords = ["slack.com"]
+
+[[rules]]
+id = "notion-link"
+description = "A link to Notion."
+regex = '''(?i)\bnotion\.(?:so|site)/'''
+keywords = ["notion.so", "notion.site"]
+
+[[rules]]
+id = "internal-host"
+description = "A storage bucket or cluster-internal host name."
+regex = '''(?i)(?:\bgs://[a-z0-9][a-z0-9._-]+|\b[a-z0-9-]+\.svc\.cluster\.local\b)'''
+keywords = ["gs://", "cluster.local"]
+
+[[rules]]
+id = "staff-email"
+description = "A staff email address. Public role addresses are not staff: see the allowlist."
+regex = '''(?i)\b[a-z0-9._%+-]+@nexus\.(?:xyz|inc)\b'''
+keywords = ["@nexus."]
+
+[[rules.allowlists]]
+regexTarget = "match"
+regexes = ['''(?i)^(?:security|conduct|trademarks|legal|privacy|support|hello|desktop|cli|no-?reply)@nexus\.(?:xyz|inc)$''']
+
+# Fakes, not staff: the test personas "Ada" and "Person" in the employee-domain checks (exact domains and lookalike
+# domains that must be refused). Path and line scoped, so a real address in these files still fires.
+[[rules.allowlists]]
+condition = "AND"
+paths = ['''(^|/)nexus-client/src/(staff|commit_trailer)\.rs$''', '''(^|/)(nexus-cli|apps/cli)/tests/help\.rs$''']
+regexTarget = "match"
+regexes = ['''(?i)^(?:ada|person)@nexus\.(?:xyz|inc)$''']
+
+[[rules]]
+id = "personal-email"
+description = "A personal email address at a consumer mail provider."
+regex = '''(?i)\b[a-z0-9._%+-]+@(?:gmail|googlemail|yahoo|hotmail|outlook|live|icloud|proton|protonmail)\.(?:com|me)\b'''
+keywords = ["@gmail", "@googlemail", "@yahoo", "@hotmail", "@outlook", "@live", "@icloud", "@proton"]
+
+# The license notices quote third-party authors' copyright lines, with their own addresses. The licenses require them.
+[[rules.allowlists]]
+paths = ['''(^|/)THIRD_PARTY_NOTICES\.txt$''']
+
+# A fake: the "Ada" persona's non-staff address in the CLI's employee check test.
+[[rules.allowlists]]
+condition = "AND"
+paths = ['''(^|/)(nexus-cli|apps/cli)/tests/help\.rs$''']
+regexTarget = "match"
+regexes = ['''^ada@gmail\.com$''']

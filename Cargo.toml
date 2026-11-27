@@ -1,0 +1,119 @@
+# The Nexus Desktop workspace: the app and its crates.
+[workspace]
+resolver = "3"
+members = ["apps/desktop", "apps/cli", "crates/*"]
+exclude = ["vendor"]
+
+[workspace.package]
+edition = "2024"
+publish = false
+rust-version = "1.94"
+version = "0.1.0"
+
+[workspace.dependencies]
+aes-gcm = "=0.11.1"
+axum = { version = "=0.8.9", default-features = false, features = ["http1", "http2", "json", "query", "tokio", "matched-path", "original-uri", "ws"] }
+base64 = "=0.23.1"
+bytes = "=1.12.1"
+crossterm = { version = "=0.29.0", default-features = false, features = ["bracketed-paste", "events", "windows"] }
+futures = "=0.3.34"
+getrandom = { version = "=0.4.3", features = ["sys_rng"] }
+hex = "=0.4.3"
+hpke = { version = "=0.14.1", default-features = false, features = ["alloc", "x25519", "aes"] }
+nexus-agent-memory = { path = "crates/nexus-agent-memory", version = "0.1.0" }
+nexus-agents = { path = "crates/nexus-agents", version = "0.1.0" }
+nexus-client = { path = "crates/nexus-client" }
+nexus-local-agents = { path = "crates/nexus-local-agents", version = "0.1.0" }
+nexus-providers = { path = "crates/nexus-providers", version = "0.1.0" }
+nexus-workbench = { path = "crates/nexus-workbench" }
+nix = { version = "=0.31.3", default-features = false, features = ["poll", "signal", "user"] }
+qrcodegen = "=1.8.0"
+rand = "=0.10.3"
+reqwest = { version = "=0.13.5", default-features = false, features = ["json", "stream", "http2"] }
+ring = "=0.17.14"
+rustls = { version = "=0.23.46", default-features = false, features = ["ring", "std", "tls12", "logging"] }
+serde = { version = "=1.0.229", features = ["derive"] }
+serde_json = { version = "=1.0.154", features = ["preserve_order"] }
+sha2 = "=0.11.1"
+signal-hook = "=0.4.6"
+time = { version = "=0.3.55", features = ["formatting", "parsing", "macros", "serde"] }
+tokio = { version = "=1.53.3", features = ["macros", "rt-multi-thread", "net", "signal", "sync", "time", "fs", "process", "io-util"] }
+tokio-tungstenite = "=0.29.0"
+unicode-width = "=0.2.3"
+url = "=2.5.9"
+uuid = { version = "=1.28.0", features = ["v4"] }
+yaml_serde = "=0.10.7"
+zeroize = "=1.9.1"
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+missing_debug_implementations = "allow"
+
+[workspace.lints.clippy]
+dbg_macro = "warn"
+todo = "warn"
+unwrap_used = "warn"
+
+# GPUI's crates with a surface primitive on Linux: a wgpu texture made outside the renderer, drawn like an image.
+# Upstream has one on macOS only (video frames). The changes are marked "Nexus" and listed in `vendor/README.md`.
+# Drop these when gpui-kit's GPUI has it, or move them to a fork.
+[patch.crates-io]
+gpui-pre = { path = "vendor/gpui-pre" }
+gpui-pre-wgpu = { path = "vendor/gpui-pre-wgpu" }
+# Stops the X11 refresh timer while a window has nothing to draw: upstream wakes the main thread every vsync
+# (vendor/README.md).
+gpui-pre-linux = { path = "vendor/gpui-pre-linux" }
+# Its X11 thread sleeps until there's an event instead of waking every 50 ms (vendor/README.md).
+global-hotkey = { path = "vendor/global-hotkey" }
+# Builds on the pinned Rust: upstream calls Option::map_or_default, unstable there (vendor/README.md).
+gpui-pre-macos = { path = "vendor/gpui-pre-macos" }
+# GPUI's Metal renderer (macOS): draws IOSurface-backed BGRA surfaces, a web page's frames, and keeps each surface's
+# owner until the GPU has finished the frame (vendor/README.md).
+gpui-pre-apple = { path = "vendor/gpui-pre-apple" }
+# GPUI's Windows platform: its D3D11 renderer draws a D3D11 texture made outside it as a surface (vendor/README.md).
+gpui-pre-windows = { path = "vendor/gpui-pre-windows" }
+
+# The default release profile, without LTO across crates: the fastest optimized build. `dist` below adds thin LTO
+# for a shipped build.
+[profile.release]
+debug = "line-tables-only"
+
+# The edit loop (`cargo run --profile fast`): every dependency optimized as in `release`, so GPUI, CEF's frames and
+# images run as fast; this crate at opt-level 1 and built incrementally, so an edit rebuilds only what changed.
+[profile.fast]
+inherits = "release"
+incremental = true
+
+[profile.fast.package.nexus-desktop-gpui]
+opt-level = 1
+codegen-units = 256
+
+# Shipped builds (`packaging/`): thin LTO across every crate, 16 codegen units, no debug info, symbols stripped.
+# Fat LTO with one codegen unit compiled the app crate on one core: 19.7 minutes of the 8-core Windows release
+# build, against 5.2 with these settings, for packages 1 to 2.5% larger. Panics still unwind: `abort`
+# would end the app on a panic in any background thread.
+[profile.dist]
+inherits = "release"
+lto = "thin"
+codegen-units = 16
+debug = false
+strip = "symbols"
+
+# nexus-host's release build (`cargo build --profile host -p nexus-host`, the release workflow): thin LTO, stripped, and a panic ends the process.
+[profile.host]
+inherits = "release"
+lto = "thin"
+codegen-units = 4
+debug = false
+strip = true
+panic = "abort"
+
+# Proc macros and build scripts stay unstripped: macOS 27's dyld can refuse a dylib that rustc's rust-objcopy
+# stripped ("mis-aligned LINKEDIT string pool").
+[profile.host.build-override]
+strip = false
+
+# A dev build of the app installs nexus-host on a server under `dev-<sha256 of nexus-host>`, and hashes that binary
+# (~250 MB in debug) on every connect. Unoptimized, that takes 5 to 8 s each time.
+[profile.dev.package.sha2]
+opt-level = 3

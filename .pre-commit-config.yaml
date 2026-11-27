@@ -1,0 +1,18 @@
+# Local hooks for contributors (https://pre-commit.com). Install once with `pre-commit install`.
+# The leak gate's `staged` mode runs gitleaks on the lines you are about to commit, with
+# .github/oss-leak-gate/gitleaks.toml. CI runs the full scan on every pull request (.github/workflows/leak-gate.yml).
+repos:
+  - repo: local
+    hooks:
+      - id: leak-gate
+        name: leak gate (gitleaks, staged changes)
+        entry: python3 .github/scripts/leak_gate.py staged
+        language: system
+        pass_filenames: false
+        stages: [pre-commit]
+      - id: cargo-fmt
+        name: cargo fmt
+        entry: cargo fmt --all -- --check
+        language: system
+        types: [rust]
+        pass_filenames: false

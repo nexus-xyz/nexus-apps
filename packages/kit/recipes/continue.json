@@ -1,0 +1,38 @@
+{
+  "schema": "nexus-recipe/1",
+  "id": "continue",
+  "kind": "config",
+  "tool": "Continue",
+  "title": "Continue through Nexus Gateway",
+  "description": "Point Continue at Nexus Gateway with a file of its own and a Nexus API key, so its model calls are metered and recorded on your organization's key.",
+  "route": "gateway",
+  "config": {
+    "path": "~/.continue/models/nexus.yaml",
+    "contents": "name: Nexus Gateway\nversion: 1.0.0\nschema: v1\nmodels:\n  - name: Nexus Gateway gpt-6-luna\n    provider: openai\n    model: openai/gpt-6-luna\n    apiBase: %CORE_URL%/v1\n    apiKey: ${{ secrets.NEXUS_API_KEY }}\n    roles:\n      - chat\n      - edit\n      - apply\n",
+    "keyVariable": "NEXUS_API_KEY"
+  },
+  "limits": [
+    "Nexus has no launcher for Continue. It writes one model file of its own, and Continue sends that model's calls to Gateway's OpenAI compatible API, `/v1/chat/completions`, with a Nexus API key: reserved, metered, checked against your organization's policy and attributed to you.",
+    "Gateway cannot tell Continue's calls from any other call on that key. `nexus spend` lists them under Nexus Gateway, direct API calls (`core`), not under `agents`, and no agent session groups them.",
+    "These calls run on a provider key your person, team or organization stored. Nexus credit never pays for them: without a key, Gateway refuses the call with `403`.",
+    "The run below uses Continue's command line, `cn`, which reads the file when you pass it. Continue's editor extension reads the same folder on its own, but it reads `NEXUS_API_KEY` from its own environment or from `~/.continue/.env`, and no run has shown it yet.",
+    "The API key works until you revoke it in Nexus UI, and anyone holding it spends as you. Keep it out of files and shell history."
+  ],
+  "steps": [
+    { "id": "install_cli", "who": "you", "text": "Install the nexus CLI. It needs Node.js 22.6 or later and curl. If the installer says its folder is not on your PATH, add the line it prints to your shell's profile, then open a new terminal.", "command": "curl -fsSL %CORE_URL%/install.sh | bash" },
+    { "id": "nexus_login", "who": "you", "text": "Sign in to Nexus and approve the code in Nexus UI. The code expires after ten minutes.", "command": "nexus auth login" },
+    { "id": "api_key", "who": "you", "text": "In Nexus UI, open Settings, then Keys, and create a key named `continue`. It is shown once: copy it." },
+    { "id": "install", "who": "you", "text": "Install Continue's command line. Nexus never installs it for you. If `cn` is not found afterwards, add npm's global folder, `$(npm prefix -g)/bin`, to your PATH.", "command": "npm i -g @continuedev/cli" },
+    { "id": "provider_key", "who": "admin", "text": "If `nexus keys list` shows no OpenAI key, add the organization's key, once.", "command": "nexus keys add openai <key>" },
+    { "id": "config", "who": "you", "text": "Write Nexus's model file. It holds your Gateway's URL and the name of the variable with the key, not the key. If the file is already there and differs, the last line keeps a copy first, and stops if it cannot." },
+    { "id": "environment", "who": "you", "text": "Give this terminal the key. After you run the line, paste the API key and press Enter: nothing shows, and the key stays out of your shell history.", "command": "read -rs NEXUS_API_KEY && export NEXUS_API_KEY" },
+    { "id": "run", "who": "you", "text": "Run one prompt through Gateway on the file's small model. It runs from any folder.", "command": "cn --config ~/.continue/models/nexus.yaml -p \"Reply with the single word pong\"" }
+  ],
+  "verify": { "text": "The call shows in your spend under Nexus Gateway, direct API calls, and first in its recent calls.", "command": "nexus spend" },
+  "test": {
+    "features": ["One prompt through Gateway's `/v1/chat/completions` by Continue's command line and the steps above, recorded in `nexus spend` under direct API calls"]
+  },
+  "claim": { "state": "tested", "registerRow": null },
+  "owner": "factory-services-frontend-capabilities-integrations-capabilities",
+  "retireWhen": "Gateway drops its OpenAI compatible `/v1/chat/completions`, or Continue stops reading model files from `~/.continue/models/`."
+}

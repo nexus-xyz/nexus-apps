@@ -1,0 +1,17 @@
+{
+  "name": "review_local",
+  "description": "Review the working tree's change against its merge base with the remote default branch, before a pull request, with Nexus Review: the repository's own rules, read at the merge base, as a pull request review reads them. Posts nothing; spends your model budget. Answers the findings (path, lines, severity, title, detail) and whether one would fail the check. Sends the changed files to Nexus Review, and can take several minutes: it answers when the run ends.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "path": { "type": "string", "description": "The repository's folder, inside the one nexus mcp runs in; default: that folder" },
+      "repo": { "type": "string", "description": "owner/name; default: the origin remote's" },
+      "model": { "type": "string", "description": "A model for every review slot of this run" },
+      "exclude": { "type": "array", "items": { "type": "string" }, "description": "Paths or folders left out" }
+    }
+  },
+  "annotations": { "readOnlyHint": false },
+  "refusals": {
+    "path_outside": "path must name a folder inside the one nexus mcp runs in: no absolute path, no .., no link out of it"
+  }
+}
