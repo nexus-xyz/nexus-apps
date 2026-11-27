@@ -23,7 +23,7 @@ pub(crate) use dispatch::Dispatch;
 pub(crate) use retention::RetainedSharedTerminals;
 // The Commands pane's parts, which a session's shells use before it starts (`terminals/commands.rs`).
 pub(crate) use pane::{frame as pane_frame, item as pane_item};
-pub(crate) use rows::{ROW, ROW_RADIUS, row_button};
+pub(crate) use rows::{ROW, ROW_RADIUS, folder_slot, row_button};
 pub(crate) type Guard = std::sync::Arc<dyn Fn() -> bool + Send + Sync>;
 use crate::pages::ui;
 use crate::workspace::glyph;
@@ -46,6 +46,9 @@ use std::{
 struct Entry {
     id: String,
     name: String,
+    /// A shell the person types into, not one command: its `command` is only the words "Interactive shell".
+    #[serde(default)]
+    interactive: bool,
     command: String,
     reason: Option<String>,
     cwd: String,

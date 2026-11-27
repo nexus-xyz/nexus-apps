@@ -13,7 +13,7 @@ use super::{MAX_SPLIT, TerminalSet};
 use crate::pages::ui;
 use crate::palette::Palette;
 use crate::side::INSET;
-use crate::side::shared_terminals::{ROW, ROW_RADIUS, pane_frame, pane_item, row_button};
+use crate::side::shared_terminals::{ROW, ROW_RADIUS, folder_slot, pane_frame, pane_item, row_button};
 use crate::side::well;
 use crate::workspace::glyph;
 
@@ -141,7 +141,7 @@ impl TerminalSet {
         inset(pane_frame(vec![toolbar(self.groups.len(), new_shell, palette)], body))
     }
 
-    /// A terminal as a command's row: chevron, running mark, name, "Interactive shell", Split, Maximize and Stop;
+    /// A terminal as a command's row: chevron, running mark, name, folder, Split, Maximize and Stop;
     /// open, its shells in their well.
     fn render_command_row(
         &self,
@@ -193,16 +193,7 @@ impl TerminalSet {
                     .text_color(palette.foreground)
                     .child(group.name.clone()),
             )
-            .child(
-                div()
-                    .flex_1()
-                    .min_w(px(0.))
-                    .truncate()
-                    .font_family(ui::MONO)
-                    .text_size(px(12.))
-                    .text_color(palette.faint)
-                    .child("Interactive shell"),
-            )
+            .child(folder_slot(&self.dir.to_string_lossy(), &[], palette))
             .when(split > 1, |row| {
                 row.child(
                     div()
@@ -270,14 +261,8 @@ impl TerminalSet {
             .pr(px(8.))
             .pt(px(2.))
             .pb(px(well::FOOT))
-            .child(
-                h_flex()
-                    .items_start()
-                    .gap(px(4.))
-                    .child(ui::note("Folder:", palette))
-                    .child(ui::note(self.dir.display().to_string(), palette).flex_1().min_w(px(0.)))
-                    .children(well::hidden_note(hidden, palette)),
-            )
+            // The row shows the folder; a maximized well notes the rows it hides.
+            .children(well::hidden_note(hidden, palette))
             .child(self.render_well(ix, palette, window, cx));
         v_flex()
             .w_full()
