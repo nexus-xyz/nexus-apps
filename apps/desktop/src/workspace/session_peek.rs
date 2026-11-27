@@ -285,7 +285,11 @@ impl Workspace {
                 card.child(
                     h_flex()
                         .gap(px(6.))
-                        .child(status_mark(&format!("peek-{}", session.id), mark, palette))
+                        // The card is built in its row, while the list collects its moving marks, but it is drawn
+                        // over the overlay that moves them: its mark moves where it is drawn.
+                        .child(super::sidebar_marks::in_place_while(true, || {
+                            status_mark(&format!("peek-{}", session.id), mark, palette)
+                        }))
                         .child(state),
                 )
             })
