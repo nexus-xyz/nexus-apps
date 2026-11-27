@@ -1,8 +1,8 @@
 # The commit-msg hook that a Nexus session adds through git config (hook.nexus-commit-trailer, git 2.54 and later).
-# It marks a commit made in the session with a Co-authored-by trailer for Nexus, in place of the one Claude Code adds
-# for Anthropic. GitHub keeps the trailer when it squashes a pull request, so Nexus can count the merged work that
-# came from a Nexus session. Git runs it as a shell command with the trailer, then the message file. It never fails a
-# commit, and it changes nothing when in doubt.
+# It marks a commit made in the session with a Co-authored-by trailer for Nexus. It only adds: every other trailer
+# stays, the one Claude Code adds for Anthropic included. GitHub keeps the trailer when it squashes a pull request, so
+# Nexus can count the merged work that came from a Nexus session. Git runs it as a shell command with the trailer,
+# then the message file. It never fails a commit, and it changes nothing when in doubt.
 # No single quotes and no exclamation marks in this file: it travels quoted in GIT_CONFIG_PARAMETERS.
 nexus_commit_trailer() {
   trailer="$1"
@@ -35,16 +35,7 @@ nexus_commit_trailer() {
     done <"$message" | git stripspace --strip-comments 2>/dev/null
   )
   [ -n "$body" ] || return 0
-  # Nexus is the co-author, not the agent it ran: the trailer Claude Code adds for Anthropic goes. A person named as
-  # a co-author stays.
-  # A fixed path can point to another file. Create a private temporary file instead.
-  kept=$(mktemp "$message.nexus.XXXXXX" 2>/dev/null) || return 0
-  while IFS= read -r line || [ -n "$line" ]; do
-    case "$line" in
-      [Cc][Oo]-[Aa][Uu][Tt][Hh][Oo][Rr][Ee][Dd]-[Bb][Yy]:*"<noreply@anthropic.com>"*) ;;
-      *) printf "%s\n" "$line" ;;
-    esac
-  done <"$message" >"$kept" && mv -f "$kept" "$message" || rm -f "$kept"
+  # Nexus joins the co-authors already named: the agent it ran (Claude Code adds one for Anthropic) and any person.
   git interpret-trailers --in-place --no-divider --where end --if-exists addIfDifferent --if-missing add \
     --trailer "$trailer" "$message" >/dev/null 2>&1
   return 0
