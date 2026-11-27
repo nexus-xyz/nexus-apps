@@ -599,7 +599,7 @@ fn load_or_create(gateway: &str) -> Result<(DeviceKey, bool), String> {
         None => {
             let key = DeviceKey::generate();
             crate::keychain::save_device_key(gateway, &e2e::b64u(&key.secret_bytes()[..]))
-                .map_err(|_| "Nexus did not save this computer's device key.".to_string())?;
+                .map_err(|error| format!("Nexus did not save this computer's device key: {error}"))?;
             Ok((key, true))
         }
     }
