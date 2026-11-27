@@ -1,3 +1,6 @@
+// Nexus: the parts whose comments name zui are ported from zui (https://github.com/zeronsh/zui),
+// Copyright 2022 - 2025 Zed Industries, Inc., licensed under the Apache License, Version 2.0.
+// Modified by Nexus Laboratories, Inc. See NOTICE.
 use crate::metal_atlas::MetalAtlas;
 use anyhow::{Context as _, Result};
 use block2::RcBlock;

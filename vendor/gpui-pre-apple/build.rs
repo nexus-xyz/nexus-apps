@@ -1,3 +1,6 @@
+// Nexus: the parts whose comments name zui are ported from zui (https://github.com/zeronsh/zui),
+// Copyright 2022 - 2025 Zed Industries, Inc., licensed under the Apache License, Version 2.0.
+// Modified by Nexus Laboratories, Inc. See NOTICE.
 // Modified for gpui-pre (snapshot of zed@f816e1f): the gpui sources it reads are vendored under `vendor/gpui`.
 #![allow(clippy::disallowed_methods, reason = "build scripts are exempt")]
 

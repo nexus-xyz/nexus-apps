@@ -1,3 +1,5 @@
+// Ported from zui (https://github.com/zeronsh/zui), Copyright 2022 - 2025 Zed Industries, Inc.,
+// licensed under the Apache License, Version 2.0. Modified by Nexus Laboratories, Inc. See NOTICE.
 //! Nexus (new file): backdrop blur (frosted glass) for the D3D11 renderer, `Window::paint_backdrop_blur`. Ported from
 //! zui (<https://github.com/zeronsh/zui>, Apache-2.0, Copyright Zed Industries),
 //! `crates/gpui_windows/src/directx_renderer/backdrop.rs`. The region, scratch and kernel math is GPUI's shared

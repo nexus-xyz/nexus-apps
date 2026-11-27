@@ -1,6 +1,6 @@
 # Trademarks
 
-This page covers everything in this repository: the desktop app, the `nexus` command-line tool, the mobile app and the
+This page covers everything in this repository: the desktop app, the `nexus` command-line tool, and the
 shared code. The source code is licensed under the MIT license. You can use, change and share it under that license.
 
 The license covers the code only. It does not give you any rights to our names or logos.

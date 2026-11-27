@@ -1,3 +1,6 @@
+// Nexus: the parts whose comments name zui are ported from zui (https://github.com/zeronsh/zui),
+// Copyright 2022 - 2025 Zed Industries, Inc., licensed under the Apache License, Version 2.0.
+// Modified by Nexus Laboratories, Inc. See NOTICE.
 // Modified for gpui-pre (snapshot of zed@f816e1f): adapt device queues and sRGB detection to wgpu 30.0.1.
 use crate::{CompositorGpuHint, DeviceErrorState, WgpuAtlas, WgpuContext};
 use anyhow::{Context as _, Result};

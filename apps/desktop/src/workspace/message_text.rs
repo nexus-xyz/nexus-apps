@@ -1,3 +1,4 @@
+// Adapted from longbridge/gpui-kit (Apache-2.0); modified by Nexus Laboratories, Inc.
 //! Literal message selection and the shared selection context menu.
 
 use std::ops::Range;

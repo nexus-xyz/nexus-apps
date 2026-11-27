@@ -1,3 +1,6 @@
+// Nexus: the parts whose comments name zui are ported from zui (https://github.com/zeronsh/zui),
+// Copyright 2022 - 2025 Zed Industries, Inc., licensed under the Apache License, Version 2.0.
+// Modified by Nexus Laboratories, Inc. See NOTICE.
 #include "alpha_correction.hlsl"
 
 cbuffer GlobalParams: register(b0) {
