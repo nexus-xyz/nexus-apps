@@ -65541,7 +65541,7 @@
           "os",
           "arch"
         ],
-        "description": "The open-source desktop app's one usage event: the field list of desktop-gpui's `oss/community/PRIVACY.md`.",
+        "description": "The open-source desktop app's one usage event: the field list of the desktop app's `PRIVACY.md`.",
         "properties": {
           "install_id": {
             "type": "string",
