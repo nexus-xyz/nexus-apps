@@ -77,7 +77,7 @@ fn catalog_entry(entry: &AgentEntry) -> Value {
 pub fn offline_agent_access() -> Value {
     let agents: Vec<Value> = Agent::ALL
         .into_iter()
-        .filter(|agent| agent.entry().session.cli_launcher)
+        .filter(|agent| agent.entry().session.has_cli_launcher())
         .map(|agent| catalog_entry(agent.entry()))
         .collect();
     json!({ "agentSubscriptions": true, "agents": agents })

@@ -15,6 +15,7 @@ mod antigravity;
 mod claude;
 mod codex;
 mod cursor;
+mod grok;
 mod nexus;
 mod opencode;
 

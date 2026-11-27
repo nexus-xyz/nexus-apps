@@ -17,6 +17,7 @@ mod antigravity;
 mod claude;
 mod codex;
 mod cursor;
+mod grok;
 mod opencode;
 
 pub use antigravity::{antigravity_login, antigravity_settings};

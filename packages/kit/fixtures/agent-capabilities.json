@@ -185,6 +185,43 @@
         "sessionLog": false,
         "promptArgument": false
       }
+    },
+    {
+      "access": {
+        "agent": "grok",
+        "name": "Grok",
+        "install": "curl -fsSL https://x.ai/cli/install.sh | bash",
+        "route": "subscription",
+        "from": "default",
+        "routes": [
+          {
+            "route": "gateway",
+            "access": null,
+            "available": false,
+            "reason": "Grok runs only on your Grok plan through Nexus for now"
+          },
+          {
+            "route": "subscription",
+            "access": "subscription",
+            "available": true,
+            "plan": "Grok",
+            "vendor": "xAI",
+            "login": "grok login",
+            "loginStatus": "grok"
+          }
+        ]
+      },
+      "executable": "grok",
+      "cliLauncher": false,
+      "configuredProvider": null,
+      "logout": "grok logout",
+      "resume": "--resume",
+      "capabilities": {
+        "gateway": null,
+        "usageReporting": null,
+        "sessionLog": false,
+        "promptArgument": false
+      }
     }
   ]
 }

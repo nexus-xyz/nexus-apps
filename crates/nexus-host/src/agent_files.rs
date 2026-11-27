@@ -168,7 +168,8 @@ impl AgentFiles {
             Some(
                 nexus_client::agent_entries::Agent::Antigravity
                 | nexus_client::agent_entries::Agent::Cursor
-                | nexus_client::agent_entries::Agent::Opencode,
+                | nexus_client::agent_entries::Agent::Opencode
+                | nexus_client::agent_entries::Agent::Grok,
             )
             | None => {}
         }

@@ -516,7 +516,7 @@ fn configure_memory_launch(
 
 /// A catalog entry can ship before its local session integration.
 pub(crate) fn launch_available(agent: Agent) -> bool {
-    agent.entry().session.cli_launcher
+    agent.entry().session.has_cli_launcher()
 }
 
 pub fn launch_agent(agent: Agent, argv: &[String], ctx: &Context, config: &Config, style: &Style) -> Result<i32> {
@@ -873,7 +873,7 @@ pub fn launch_agent(agent: Agent, argv: &[String], ctx: &Context, config: &Confi
         Agent::Codex => codex_resumed(&forwarded),
         Agent::Antigravity => antigravity_resumed(&forwarded),
         Agent::Cursor => resumed_with(&forwarded, "--resume"),
-        Agent::Opencode => Conversation::Unknown,
+        Agent::Opencode | Agent::Grok => Conversation::Unknown,
     };
     if let Conversation::New(id) = &conversation {
         forwarded.splice(0..0, ["--session-id".to_string(), id.clone()]);
@@ -918,7 +918,7 @@ pub fn launch_agent(agent: Agent, argv: &[String], ctx: &Context, config: &Confi
         Agent::Claude => {
             launch_env.insert("CLAUDE_CODE_DISABLE_ARTIFACT".into(), "1".into());
         }
-        Agent::Codex | Agent::Antigravity | Agent::Cursor | Agent::Opencode => {}
+        Agent::Codex | Agent::Antigravity | Agent::Cursor | Agent::Opencode | Agent::Grok => {}
     }
     let launch_args = prompt_in_file_for_store(
         &bin,
@@ -1043,7 +1043,7 @@ pub fn launch_agent(agent: Agent, argv: &[String], ctx: &Context, config: &Confi
     let conversation = match conversation {
         Conversation::New(id) | Conversation::Known(id) => Some(id),
         Conversation::Unknown => match agent {
-            Agent::Claude | Agent::Cursor | Agent::Opencode => None,
+            Agent::Claude | Agent::Cursor | Agent::Opencode | Agent::Grok => None,
             Agent::Codex => agent_profile(ctx, agent).and_then(|home| codex_conversation(&home, &cwd, started_at)),
             Agent::Antigravity => agent_profile(ctx, agent)
                 .and_then(|profile| antigravity_conversation(&profile, started_at, continues_latest(&launch_args))),
@@ -1401,7 +1401,7 @@ fn check_plan_login(agent: Agent, login: Option<Login>) -> std::result::Result<O
                 js_string(plan.get("login")),
                 match agent {
                     Agent::Claude => ", not Console",
-                    Agent::Codex | Agent::Antigravity | Agent::Cursor | Agent::Opencode => "",
+                    Agent::Codex | Agent::Antigravity | Agent::Cursor | Agent::Opencode | Agent::Grok => "",
                 }
             ),
         )),
@@ -1446,6 +1446,7 @@ fn check_plan_login(agent: Agent, login: Option<Login>) -> std::result::Result<O
                 Agent::Antigravity => "agy -p /usage",
                 Agent::Cursor => "cursor-agent status",
                 Agent::Opencode => "opencode auth list",
+                Agent::Grok => agent.entry().sign_in.login_status,
             }
         ))),
     }
@@ -1478,7 +1479,7 @@ fn launch_line(
         let usage = match agent {
             Agent::Claude | Agent::Codex => format!("{} reports their usage", agent.entry().identity.name),
             Agent::Antigravity => format!("usage reported when {command} exits"),
-            Agent::Cursor | Agent::Opencode => "usage unavailable".to_string(),
+            Agent::Cursor | Agent::Opencode | Agent::Grok => "usage unavailable".to_string(),
         };
         return format!(
             "{} Nexus Gateway {} session {session_id} {} {command} on your {} subscription{}{from} {} model calls go straight to {} (not metered or checked by Gateway; {usage})",
@@ -1878,7 +1879,7 @@ fn launcher_help(
             ),
             format!("  {core_url}/v1/openai/v1, the Responses API); ~/.codex/config.toml is not changed."),
         ],
-        Agent::Antigravity | Agent::Cursor | Agent::Opencode => Vec::new(),
+        Agent::Antigravity | Agent::Cursor | Agent::Opencode | Agent::Grok => Vec::new(),
     };
     let route = match access {
         Some(access) => format!(

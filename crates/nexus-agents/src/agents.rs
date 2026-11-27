@@ -4,10 +4,12 @@ mod antigravity;
 mod claude;
 mod codex;
 mod cursor;
+mod grok;
 mod opencode;
 
 pub use antigravity::Antigravity;
 pub use claude::Claude;
 pub use codex::Codex;
 pub use cursor::Cursor;
+pub use grok::Grok;
 pub use opencode::Opencode;

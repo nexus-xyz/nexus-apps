@@ -12,7 +12,7 @@
 mod agents;
 mod entry;
 
-pub use agents::{Antigravity, Claude, Codex, Cursor, Opencode};
+pub use agents::{Antigravity, Claude, Codex, Cursor, Grok, Opencode};
 pub use entry::{AgentEntry, Billing, GatewayBinding, Identity, Install, Platform, Profile, Session, SignIn};
 
 use serde::{Deserialize, Serialize};
@@ -58,6 +58,7 @@ agents! { $
     Antigravity,
     Cursor,
     Opencode,
+    Grok,
 }
 
 /// The trait every coding agent's type implements in this crate (`src/agents/<agent>.rs`): it gives that agent's
@@ -109,7 +110,7 @@ impl Agent {
     pub fn commands(sep: &str) -> String {
         Agent::ALL
             .into_iter()
-            .filter(|agent| agent.entry().session.cli_launcher)
+            .filter(|agent| agent.entry().session.has_cli_launcher())
             .map(Agent::command)
             .collect::<Vec<_>>()
             .join(sep)
@@ -137,6 +138,7 @@ mod tests {
             Agent::Antigravity => 2,
             Agent::Cursor => 3,
             Agent::Opencode => 4,
+            Agent::Grok => 5,
         }
     }
 
@@ -162,7 +164,7 @@ mod tests {
         }
         assert_eq!(
             Agent::ALL.map(Agent::as_str),
-            ["claude", "codex", "antigravity", "cursor", "opencode"]
+            ["claude", "codex", "antigravity", "cursor", "opencode", "grok"]
         );
     }
 
@@ -175,7 +177,7 @@ mod tests {
             assert_eq!(Agent::parse_named(agent.as_str()), Some(agent));
         }
         assert_eq!(Agent::from_command("antigravity"), None);
-        assert_eq!(Agent::ids("|"), "claude|codex|antigravity|cursor|opencode");
+        assert_eq!(Agent::ids("|"), "claude|codex|antigravity|cursor|opencode|grok");
         assert_eq!(Agent::commands("|"), "claude|codex|agy|cursor-agent");
     }
 

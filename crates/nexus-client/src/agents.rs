@@ -216,7 +216,7 @@ mod tests {
     fn no_agent_inherits_the_gateway_the_wrapper_set() {
         for agent in Agent::ALL {
             for route in [Route::Gateway, Route::Subscription] {
-                let (_, env) = agent_launch(
+                let (args, env) = agent_launch(
                     agent,
                     LaunchOptions {
                         core_url: "https://core.example",
@@ -227,7 +227,7 @@ mod tests {
                         model_catalog: None,
                         web_search: false,
                         route,
-                        args: Vec::new(),
+                        args: v(&["sample prompt"]),
                         env: map(&[
                             ("NEXUS_URL", "https://nexus.example"),
                             ("NEXUS_UI_URL", "https://app.nexus.example"),
@@ -238,7 +238,13 @@ mod tests {
                 let route = route.as_str();
                 assert!(!env.contains_key("NEXUS_URL"), "{agent} on {route}");
                 assert!(!env.contains_key("NEXUS_UI_URL"), "{agent} on {route}");
-                assert_eq!(env["NEXUS_TEAM"], "platform", "{agent} on {route}");
+                if agent.entry().session.platforms.is_empty() {
+                    // A catalog-only agent answers the capability probe without starting a session.
+                    assert_eq!(args, ["--help"], "{agent} on {route}");
+                    assert!(env.is_empty(), "{agent} on {route}");
+                } else {
+                    assert_eq!(env["NEXUS_TEAM"], "platform", "{agent} on {route}");
+                }
             }
         }
     }

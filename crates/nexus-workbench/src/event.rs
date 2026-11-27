@@ -139,6 +139,7 @@ impl TryFrom<nexus_agents::Agent> for SessionAgent {
             nexus_agents::Agent::Cursor => Ok(SessionAgent::Cursor),
             #[cfg(feature = "opencode")]
             nexus_agents::Agent::Opencode => Ok(SessionAgent::Opencode),
+            nexus_agents::Agent::Grok => Err(agent),
             #[cfg(not(feature = "cursor"))]
             nexus_agents::Agent::Cursor => Err(agent),
             #[cfg(not(feature = "opencode"))]
@@ -1250,6 +1251,11 @@ mod tests {
             .filter(|&agent| cfg!(feature = "cursor") || agent != Cursor)
             .filter(|&agent| cfg!(feature = "opencode") || agent != Opencode)
         {
+            if coding.entry().session.platforms.is_empty() {
+                assert_eq!(SessionAgent::try_from(coding), Err(coding));
+                assert_eq!(SessionAgent::parse(coding.as_str()), None);
+                continue;
+            }
             let agent = SessionAgent::try_from(coding).expect("local session agent");
             assert_eq!(agent.coding(), Some(coding));
             assert_eq!(agent.as_str(), coding.as_str());

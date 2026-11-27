@@ -342,7 +342,7 @@ pub fn list(env: &dyn Fn(&str) -> Option<String>, limit: usize) -> Vec<LocalSess
                 })
                 .unwrap_or_default(),
             // Antigravity keeps each conversation in a database this module does not read yet: none are listed.
-            Agent::Antigravity | Agent::Cursor | Agent::Opencode => Vec::new(),
+            Agent::Antigravity | Agent::Cursor | Agent::Opencode | Agent::Grok => Vec::new(),
         };
         files.extend(found.into_iter().map(|(at, path)| (at, path, agent)));
     }
@@ -352,7 +352,7 @@ pub fn list(env: &dyn Fn(&str) -> Option<String>, limit: usize) -> Vec<LocalSess
         .filter_map(|(modified, path, agent)| match agent {
             Agent::Claude => claude_session(&path, modified),
             Agent::Codex => codex_session(&path, modified),
-            Agent::Antigravity | Agent::Cursor | Agent::Opencode => None,
+            Agent::Antigravity | Agent::Cursor | Agent::Opencode | Agent::Grok => None,
         })
         .take(limit)
         .collect()
@@ -383,7 +383,7 @@ pub fn find(env: &dyn Fn(&str) -> Option<String>, agent: Agent, id: &str) -> Opt
                 })
                 .find_map(|(modified, path)| codex_session(&path, modified).filter(|session| session.id == id))
         }
-        Agent::Antigravity | Agent::Cursor | Agent::Opencode => None,
+        Agent::Antigravity | Agent::Cursor | Agent::Opencode | Agent::Grok => None,
     }
 }
 

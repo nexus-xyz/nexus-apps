@@ -34,7 +34,7 @@ pub(crate) fn prose_list(items: &[String], last: &str) -> String {
 pub(crate) fn launchers() -> impl Iterator<Item = Agent> {
     Agent::ALL
         .into_iter()
-        .filter(|agent| agent.entry().session.cli_launcher)
+        .filter(|agent| agent.entry().session.has_cli_launcher())
 }
 
 /// Each launcher's command (`nexus claude, nexus codex and nexus agy`).
@@ -163,7 +163,7 @@ impl Agents<'_> {
     fn local(&self, agent: &str) -> LocalAgent {
         // Only the agents this CLI launches are looked for: a name from Gateway never runs a program here. A
         // NEXUS_<AGENT>_BIN that names no file shows as not installed; `nexus claude` names the file.
-        let Some(known) = Agent::parse(agent).filter(|agent| agent.entry().session.cli_launcher) else {
+        let Some(known) = Agent::parse(agent).filter(|agent| agent.entry().session.has_cli_launcher()) else {
             return LocalAgent {
                 agent: agent.into(),
                 installed: false,
@@ -234,7 +234,7 @@ impl Agents<'_> {
             .filter(|entry| {
                 s(entry, "agent")
                     .and_then(Agent::parse)
-                    .is_none_or(|agent| agent.entry().session.cli_launcher)
+                    .is_none_or(|agent| agent.entry().session.has_cli_launcher())
             })
             .map(|entry| {
                 report(
@@ -285,7 +285,7 @@ impl Agents<'_> {
         let agent = args
             .first()
             .and_then(|agent| Agent::parse_named(agent))
-            .filter(|agent| agent.entry().session.cli_launcher);
+            .filter(|agent| agent.entry().session.has_cli_launcher());
         let route = args.get(1).map(String::as_str).filter(|route| !route.is_empty());
         let (Some(agent), Some(route)) = (agent, route) else {
             return Err(CliError::usage(
