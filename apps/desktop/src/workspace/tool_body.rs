@@ -75,6 +75,9 @@ impl Workspace {
         let View::Code(view) = &self.view else {
             return div().into_any_element();
         };
+        if let Some(handed) = call.output.as_ref().and_then(|output| output.handoff.as_ref()) {
+            return self.render_handoff(ix, handed, palette, cx);
+        }
         let open = view.open_tools.contains(&call.id);
         let running = self.code_running();
         let background =

@@ -16,7 +16,6 @@ use std::time::{Duration, Instant};
 use gpui_kit::prelude::*;
 use gpui_kit::*;
 
-use super::sidebar::ROW;
 use crate::motion;
 use crate::palette::Palette;
 
@@ -46,7 +45,7 @@ pub(super) fn delete_failed_text(title: &str, error: &str) -> String {
 /// How to draw a row now.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(super) struct Frame {
-    /// The row's height, as a share of `ROW`.
+    /// The row's height, as a share of its full height.
     pub height: f32,
     /// The content's opacity.
     pub content: f32,
@@ -171,17 +170,24 @@ impl RowExits {
         (frame.leaving || frame.moving).then_some(frame)
     }
 
-    /// The height of the rows of `ids`, in pixels: `ROW` each, less what the leaving ones have folded.
-    pub fn height<'a>(&self, ids: impl IntoIterator<Item = &'a str>, now: Instant, reduced: bool) -> f32 {
-        ids.into_iter()
-            .map(|id| self.frame(id, now, reduced).map_or(1., |frame| frame.height) * ROW)
+    /// The combined height of the rows, including captions, as leaving rows fold.
+    pub fn height<'a>(&self, rows: impl IntoIterator<Item = (&'a str, f32)>, now: Instant, reduced: bool) -> f32 {
+        rows.into_iter()
+            .map(|(id, height)| self.frame(id, now, reduced).map_or(1., |frame| frame.height) * height)
             .sum()
     }
 }
 
 /// Draw `row` as `frame`: its slot at `frame.height`, the tint and the ring behind and around it, its content faded
 /// and shifted. A leaving row takes no pointer, so a second click cannot open it or its menu.
-pub(super) fn draw(row: AnyElement, id: &str, frame: Frame, palette: Palette, window: &mut Window) -> AnyElement {
+pub(super) fn draw(
+    row: AnyElement,
+    id: &str,
+    height: f32,
+    frame: Frame,
+    palette: Palette,
+    window: &mut Window,
+) -> AnyElement {
     if frame.moving {
         window.request_animation_frame();
     }
@@ -190,7 +196,7 @@ pub(super) fn draw(row: AnyElement, id: &str, frame: Frame, palette: Palette, wi
         .relative()
         .flex_none()
         .w_full()
-        .h(px(ROW * frame.height))
+        .h(px(height * frame.height))
         .when(frame.height < 1., |slot| slot.overflow_hidden())
         .when(frame.tint > 0., |slot| {
             slot.child(

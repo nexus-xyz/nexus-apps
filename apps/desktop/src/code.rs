@@ -199,6 +199,8 @@ pub struct CodeSession {
     /// The session that started it, as a linked session: the sidebar nests it under that one
     /// (`nexus_workbench::session_tree`).
     pub parent: Option<String>,
+    /// The session that handed its work to this one (`handoff_session`): the sidebar says "from a Codex session".
+    pub handoff_from: Option<nexus_workbench::event::HandoffFrom>,
     /// Its agent can move a running command to the background (`capabilities.background` holds "shell").
     pub background: bool,
     /// Its agent left work running past its turn (`nexus_workbench::attention::busy_in_background`).
@@ -255,6 +257,7 @@ impl CodeSession {
             interrupted: thread.status == ThreadStatus::Interrupted,
             live: thread.capabilities.is_some(),
             parent: thread.parent_thread_id.clone(),
+            handoff_from: thread.handoff_from.clone(),
             background: thread
                 .capabilities
                 .as_ref()
@@ -528,9 +531,32 @@ pub struct ToolCall {
 /// A call's result: its text (the core caps it at 64 KiB), and whether it failed or was cut.
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct ToolOutput {
+    pub handoff: Option<HandedOff>,
     pub text: String,
     pub error: bool,
     pub truncated: bool,
+}
+
+/// The successor named in a completed Nexus handoff tool result.
+#[derive(Debug, Clone, PartialEq)]
+pub struct HandedOff {
+    pub session_id: String,
+    pub title: String,
+    pub agent: SessionAgent,
+}
+
+impl HandedOff {
+    fn parse(tool: &str, text: &str, failed: bool) -> Option<Self> {
+        if failed || !matches!(tool, "handoff_session" | "mcp__nexus_app__handoff_session") {
+            return None;
+        }
+        let answer: Value = serde_json::from_str(text).ok()?;
+        Some(Self {
+            session_id: answer.get("session_id")?.as_str()?.to_owned(),
+            title: answer.get("title")?.as_str()?.to_owned(),
+            agent: SessionAgent::parse(answer.get("agent")?.as_str()?)?,
+        })
+    }
 }
 
 /// One step of the agent's plan.
@@ -1270,13 +1296,17 @@ fn read_blocks(events: impl IntoIterator<Item = (i64, i64, WbEvent)>) -> (Vec<Bl
                 parent,
             } => {
                 if let Some(Block::Tool {
-                    images: shown, call, ..
+                    images: shown,
+                    call,
+                    name,
+                    ..
                 }) = tools
                     .get(&id)
                     .and_then(|ix| blocks.get_mut(*ix).map(|(_, block)| block))
                 {
                     *shown = crate::code_media::tool_images(images);
                     call.output = Some(ToolOutput {
+                        handoff: HandedOff::parse(name, &output, is_error),
                         text: output.clone(),
                         error: is_error,
                         truncated,
@@ -3398,5 +3428,31 @@ mod tests {
         assert_eq!(transcript.blocks[nested].path(), ["agent"]);
         assert!(matches!(transcript.blocks[nested].inner(), Block::Text(text) if text == "Nested"));
         assert!(matches!(transcript.blocks[main], Block::Text(ref text) if text == "Main"));
+    }
+}
+
+#[cfg(test)]
+mod handoff_tests {
+    use super::{HandedOff, SessionAgent};
+    #[test]
+    fn a_handoff_call_names_the_new_session_for_either_agent_and_nothing_else_does() {
+        let answer = r#"{"session_id":"t_new","title":"Fix login","agent":"codex","status":"starting"}"#;
+        let expected = Some(HandedOff {
+            session_id: "t_new".into(),
+            title: "Fix login".into(),
+            agent: SessionAgent::Codex,
+        });
+        assert_eq!(
+            HandedOff::parse("mcp__nexus_app__handoff_session", answer, false),
+            expected
+        );
+        assert_eq!(HandedOff::parse("handoff_session", answer, false), expected);
+        assert_eq!(HandedOff::parse("mcp__nexus_app__start_session", answer, false), None);
+        assert_eq!(
+            HandedOff::parse("handoff_session", answer, true),
+            None,
+            "a refusal is a plain row"
+        );
+        assert_eq!(HandedOff::parse("handoff_session", "not json", false), None);
     }
 }

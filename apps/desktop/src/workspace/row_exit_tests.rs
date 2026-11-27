@@ -1,4 +1,5 @@
 use super::*;
+use crate::workspace::sidebar::ROW;
 use core::prelude::v1::test;
 
 #[test]
@@ -58,10 +59,10 @@ fn a_failed_delete_brings_the_row_back_from_where_it_was() {
 fn the_group_height_follows_the_folding_rows() {
     let start = Instant::now();
     let mut exits = RowExits::default();
-    let ids = ["a", "b", "c"];
-    assert_eq!(exits.height(ids, start, false), 3. * ROW);
+    let ids = [("a", ROW), ("b", ROW + 16.), ("c", ROW)];
+    assert_eq!(exits.height(ids, start, false), 3. * ROW + 16.);
     exits.start("b", start);
-    assert_eq!(exits.height(ids, start, false), 3. * ROW);
+    assert_eq!(exits.height(ids, start, false), 3. * ROW + 16.);
     let folded = start + LEAVE + FOLD;
     assert!((exits.height(ids, folded, false) - 2. * ROW).abs() < 0.01);
 }
