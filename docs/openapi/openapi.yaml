@@ -1,0 +1,832 @@
+# Entry point of the Nexus public API contract. See README.md.
+openapi: 3.1.0
+info:
+  title: Nexus public API
+  version: 1.0.0-draft
+  summary: Gateway endpoints for public clients.
+  description: >
+    The Nexus Gateway endpoints for public clients, including sign-in and self-service OAuth clients.
+
+
+    Read `README.md` next to this file for the rules in plain words. In short:
+
+
+    - Every state-changing `POST` needs an `Idempotency-Key` header. Without one the Gateway answers 428
+    `idempotency_key_required`. Each operation states its rule in `x-idempotency` (`required`, `optional` or `ignored`).
+
+    - A write to an editable resource needs `If-Match` with the `ETag` from your last read (`x-if-match: required`). A
+    stale value gets 412 `version_mismatch`.
+
+    - Every error has the shape of the `Error` schema. Its `code` field lists every documented code in `x-error-codes`,
+    with its HTTP status and whether a retry is safe. Codes tagged `legacy` belong to older routes.
+
+    - Operations marked `x-internal-stability: beta` (the `Billing` and `Cloud machines` tags) are public, but the
+    deprecation windows in `DEPRECATION.md` do not cover them. They can change with a changelog entry and at least 30
+    days' notice.
+
+
+    Sign-in uses the OAuth 2.0 device grant, or the authorization code with PKCE. The Gateway issues no refresh token.
+    See "Sign-in (OAuth 2.0)" in `README.md` for the sign-in flows, OAuth client tiers, and user IDs.
+servers:
+  - url: "{gateway}"
+    description: A Nexus Gateway. The hosted one is the default.
+    variables:
+      gateway:
+        default: https://api.nexus.inc
+        description: The Gateway's base URL, without a trailing slash.
+security:
+  - bearer: []
+tags:
+  - name: Auth
+    description: Sign-in (OAuth 2.0 device grant, and authorization code with PKCE), tokens, agent links.
+  - name: Developer clients
+    description: List, register, and revoke OAuth clients for your forks.
+  - name: Devices
+    description: Trusted devices and their approval.
+  - name: Account
+    description: >-
+      Who you are, the organization you act in, the API description, feature switches, search, feedback and update
+      access.
+  - name: Models
+    description: The model catalog and model calls, including the provider-compatible routes coding agents use.
+  - name: Chat
+    description: >-
+      Chat sessions: messages, attachments, rewind, suggestions, voice, web search, and guest chat for signed-out
+      visitors.
+  - name: Threads
+    description: >-
+      Synced agent threads: list, read, follow, presence, the live stream, sealed events, content keys, and control of a
+      Code session from another device.
+  - name: Computers
+    description: "Your computers: the list, signed presence, encrypted requests between your devices and their live states."
+  - name: Agents
+    description: Coding agent access, sessions and usage reports.
+  - name: Cloud machines
+    description: >-
+      Cloud machines for agent sessions, including the calls the machine's host makes. Beta: not covered by the
+      deprecation windows; see DEPRECATION.md.
+    x-internal-stability: beta
+  - name: Artifacts and pages
+    description: Shared artifacts and their public links, pages, page frames and design systems.
+  - name: Skills
+    description: Skills, the skill library and skill promotions.
+  - name: Connectors
+    description: Connectors and the person's connections to them.
+  - name: Slack
+    description: "The Slack app: installs, the organization's workspace bindings and the channels bound to its teams."
+  - name: GitHub
+    description: The GitHub App and linked repositories.
+  - name: Notifications and presence
+    description: Notifications, push devices and member presence.
+  - name: Organization
+    description: The organization, its members, domains, invitations, settings, provider keys and service accounts.
+  - name: Teams
+    description: Teams and their members.
+  - name: Policies
+    description: Model, agent, connector and chat-write policies, traffic controls, and approvals of one connector call.
+  - name: Billing
+    description: >-
+      The subscription, payment method, credits and receipts. Beta: not covered by the deprecation windows; see
+      DEPRECATION.md.
+    x-internal-stability: beta
+  - name: Usage and budgets
+    description: Spend, analytics, audit and budgets.
+  - name: Sessions
+    description: >-
+      Headless cloud sessions: start one on a cloud machine, read it, send it messages, stop it, take and renew its
+      runner. Beta: not covered by the deprecation windows; see DEPRECATION.md.
+    x-internal-stability: beta
+  - name: Your agent
+    description: >-
+      Your own agent, the one in Slack: asks (streamed as server-sent events), conversations, memory, approvals,
+      errands, projects, watches, the morning brief, the vault and chat writes. Gateway forwards each call to the agent
+      service with your token. Off unless the server turns it on. Beta: not covered by the deprecation windows; see
+      DEPRECATION.md.
+    x-internal-stability: beta
+  - name: Apps
+    description: >-
+      Apps: deploy a folder as an app hosted on Vercel, follow its deployment and cost, cap its monthly hosting, claim
+      it to your own Vercel account, delete it. Off unless the server turns it on. Beta: not covered by the deprecation
+      windows; see DEPRECATION.md.
+    x-internal-stability: beta
+  - name: Routines and jobs
+    description: >-
+      Jobs, a module's verb run in the background: submit one, read its state and result, cancel it. Routines: your own
+      scheduled jobs. Beta: not covered by the deprecation windows; see DEPRECATION.md.
+    x-internal-stability: beta
+paths:
+  /v1/agent-links:
+    $ref: ./paths/auth.yaml#/~1v1~1agent-links
+  /v1/agent-links/{id}:
+    $ref: ./paths/auth.yaml#/~1v1~1agent-links~1{id}
+  /v1/agent/approvals/rules:
+    $ref: ./paths/agent.yaml#/~1v1~1agent~1approvals~1rules
+  /v1/agent/approvals/rules/{id}:
+    $ref: ./paths/agent.yaml#/~1v1~1agent~1approvals~1rules~1{id}
+  /v1/agent/approvals/settings:
+    $ref: ./paths/agent.yaml#/~1v1~1agent~1approvals~1settings
+  /v1/agent/ask:
+    $ref: ./paths/agent.yaml#/~1v1~1agent~1ask
+  /v1/agent/brief/today:
+    $ref: ./paths/agent.yaml#/~1v1~1agent~1brief~1today
+  /v1/agent/context:
+    $ref: ./paths/agent.yaml#/~1v1~1agent~1context
+  /v1/agent/conversations:
+    $ref: ./paths/agent.yaml#/~1v1~1agent~1conversations
+  /v1/agent/conversations/{id}:
+    $ref: ./paths/agent.yaml#/~1v1~1agent~1conversations~1{id}
+  /v1/agent/errands:
+    $ref: ./paths/agent.yaml#/~1v1~1agent~1errands
+  /v1/agent/errands/{id}:
+    $ref: ./paths/agent.yaml#/~1v1~1agent~1errands~1{id}
+  /v1/agent/errands/{id}/handoff:
+    $ref: ./paths/agent.yaml#/~1v1~1agent~1errands~1{id}~1handoff
+  /v1/agent/errands/{id}/messages:
+    $ref: ./paths/agent.yaml#/~1v1~1agent~1errands~1{id}~1messages
+  /v1/agent/intro:
+    $ref: ./paths/agent.yaml#/~1v1~1agent~1intro
+  /v1/agent/intro/seen:
+    $ref: ./paths/agent.yaml#/~1v1~1agent~1intro~1seen
+  /v1/agent/memory:
+    $ref: ./paths/agent.yaml#/~1v1~1agent~1memory
+  /v1/agent/memory/learning:
+    $ref: ./paths/agent.yaml#/~1v1~1agent~1memory~1learning
+  /v1/agent/memory/notes:
+    $ref: ./paths/agent.yaml#/~1v1~1agent~1memory~1notes
+  /v1/agent/memory/notes/{id}:
+    $ref: ./paths/agent.yaml#/~1v1~1agent~1memory~1notes~1{id}
+  /v1/agent/model:
+    $ref: ./paths/agent.yaml#/~1v1~1agent~1model
+  /v1/agent/pause:
+    $ref: ./paths/agent.yaml#/~1v1~1agent~1pause
+  /v1/agent/privacy:
+    $ref: ./paths/agent.yaml#/~1v1~1agent~1privacy
+  /v1/agent/proactivity:
+    $ref: ./paths/agent.yaml#/~1v1~1agent~1proactivity
+  /v1/agent/projects:
+    $ref: ./paths/agent.yaml#/~1v1~1agent~1projects
+  /v1/agent/projects/link:
+    $ref: ./paths/agent.yaml#/~1v1~1agent~1projects~1link
+  /v1/agent/projects/view:
+    $ref: ./paths/agent.yaml#/~1v1~1agent~1projects~1view
+  /v1/agent/revoke:
+    $ref: ./paths/agent.yaml#/~1v1~1agent~1revoke
+  /v1/agent/vault:
+    $ref: ./paths/agent.yaml#/~1v1~1agent~1vault
+  /v1/agent/vault/activity:
+    $ref: ./paths/agent.yaml#/~1v1~1agent~1vault~1activity
+  /v1/agent/vault/asks:
+    $ref: ./paths/agent.yaml#/~1v1~1agent~1vault~1asks
+  /v1/agent/vault/asks/{id}/approve:
+    $ref: ./paths/agent.yaml#/~1v1~1agent~1vault~1asks~1{id}~1approve
+  /v1/agent/vault/asks/{id}/decline:
+    $ref: ./paths/agent.yaml#/~1v1~1agent~1vault~1asks~1{id}~1decline
+  /v1/agent/vault/card:
+    $ref: ./paths/agent.yaml#/~1v1~1agent~1vault~1card
+  /v1/agent/vault/index:
+    $ref: ./paths/agent.yaml#/~1v1~1agent~1vault~1index
+  /v1/agent/vault/logins/{id}:
+    $ref: ./paths/agent.yaml#/~1v1~1agent~1vault~1logins~1{id}
+  /v1/agent/watches:
+    $ref: ./paths/agent.yaml#/~1v1~1agent~1watches
+  /v1/agent/watches/{id}:
+    $ref: ./paths/agent.yaml#/~1v1~1agent~1watches~1{id}
+  /v1/agent/writes/{card}:
+    $ref: ./paths/agent.yaml#/~1v1~1agent~1writes~1{card}
+  /v1/agent/writes/{card}/approve:
+    $ref: ./paths/agent.yaml#/~1v1~1agent~1writes~1{card}~1approve
+  /v1/agent/writes/{card}/decline:
+    $ref: ./paths/agent.yaml#/~1v1~1agent~1writes~1{card}~1decline
+  /v1/agents/access:
+    $ref: ./paths/agents.yaml#/~1v1~1agents~1access
+  /v1/agents/check:
+    $ref: ./paths/agents.yaml#/~1v1~1agents~1check
+  /v1/agents/policy:
+    $ref: ./paths/agents.yaml#/~1v1~1agents~1policy
+  /v1/agents/profiles:
+    $ref: ./paths/agents.yaml#/~1v1~1agents~1profiles
+  /v1/agents/profiles/{id}:
+    $ref: ./paths/agents.yaml#/~1v1~1agents~1profiles~1{id}
+  /v1/agents/route:
+    $ref: ./paths/agents.yaml#/~1v1~1agents~1route
+  /v1/agents/sessions:
+    $ref: ./paths/agents.yaml#/~1v1~1agents~1sessions
+  /v1/agents/sessions/export.csv:
+    $ref: ./paths/agents.yaml#/~1v1~1agents~1sessions~1export.csv
+  /v1/agents/sessions/export.jsonl:
+    $ref: ./paths/agents.yaml#/~1v1~1agents~1sessions~1export.jsonl
+  /v1/agents/sessions/{id}:
+    $ref: ./paths/agents.yaml#/~1v1~1agents~1sessions~1{id}
+  /v1/agents/sessions/{id}/end:
+    $ref: ./paths/agents.yaml#/~1v1~1agents~1sessions~1{id}~1end
+  /v1/agents/sessions/{id}/heartbeat:
+    $ref: ./paths/agents.yaml#/~1v1~1agents~1sessions~1{id}~1heartbeat
+  /v1/agents/sessions/{id}/usage:
+    $ref: ./paths/agents.yaml#/~1v1~1agents~1sessions~1{id}~1usage
+  /v1/analytics/agents:
+    $ref: ./paths/usage.yaml#/~1v1~1analytics~1agents
+  /v1/analytics/chat:
+    $ref: ./paths/usage.yaml#/~1v1~1analytics~1chat
+  /v1/analytics/usage:
+    $ref: ./paths/usage.yaml#/~1v1~1analytics~1usage
+  /v1/analytics/usage/export.csv:
+    $ref: ./paths/usage.yaml#/~1v1~1analytics~1usage~1export.csv
+  /v1/analytics/usage/export.jsonl:
+    $ref: ./paths/usage.yaml#/~1v1~1analytics~1usage~1export.jsonl
+  /v1/anthropic/v1/messages:
+    $ref: ./paths/models.yaml#/~1v1~1anthropic~1v1~1messages
+  /v1/anthropic/v1/messages/count_tokens:
+    $ref: ./paths/models.yaml#/~1v1~1anthropic~1v1~1messages~1count_tokens
+  /v1/anthropic/v1/models:
+    $ref: ./paths/models.yaml#/~1v1~1anthropic~1v1~1models
+  /v1/approvals:
+    $ref: ./paths/policies.yaml#/~1v1~1approvals
+  /v1/approvals/{id}:
+    $ref: ./paths/policies.yaml#/~1v1~1approvals~1{id}
+  /v1/approvals/{id}/cancel:
+    $ref: ./paths/policies.yaml#/~1v1~1approvals~1{id}~1cancel
+  /v1/approvals/{id}/confirm:
+    $ref: ./paths/policies.yaml#/~1v1~1approvals~1{id}~1confirm
+  /v1/approvals/{id}/deny:
+    $ref: ./paths/policies.yaml#/~1v1~1approvals~1{id}~1deny
+  /v1/apps:
+    $ref: ./paths/apps.yaml#/~1v1~1apps
+  /v1/apps/{id}:
+    $ref: ./paths/apps.yaml#/~1v1~1apps~1{id}
+  /v1/apps/{id}/cap:
+    $ref: ./paths/apps.yaml#/~1v1~1apps~1{id}~1cap
+  /v1/apps/{id}/claim:
+    $ref: ./paths/apps.yaml#/~1v1~1apps~1{id}~1claim
+  /v1/artifacts:
+    $ref: ./paths/artifacts.yaml#/~1v1~1artifacts
+  /v1/artifacts/external:
+    $ref: ./paths/artifacts.yaml#/~1v1~1artifacts~1external
+  /v1/artifacts/revoke:
+    $ref: ./paths/artifacts.yaml#/~1v1~1artifacts~1revoke
+  /v1/artifacts/sessions:
+    $ref: ./paths/artifacts.yaml#/~1v1~1artifacts~1sessions
+  /v1/artifacts/sessions/{id}:
+    $ref: ./paths/artifacts.yaml#/~1v1~1artifacts~1sessions~1{id}
+  /v1/artifacts/{id}:
+    $ref: ./paths/artifacts.yaml#/~1v1~1artifacts~1{id}
+  /v1/artifacts/{id}.md:
+    $ref: ./paths/artifacts.yaml#/~1v1~1artifacts~1{id}.md
+  /v1/artifacts/{id}/access:
+    $ref: ./paths/artifacts.yaml#/~1v1~1artifacts~1{id}~1access
+  /v1/artifacts/{id}/access-requests:
+    $ref: ./paths/artifacts.yaml#/~1v1~1artifacts~1{id}~1access-requests
+  /v1/artifacts/{id}/attachments/{attachmentId}:
+    $ref: ./paths/artifacts.yaml#/~1v1~1artifacts~1{id}~1attachments~1{attachmentId}
+  /v1/artifacts/{id}/continue:
+    $ref: ./paths/artifacts.yaml#/~1v1~1artifacts~1{id}~1continue
+  /v1/artifacts/{id}/events:
+    $ref: ./paths/artifacts.yaml#/~1v1~1artifacts~1{id}~1events
+  /v1/artifacts/{id}/frame:
+    $ref: ./paths/artifacts.yaml#/~1v1~1artifacts~1{id}~1frame
+  /v1/artifacts/{id}/remix:
+    $ref: ./paths/artifacts.yaml#/~1v1~1artifacts~1{id}~1remix
+  /v1/audit:
+    $ref: ./paths/usage.yaml#/~1v1~1audit
+  /v1/audit/export.csv:
+    $ref: ./paths/usage.yaml#/~1v1~1audit~1export.csv
+  /v1/auth/account/delete:
+    $ref: ./paths/auth.yaml#/~1v1~1auth~1account~1delete
+  /v1/auth/device:
+    $ref: ./paths/auth.yaml#/~1v1~1auth~1device
+  /v1/auth/logout:
+    $ref: ./paths/auth.yaml#/~1v1~1auth~1logout
+  /v1/auth/scoped-keys/revoke:
+    $ref: ./paths/auth.yaml#/~1v1~1auth~1scoped-keys~1revoke
+  /v1/auth/token:
+    $ref: ./paths/auth.yaml#/~1v1~1auth~1token
+  /v1/auth/tokens:
+    $ref: ./paths/auth.yaml#/~1v1~1auth~1tokens
+  /v1/auth/tokens/{id}:
+    $ref: ./paths/auth.yaml#/~1v1~1auth~1tokens~1{id}
+  /v1/auth/whoami:
+    $ref: ./paths/auth.yaml#/~1v1~1auth~1whoami
+  /v1/billing:
+    $ref: ./paths/billing.yaml#/~1v1~1billing
+  /v1/billing/after-the-fact:
+    $ref: ./paths/billing.yaml#/~1v1~1billing~1after-the-fact
+  /v1/billing/auto-topup:
+    $ref: ./paths/billing.yaml#/~1v1~1billing~1auto-topup
+  /v1/billing/confirm-payment:
+    $ref: ./paths/billing.yaml#/~1v1~1billing~1confirm-payment
+  /v1/billing/credits:
+    $ref: ./paths/billing.yaml#/~1v1~1billing~1credits
+  /v1/billing/operations/{operationId}:
+    $ref: ./paths/billing.yaml#/~1v1~1billing~1operations~1{operationId}
+  /v1/billing/payment-method:
+    $ref: ./paths/billing.yaml#/~1v1~1billing~1payment-method
+  /v1/billing/plan:
+    $ref: ./paths/billing.yaml#/~1v1~1billing~1plan
+  /v1/billing/plan/change:
+    $ref: ./paths/billing.yaml#/~1v1~1billing~1plan~1change
+  /v1/billing/plans:
+    $ref: ./paths/billing.yaml#/~1v1~1billing~1plans
+  /v1/billing/portal:
+    $ref: ./paths/billing.yaml#/~1v1~1billing~1portal
+  /v1/billing/receipts:
+    $ref: ./paths/billing.yaml#/~1v1~1billing~1receipts
+  /v1/billing/receipts/{paymentId}:
+    $ref: ./paths/billing.yaml#/~1v1~1billing~1receipts~1{paymentId}
+  /v1/billing/statement:
+    $ref: ./paths/billing.yaml#/~1v1~1billing~1statement
+  /v1/billing/statements:
+    $ref: ./paths/billing.yaml#/~1v1~1billing~1statements
+  /v1/budgets:
+    $ref: ./paths/usage.yaml#/~1v1~1budgets
+  /v1/budgets/limit-managers/{userId}:
+    $ref: ./paths/usage.yaml#/~1v1~1budgets~1limit-managers~1{userId}
+  /v1/budgets/person-default:
+    $ref: ./paths/usage.yaml#/~1v1~1budgets~1person-default
+  /v1/budgets/products/{product}/{capability}:
+    $ref: ./paths/usage.yaml#/~1v1~1budgets~1products~1{product}~1{capability}
+  /v1/chat/completions:
+    $ref: ./paths/models.yaml#/~1v1~1chat~1completions
+  /v1/chat/sessions:
+    $ref: ./paths/chat.yaml#/~1v1~1chat~1sessions
+  /v1/chat/sessions/{id}:
+    $ref: ./paths/chat.yaml#/~1v1~1chat~1sessions~1{id}
+  /v1/chat/sessions/{id}/attachments/{attachmentId}:
+    $ref: ./paths/chat.yaml#/~1v1~1chat~1sessions~1{id}~1attachments~1{attachmentId}
+  /v1/chat/sessions/{id}/export.md:
+    $ref: ./paths/chat.yaml#/~1v1~1chat~1sessions~1{id}~1export.md
+  /v1/chat/sessions/{id}/messages:
+    $ref: ./paths/chat.yaml#/~1v1~1chat~1sessions~1{id}~1messages
+  /v1/chat/sessions/{id}/rewind:
+    $ref: ./paths/chat.yaml#/~1v1~1chat~1sessions~1{id}~1rewind
+  /v1/chat/sessions/{id}/share:
+    $ref: ./paths/chat.yaml#/~1v1~1chat~1sessions~1{id}~1share
+  /v1/chat/sessions/{id}/suggest:
+    $ref: ./paths/chat.yaml#/~1v1~1chat~1sessions~1{id}~1suggest
+  /v1/chat/voice-token:
+    $ref: ./paths/chat.yaml#/~1v1~1chat~1voice-token
+  /v1/chat/web:
+    $ref: ./paths/chat.yaml#/~1v1~1chat~1web
+  /v1/cloud/machines:
+    $ref: ./paths/cloud.yaml#/~1v1~1cloud~1machines
+  /v1/cloud/machines/pair:
+    $ref: ./paths/cloud.yaml#/~1v1~1cloud~1machines~1pair
+  /v1/cloud/machines/{id}:
+    $ref: ./paths/cloud.yaml#/~1v1~1cloud~1machines~1{id}
+  /v1/cloud/machines/{id}/access:
+    $ref: ./paths/cloud.yaml#/~1v1~1cloud~1machines~1{id}~1access
+  /v1/cloud/machines/{id}/activity:
+    $ref: ./paths/cloud.yaml#/~1v1~1cloud~1machines~1{id}~1activity
+  /v1/cloud/machines/{id}/connect:
+    $ref: ./paths/cloud.yaml#/~1v1~1cloud~1machines~1{id}~1connect
+  /v1/cloud/machines/{id}/history:
+    $ref: ./paths/cloud.yaml#/~1v1~1cloud~1machines~1{id}~1history
+  /v1/cloud/machines/{id}/history/{threadId}:
+    $ref: ./paths/cloud.yaml#/~1v1~1cloud~1machines~1{id}~1history~1{threadId}
+  /v1/cloud/machines/{id}/history/{threadId}/events:
+    $ref: ./paths/cloud.yaml#/~1v1~1cloud~1machines~1{id}~1history~1{threadId}~1events
+  /v1/cloud/machines/{id}/host:
+    $ref: ./paths/cloud.yaml#/~1v1~1cloud~1machines~1{id}~1host
+  /v1/cloud/machines/{id}/host/streams/{stream}:
+    $ref: ./paths/cloud.yaml#/~1v1~1cloud~1machines~1{id}~1host~1streams~1{stream}
+  /v1/cloud/machines/{id}/links:
+    $ref: ./paths/cloud.yaml#/~1v1~1cloud~1machines~1{id}~1links
+  /v1/cloud/machines/{id}/setup-done:
+    $ref: ./paths/cloud.yaml#/~1v1~1cloud~1machines~1{id}~1setup-done
+  /v1/cloud/machines/{id}/setup-token:
+    $ref: ./paths/cloud.yaml#/~1v1~1cloud~1machines~1{id}~1setup-token
+  /v1/cloud/machines/{id}/sleep:
+    $ref: ./paths/cloud.yaml#/~1v1~1cloud~1machines~1{id}~1sleep
+  /v1/cloud/machines/{id}/wake:
+    $ref: ./paths/cloud.yaml#/~1v1~1cloud~1machines~1{id}~1wake
+  /v1/computers:
+    $ref: ./paths/computers.yaml#/~1v1~1computers
+  /v1/computers/stream:
+    $ref: ./paths/computers.yaml#/~1v1~1computers~1stream
+  /v1/computers/{computerId}/presence:
+    $ref: ./paths/computers.yaml#/~1v1~1computers~1{computerId}~1presence
+  /v1/computers/{computerId}/requests:
+    $ref: ./paths/computers.yaml#/~1v1~1computers~1{computerId}~1requests
+  /v1/computers/{computerId}/requests/inbox:
+    $ref: ./paths/computers.yaml#/~1v1~1computers~1{computerId}~1requests~1inbox
+  /v1/computers/{computerId}/requests/{id}:
+    $ref: ./paths/computers.yaml#/~1v1~1computers~1{computerId}~1requests~1{id}
+  /v1/computers/{computerId}/requests/{id}/claim:
+    $ref: ./paths/computers.yaml#/~1v1~1computers~1{computerId}~1requests~1{id}~1claim
+  /v1/computers/{computerId}/requests/{id}/reply:
+    $ref: ./paths/computers.yaml#/~1v1~1computers~1{computerId}~1requests~1{id}~1reply
+  /v1/connections:
+    $ref: ./paths/connectors.yaml#/~1v1~1connections
+  /v1/connections/oauth/finish:
+    $ref: ./paths/connectors.yaml#/~1v1~1connections~1oauth~1finish
+  /v1/connections/{connector}:
+    $ref: ./paths/connectors.yaml#/~1v1~1connections~1{connector}
+  /v1/connections/{connector}/oauth:
+    $ref: ./paths/connectors.yaml#/~1v1~1connections~1{connector}~1oauth
+  /v1/connections/{connector}/{account}:
+    $ref: ./paths/connectors.yaml#/~1v1~1connections~1{connector}~1{account}
+  /v1/connectors:
+    $ref: ./paths/connectors.yaml#/~1v1~1connectors
+  /v1/connectors/{name}:
+    $ref: ./paths/connectors.yaml#/~1v1~1connectors~1{name}
+  /v1/connectors/{name}/{operation}:
+    $ref: ./paths/connectors.yaml#/~1v1~1connectors~1{name}~1{operation}
+  /v1/connectors/{name}/{operation}/read:
+    $ref: ./paths/connectors.yaml#/~1v1~1connectors~1{name}~1{operation}~1read
+  /v1/design-systems:
+    $ref: ./paths/artifacts.yaml#/~1v1~1design-systems
+  /v1/design-systems/{id}:
+    $ref: ./paths/artifacts.yaml#/~1v1~1design-systems~1{id}
+  /v1/design-systems/{id}/default:
+    $ref: ./paths/artifacts.yaml#/~1v1~1design-systems~1{id}~1default
+  /v1/developer/clients:
+    $ref: ./paths/developer-clients.yaml#/~1v1~1developer~1clients
+  /v1/developer/clients/{id}/revoke:
+    $ref: ./paths/developer-clients.yaml#/~1v1~1developer~1clients~1{id}~1revoke
+  /v1/devices:
+    $ref: ./paths/devices.yaml#/~1v1~1devices
+  /v1/devices/recover:
+    $ref: ./paths/devices.yaml#/~1v1~1devices~1recover
+  /v1/devices/recover/challenge:
+    $ref: ./paths/devices.yaml#/~1v1~1devices~1recover~1challenge
+  /v1/devices/{id}/approve:
+    $ref: ./paths/devices.yaml#/~1v1~1devices~1{id}~1approve
+  /v1/devices/{id}/keys:
+    $ref: ./paths/devices.yaml#/~1v1~1devices~1{id}~1keys
+  /v1/devices/{id}/revoke:
+    $ref: ./paths/devices.yaml#/~1v1~1devices~1{id}~1revoke
+  /v1/devices/{inviterDeviceId}/pairing-requests:
+    $ref: ./paths/devices.yaml#/~1v1~1devices~1{inviterDeviceId}~1pairing-requests
+  /v1/devices/{inviterDeviceId}/pairing-requests/{id}/finish:
+    $ref: ./paths/devices.yaml#/~1v1~1devices~1{inviterDeviceId}~1pairing-requests~1{id}~1finish
+  /v1/devices/{runnerDeviceId}/code-commands:
+    $ref: ./paths/devices.yaml#/~1v1~1devices~1{runnerDeviceId}~1code-commands
+  /v1/diagnostics/errors:
+    $ref: ./paths/account.yaml#/~1v1~1diagnostics~1errors
+  /v1/diagnostics/feedback:
+    $ref: ./paths/account.yaml#/~1v1~1diagnostics~1feedback
+  /v1/diagnostics/heartbeat:
+    $ref: ./paths/account.yaml#/~1v1~1diagnostics~1heartbeat
+  /v1/diagnostics/reports:
+    $ref: ./paths/account.yaml#/~1v1~1diagnostics~1reports
+  /v1/github/app:
+    $ref: ./paths/github.yaml#/~1v1~1github~1app
+  /v1/github/installations:
+    $ref: ./paths/github.yaml#/~1v1~1github~1installations
+  /v1/github/installations/{id}:
+    $ref: ./paths/github.yaml#/~1v1~1github~1installations~1{id}
+  /v1/github/repositories:
+    $ref: ./paths/github.yaml#/~1v1~1github~1repositories
+  /v1/guest/chat:
+    $ref: ./paths/chat.yaml#/~1v1~1guest~1chat
+  /v1/guest/chat/messages:
+    $ref: ./paths/chat.yaml#/~1v1~1guest~1chat~1messages
+  /v1/jobs:
+    $ref: ./paths/jobs.yaml#/~1v1~1jobs
+  /v1/jobs/{id}:
+    $ref: ./paths/jobs.yaml#/~1v1~1jobs~1{id}
+  /v1/jobs/{id}/cancel:
+    $ref: ./paths/jobs.yaml#/~1v1~1jobs~1{id}~1cancel
+  /v1/jobs/{id}/result:
+    $ref: ./paths/jobs.yaml#/~1v1~1jobs~1{id}~1result
+  /v1/keys/providers:
+    $ref: ./paths/organization.yaml#/~1v1~1keys~1providers
+  /v1/keys/providers/{provider}:
+    $ref: ./paths/organization.yaml#/~1v1~1keys~1providers~1{provider}
+  /v1/keys/providers/{provider}/disable:
+    $ref: ./paths/organization.yaml#/~1v1~1keys~1providers~1{provider}~1disable
+  /v1/keys/providers/{provider}/enable:
+    $ref: ./paths/organization.yaml#/~1v1~1keys~1providers~1{provider}~1enable
+  /v1/keys/providers/{provider}/remove:
+    $ref: ./paths/organization.yaml#/~1v1~1keys~1providers~1{provider}~1remove
+  /v1/keys/providers/{provider}/replace:
+    $ref: ./paths/organization.yaml#/~1v1~1keys~1providers~1{provider}~1replace
+  /v1/models:
+    $ref: ./paths/models.yaml#/~1v1~1models
+  /v1/modules:
+    $ref: ./paths/account.yaml#/~1v1~1modules
+  /v1/notifications:
+    $ref: ./paths/notifications.yaml#/~1v1~1notifications
+  /v1/notifications/ask-owner:
+    $ref: ./paths/notifications.yaml#/~1v1~1notifications~1ask-owner
+  /v1/notifications/devices:
+    $ref: ./paths/notifications.yaml#/~1v1~1notifications~1devices
+  /v1/notifications/devices/{id}:
+    $ref: ./paths/notifications.yaml#/~1v1~1notifications~1devices~1{id}
+  /v1/notifications/devices/{id}/collect:
+    $ref: ./paths/notifications.yaml#/~1v1~1notifications~1devices~1{id}~1collect
+  /v1/notifications/kinds:
+    $ref: ./paths/notifications.yaml#/~1v1~1notifications~1kinds
+  /v1/notifications/push-key:
+    $ref: ./paths/notifications.yaml#/~1v1~1notifications~1push-key
+  /v1/notifications/settings:
+    $ref: ./paths/notifications.yaml#/~1v1~1notifications~1settings
+  /v1/notifications/{id}/done:
+    $ref: ./paths/notifications.yaml#/~1v1~1notifications~1{id}~1done
+  /v1/notifications/{id}/read:
+    $ref: ./paths/notifications.yaml#/~1v1~1notifications~1{id}~1read
+  /v1/openai/v1/models:
+    $ref: ./paths/models.yaml#/~1v1~1openai~1v1~1models
+  /v1/openai/v1/responses:
+    $ref: ./paths/models.yaml#/~1v1~1openai~1v1~1responses
+  /v1/openapi.json:
+    $ref: ./paths/account.yaml#/~1v1~1openapi.json
+  /v1/orgs:
+    $ref: ./paths/organization.yaml#/~1v1~1orgs
+  /v1/orgs/budget:
+    $ref: ./paths/organization.yaml#/~1v1~1orgs~1budget
+  /v1/orgs/directory/export.csv:
+    $ref: ./paths/organization.yaml#/~1v1~1orgs~1directory~1export.csv
+  /v1/orgs/directory/export.jsonl:
+    $ref: ./paths/organization.yaml#/~1v1~1orgs~1directory~1export.jsonl
+  /v1/orgs/domain-suggestions:
+    $ref: ./paths/organization.yaml#/~1v1~1orgs~1domain-suggestions
+  /v1/orgs/domain-suggestions/join:
+    $ref: ./paths/organization.yaml#/~1v1~1orgs~1domain-suggestions~1join
+  /v1/orgs/domains:
+    $ref: ./paths/organization.yaml#/~1v1~1orgs~1domains
+  /v1/orgs/domains/{id}:
+    $ref: ./paths/organization.yaml#/~1v1~1orgs~1domains~1{id}
+  /v1/orgs/invitations:
+    $ref: ./paths/organization.yaml#/~1v1~1orgs~1invitations
+  /v1/orgs/invitations/accept:
+    $ref: ./paths/organization.yaml#/~1v1~1orgs~1invitations~1accept
+  /v1/orgs/invitations/mine:
+    $ref: ./paths/organization.yaml#/~1v1~1orgs~1invitations~1mine
+  /v1/orgs/invitations/{id}:
+    $ref: ./paths/organization.yaml#/~1v1~1orgs~1invitations~1{id}
+  /v1/orgs/invitations/{id}/resend:
+    $ref: ./paths/organization.yaml#/~1v1~1orgs~1invitations~1{id}~1resend
+  /v1/orgs/logo:
+    $ref: ./paths/organization.yaml#/~1v1~1orgs~1logo
+  /v1/orgs/members:
+    $ref: ./paths/organization.yaml#/~1v1~1orgs~1members
+  /v1/orgs/members/removed:
+    $ref: ./paths/organization.yaml#/~1v1~1orgs~1members~1removed
+  /v1/orgs/members/{userId}:
+    $ref: ./paths/organization.yaml#/~1v1~1orgs~1members~1{userId}
+  /v1/orgs/members/{userId}/holders:
+    $ref: ./paths/organization.yaml#/~1v1~1orgs~1members~1{userId}~1holders
+  /v1/orgs/members/{userId}/recover:
+    $ref: ./paths/organization.yaml#/~1v1~1orgs~1members~1{userId}~1recover
+  /v1/orgs/members/{userId}/role:
+    $ref: ./paths/organization.yaml#/~1v1~1orgs~1members~1{userId}~1role
+  /v1/orgs/owner:
+    $ref: ./paths/organization.yaml#/~1v1~1orgs~1owner
+  /v1/orgs/profile:
+    $ref: ./paths/organization.yaml#/~1v1~1orgs~1profile
+  /v1/orgs/recovery-key:
+    $ref: ./paths/organization.yaml#/~1v1~1orgs~1recovery-key
+  /v1/orgs/settings:
+    $ref: ./paths/organization.yaml#/~1v1~1orgs~1settings
+  /v1/orgs/subscription:
+    $ref: ./paths/organization.yaml#/~1v1~1orgs~1subscription
+  /v1/orgs/switch:
+    $ref: ./paths/organization.yaml#/~1v1~1orgs~1switch
+  /v1/orgs/team-key:
+    $ref: ./paths/organization.yaml#/~1v1~1orgs~1team-key
+  /v1/orgs/team-key/copies:
+    $ref: ./paths/organization.yaml#/~1v1~1orgs~1team-key~1copies
+  /v1/page-frames/{pageId}/{version}:
+    $ref: ./paths/artifacts.yaml#/~1v1~1page-frames~1{pageId}~1{version}
+  /v1/page-frames/{pageId}/{version}/design-system:
+    $ref: ./paths/artifacts.yaml#/~1v1~1page-frames~1{pageId}~1{version}~1design-system
+  /v1/pages:
+    $ref: ./paths/artifacts.yaml#/~1v1~1pages
+  /v1/pages/{id}:
+    $ref: ./paths/artifacts.yaml#/~1v1~1pages~1{id}
+  /v1/pages/{id}/boards/ask:
+    $ref: ./paths/artifacts.yaml#/~1v1~1pages~1{id}~1boards~1ask
+  /v1/pages/{id}/check:
+    $ref: ./paths/artifacts.yaml#/~1v1~1pages~1{id}~1check
+  /v1/pages/{id}/comments:
+    $ref: ./paths/artifacts.yaml#/~1v1~1pages~1{id}~1comments
+  /v1/pages/{id}/comments/ask:
+    $ref: ./paths/artifacts.yaml#/~1v1~1pages~1{id}~1comments~1ask
+  /v1/pages/{id}/comments/{commentId}:
+    $ref: ./paths/artifacts.yaml#/~1v1~1pages~1{id}~1comments~1{commentId}
+  /v1/pages/{id}/comments/{commentId}/ask:
+    $ref: ./paths/artifacts.yaml#/~1v1~1pages~1{id}~1comments~1{commentId}~1ask
+  /v1/pages/{id}/doc:
+    $ref: ./paths/artifacts.yaml#/~1v1~1pages~1{id}~1doc
+  /v1/pages/{id}/events:
+    $ref: ./paths/artifacts.yaml#/~1v1~1pages~1{id}~1events
+  /v1/pages/{id}/export:
+    $ref: ./paths/artifacts.yaml#/~1v1~1pages~1{id}~1export
+  /v1/pages/{id}/files:
+    $ref: ./paths/artifacts.yaml#/~1v1~1pages~1{id}~1files
+  /v1/pages/{id}/files/{name}:
+    $ref: ./paths/artifacts.yaml#/~1v1~1pages~1{id}~1files~1{name}
+  /v1/pages/{id}/preview:
+    $ref: ./paths/artifacts.yaml#/~1v1~1pages~1{id}~1preview
+  /v1/pages/{id}/queries:
+    $ref: ./paths/artifacts.yaml#/~1v1~1pages~1{id}~1queries
+  /v1/pages/{id}/queries/{name}:
+    $ref: ./paths/artifacts.yaml#/~1v1~1pages~1{id}~1queries~1{name}
+  /v1/pages/{id}/queries/{name}/run:
+    $ref: ./paths/artifacts.yaml#/~1v1~1pages~1{id}~1queries~1{name}~1run
+  /v1/pages/{id}/restore:
+    $ref: ./paths/artifacts.yaml#/~1v1~1pages~1{id}~1restore
+  /v1/pages/{id}/share:
+    $ref: ./paths/artifacts.yaml#/~1v1~1pages~1{id}~1share
+  /v1/pages/{id}/storage/{scope}:
+    $ref: ./paths/artifacts.yaml#/~1v1~1pages~1{id}~1storage~1{scope}
+  /v1/pages/{id}/storage/{scope}/{key}:
+    $ref: ./paths/artifacts.yaml#/~1v1~1pages~1{id}~1storage~1{scope}~1{key}
+  /v1/pages/{id}/versions:
+    $ref: ./paths/artifacts.yaml#/~1v1~1pages~1{id}~1versions
+  /v1/pages/{id}/versions/{version}:
+    $ref: ./paths/artifacts.yaml#/~1v1~1pages~1{id}~1versions~1{version}
+  /v1/pages/{id}/versions/{version}/frame:
+    $ref: ./paths/artifacts.yaml#/~1v1~1pages~1{id}~1versions~1{version}~1frame
+  /v1/pages/{id}/versions/{version}/poster:
+    $ref: ./paths/artifacts.yaml#/~1v1~1pages~1{id}~1versions~1{version}~1poster
+  /v1/pages/{id}/versions/{version}/source:
+    $ref: ./paths/artifacts.yaml#/~1v1~1pages~1{id}~1versions~1{version}~1source
+  /v1/people/{userId}/budget:
+    $ref: ./paths/usage.yaml#/~1v1~1people~1{userId}~1budget
+  /v1/people/{userId}/default-team:
+    $ref: ./paths/teams.yaml#/~1v1~1people~1{userId}~1default-team
+  /v1/policies/agent-writes:
+    $ref: ./paths/policies.yaml#/~1v1~1policies~1agent-writes
+  /v1/policies/agents/{agent}:
+    $ref: ./paths/policies.yaml#/~1v1~1policies~1agents~1{agent}
+  /v1/policies/chat-writes:
+    $ref: ./paths/policies.yaml#/~1v1~1policies~1chat-writes
+  /v1/policies/connectors:
+    $ref: ./paths/policies.yaml#/~1v1~1policies~1connectors
+  /v1/policies/connectors/{name}:
+    $ref: ./paths/policies.yaml#/~1v1~1policies~1connectors~1{name}
+  /v1/policies/controls:
+    $ref: ./paths/policies.yaml#/~1v1~1policies~1controls
+  /v1/policies/controls/{id}:
+    $ref: ./paths/policies.yaml#/~1v1~1policies~1controls~1{id}
+  /v1/policies/grants:
+    $ref: ./paths/policies.yaml#/~1v1~1policies~1grants
+  /v1/policies/grants/{product}/{capability}:
+    $ref: ./paths/policies.yaml#/~1v1~1policies~1grants~1{product}~1{capability}
+  /v1/policies/organization:
+    $ref: ./paths/policies.yaml#/~1v1~1policies~1organization
+  /v1/policies/review-events:
+    $ref: ./paths/policies.yaml#/~1v1~1policies~1review-events
+  /v1/policies/teams/{slug}:
+    $ref: ./paths/policies.yaml#/~1v1~1policies~1teams~1{slug}
+  /v1/policies/teams/{slug}/controls:
+    $ref: ./paths/policies.yaml#/~1v1~1policies~1teams~1{slug}~1controls
+  /v1/policies/teams/{slug}/controls/{id}:
+    $ref: ./paths/policies.yaml#/~1v1~1policies~1teams~1{slug}~1controls~1{id}
+  /v1/policies/test:
+    $ref: ./paths/policies.yaml#/~1v1~1policies~1test
+  /v1/presence:
+    $ref: ./paths/notifications.yaml#/~1v1~1presence
+  /v1/presence/settings:
+    $ref: ./paths/notifications.yaml#/~1v1~1presence~1settings
+  /v1/providers:
+    $ref: ./paths/models.yaml#/~1v1~1providers
+  /v1/public/artifacts/{token}:
+    $ref: ./paths/artifacts.yaml#/~1v1~1public~1artifacts~1{token}
+  /v1/public/artifacts/{token}/attachments/{attachmentId}:
+    $ref: ./paths/artifacts.yaml#/~1v1~1public~1artifacts~1{token}~1attachments~1{attachmentId}
+  /v1/public/artifacts/{token}/events:
+    $ref: ./paths/artifacts.yaml#/~1v1~1public~1artifacts~1{token}~1events
+  /v1/public/artifacts/{token}/frame:
+    $ref: ./paths/artifacts.yaml#/~1v1~1public~1artifacts~1{token}~1frame
+  /v1/public/artifacts/{token}/report:
+    $ref: ./paths/artifacts.yaml#/~1v1~1public~1artifacts~1{token}~1report
+  /v1/referrals:
+    $ref: ./paths/account.yaml#/~1v1~1referrals
+  /v1/routines:
+    $ref: ./paths/jobs.yaml#/~1v1~1routines
+  /v1/routines/{id}:
+    $ref: ./paths/jobs.yaml#/~1v1~1routines~1{id}
+  /v1/search:
+    $ref: ./paths/account.yaml#/~1v1~1search
+  /v1/service-accounts:
+    $ref: ./paths/organization.yaml#/~1v1~1service-accounts
+  /v1/service-accounts/{id}:
+    $ref: ./paths/organization.yaml#/~1v1~1service-accounts~1{id}
+  /v1/sessions:
+    $ref: ./paths/sessions.yaml#/~1v1~1sessions
+  /v1/sessions/{id}:
+    $ref: ./paths/sessions.yaml#/~1v1~1sessions~1{id}
+  /v1/sessions/{id}/messages:
+    $ref: ./paths/sessions.yaml#/~1v1~1sessions~1{id}~1messages
+  /v1/sessions/{id}/runner:
+    $ref: ./paths/sessions.yaml#/~1v1~1sessions~1{id}~1runner
+  /v1/sessions/{id}/runner/renew:
+    $ref: ./paths/sessions.yaml#/~1v1~1sessions~1{id}~1runner~1renew
+  /v1/sessions/{id}/stop:
+    $ref: ./paths/sessions.yaml#/~1v1~1sessions~1{id}~1stop
+  /v1/skill-library:
+    $ref: ./paths/skills.yaml#/~1v1~1skill-library
+  /v1/skill-loads:
+    $ref: ./paths/skills.yaml#/~1v1~1skill-loads
+  /v1/skill-promotions:
+    $ref: ./paths/skills.yaml#/~1v1~1skill-promotions
+  /v1/skill-promotions/{id}:
+    $ref: ./paths/skills.yaml#/~1v1~1skill-promotions~1{id}
+  /v1/skill-promotions/{id}/decision:
+    $ref: ./paths/skills.yaml#/~1v1~1skill-promotions~1{id}~1decision
+  /v1/skill-promotions/{id}/withdraw:
+    $ref: ./paths/skills.yaml#/~1v1~1skill-promotions~1{id}~1withdraw
+  /v1/skills:
+    $ref: ./paths/skills.yaml#/~1v1~1skills
+  /v1/skills/{id}:
+    $ref: ./paths/skills.yaml#/~1v1~1skills~1{id}
+  /v1/skills/{id}/versions:
+    $ref: ./paths/skills.yaml#/~1v1~1skills~1{id}~1versions
+  /v1/skills/{id}/versions/{version}:
+    $ref: ./paths/skills.yaml#/~1v1~1skills~1{id}~1versions~1{version}
+  /v1/skills/{id}/versions/{version}/export:
+    $ref: ./paths/skills.yaml#/~1v1~1skills~1{id}~1versions~1{version}~1export
+  /v1/skills/{id}/versions/{version}/promotions:
+    $ref: ./paths/skills.yaml#/~1v1~1skills~1{id}~1versions~1{version}~1promotions
+  /v1/slack/installs:
+    $ref: ./paths/slack.yaml#/~1v1~1slack~1installs
+  /v1/slack/installs/{id}:
+    $ref: ./paths/slack.yaml#/~1v1~1slack~1installs~1{id}
+  /v1/slack/installs/{id}/complete:
+    $ref: ./paths/slack.yaml#/~1v1~1slack~1installs~1{id}~1complete
+  /v1/slack/installs/{id}/confirm:
+    $ref: ./paths/slack.yaml#/~1v1~1slack~1installs~1{id}~1confirm
+  /v1/slack/workspaces:
+    $ref: ./paths/slack.yaml#/~1v1~1slack~1workspaces
+  /v1/slack/workspaces/{id}:
+    $ref: ./paths/slack.yaml#/~1v1~1slack~1workspaces~1{id}
+  /v1/slack/workspaces/{id}/channels:
+    $ref: ./paths/slack.yaml#/~1v1~1slack~1workspaces~1{id}~1channels
+  /v1/slack/workspaces/{id}/channels/{channel}:
+    $ref: ./paths/slack.yaml#/~1v1~1slack~1workspaces~1{id}~1channels~1{channel}
+  /v1/slack/workspaces/{id}/channels/{channel}/settings:
+    $ref: ./paths/slack.yaml#/~1v1~1slack~1workspaces~1{id}~1channels~1{channel}~1settings
+  /v1/spend:
+    $ref: ./paths/usage.yaml#/~1v1~1spend
+  /v1/spend/calls:
+    $ref: ./paths/usage.yaml#/~1v1~1spend~1calls
+  /v1/spend/calls/export.csv:
+    $ref: ./paths/usage.yaml#/~1v1~1spend~1calls~1export.csv
+  /v1/spend/calls/export.jsonl:
+    $ref: ./paths/usage.yaml#/~1v1~1spend~1calls~1export.jsonl
+  /v1/spend/calls/{id}:
+    $ref: ./paths/usage.yaml#/~1v1~1spend~1calls~1{id}
+  /v1/teams:
+    $ref: ./paths/teams.yaml#/~1v1~1teams
+  /v1/teams/import:
+    $ref: ./paths/teams.yaml#/~1v1~1teams~1import
+  /v1/teams/pending:
+    $ref: ./paths/teams.yaml#/~1v1~1teams~1pending
+  /v1/teams/{slug}:
+    $ref: ./paths/teams.yaml#/~1v1~1teams~1{slug}
+  /v1/teams/{slug}/budget:
+    $ref: ./paths/teams.yaml#/~1v1~1teams~1{slug}~1budget
+  /v1/teams/{slug}/members:
+    $ref: ./paths/teams.yaml#/~1v1~1teams~1{slug}~1members
+  /v1/teams/{slug}/members/{userId}:
+    $ref: ./paths/teams.yaml#/~1v1~1teams~1{slug}~1members~1{userId}
+  /v1/tenants:
+    $ref: ./paths/account.yaml#/~1v1~1tenants
+  /v1/tenants/me:
+    $ref: ./paths/account.yaml#/~1v1~1tenants~1me
+  /v1/threads:
+    $ref: ./paths/threads.yaml#/~1v1~1threads
+  /v1/threads/{threadId}:
+    $ref: ./paths/threads.yaml#/~1v1~1threads~1{threadId}
+  /v1/threads/{threadId}/commands:
+    $ref: ./paths/threads.yaml#/~1v1~1threads~1{threadId}~1commands
+  /v1/threads/{threadId}/commands/{commandId}:
+    $ref: ./paths/threads.yaml#/~1v1~1threads~1{threadId}~1commands~1{commandId}
+  /v1/threads/{threadId}/commands/{commandId}/cancel:
+    $ref: ./paths/threads.yaml#/~1v1~1threads~1{threadId}~1commands~1{commandId}~1cancel
+  /v1/threads/{threadId}/commands/{commandId}/claim:
+    $ref: ./paths/threads.yaml#/~1v1~1threads~1{threadId}~1commands~1{commandId}~1claim
+  /v1/threads/{threadId}/commands/{commandId}/result:
+    $ref: ./paths/threads.yaml#/~1v1~1threads~1{threadId}~1commands~1{commandId}~1result
+  /v1/threads/{threadId}/control:
+    $ref: ./paths/threads.yaml#/~1v1~1threads~1{threadId}~1control
+  /v1/threads/{threadId}/events:
+    $ref: ./paths/threads.yaml#/~1v1~1threads~1{threadId}~1events
+  /v1/threads/{threadId}/follow:
+    $ref: ./paths/threads.yaml#/~1v1~1threads~1{threadId}~1follow
+  /v1/threads/{threadId}/keys:
+    $ref: ./paths/threads.yaml#/~1v1~1threads~1{threadId}~1keys
+  /v1/threads/{threadId}/org-key:
+    $ref: ./paths/threads.yaml#/~1v1~1threads~1{threadId}~1org-key
+  /v1/threads/{threadId}/presence:
+    $ref: ./paths/threads.yaml#/~1v1~1threads~1{threadId}~1presence
+  /v1/threads/{threadId}/private:
+    $ref: ./paths/threads.yaml#/~1v1~1threads~1{threadId}~1private
+  /v1/threads/{threadId}/stream:
+    $ref: ./paths/threads.yaml#/~1v1~1threads~1{threadId}~1stream
+  /v1/threads/{threadId}/team-key:
+    $ref: ./paths/threads.yaml#/~1v1~1threads~1{threadId}~1team-key
+  /v1/threads/{threadId}/team-keys:
+    $ref: ./paths/threads.yaml#/~1v1~1threads~1{threadId}~1team-keys
+components:
+  securitySchemes:
+    bearer:
+      type: http
+      scheme: bearer
+      description: An access token from the OAuth 2.0 device flow (`/v1/auth/device`, `/v1/auth/token`), or a personal API key.
+    apiKeyHeader:
+      type: apiKey
+      in: header
+      name: x-api-key
+      description: The same token as `bearer`, sent in `x-api-key`. Only the provider-compatible routes take it.

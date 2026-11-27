@@ -1,0 +1,2009 @@
+# Path items. The root openapi.yaml references each one.
+/v1/approvals:
+  post:
+    tags:
+      - Policies
+    operationId: createApproval
+    summary: >-
+      Ask Policy for an approval record bound to one exact connector call: the person, this agent link, the connector,
+      the operation and a SHA-256 of the arguments' canonical JSON (keys sorted at every depth, no spaces). It keeps the
+      arguments, so the person sees them. It is pending, expires in 30 minutes and allows the call once, after the
+      person confirms it in Nexus (`confirmUrl`). A chat agent's link only (`connectors.use`): any other caller gets 403
+      `agent_only`. Refused while chat writes are off (`chat_writes_off`) and for an operation the organization's
+      allowlist does not name (`operation_not_allowed`). Audited as policy.approval.requested, with the hash and never
+      the arguments.
+    parameters:
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKeyRequired
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas.yaml#/CreateApproval
+    responses:
+      "201":
+        description: Created
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Approval
+      "400":
+        description: Not a body (`invalid_approval`), or the operation only reads (`not_a_write`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "403":
+        description: >-
+          Not a chat agent's link (`agent_only`), chat writes are off (`chat_writes_off`), or the operation is not on
+          the allowlist (`operation_not_allowed`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "404":
+        description: No such connector operation
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "428":
+        $ref: ../components/common.yaml#/responses/PreconditionRequired
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: connectors.use
+    x-idempotency: required
+/v1/approvals/{id}:
+  get:
+    tags:
+      - Policies
+    operationId: getApproval
+    summary: >-
+      One approval record, with its arguments. The agent link that asked (`connectors.use`), or its person from their
+      own session or key: any other caller of the organization gets 404 `approval_not_found`, and a caller that is
+      neither a link nor a person 403 `agent_only`.
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[A-Za-z0-9_-]+$
+        description: The approval's id (`apr_…`)
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Approval
+      "403":
+        description: Neither an agent link nor a person (`agent_only`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "404":
+        description: No such approval of this link's or this person's (`approval_not_found`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: connectors.use
+/v1/approvals/{id}/cancel:
+  post:
+    tags:
+      - Policies
+    operationId: cancelApproval
+    summary: >-
+      The agent link that asked cancels its own pending record (`connectors.use`): it moves to denied, once. Cancelling
+      never confirms, so it needs no person. Any other caller gets 403 `agent_only`, and another link's record is 404
+      `approval_not_found`. Cancelled again, it answers the stored record; a confirmed or used one is 409
+      `approval_settled`. Audited as policy.approval.cancelled.
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[A-Za-z0-9_-]+$
+        description: The approval's id (`apr_…`)
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKeyRequired
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Approval
+      "403":
+        description: Not a chat agent's link (`agent_only`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "404":
+        description: No such approval of this link's (`approval_not_found`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "409":
+        description: Already confirmed or used (`approval_settled`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "428":
+        $ref: ../components/common.yaml#/responses/PreconditionRequired
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: connectors.use
+    x-idempotency: required
+/v1/approvals/{id}/confirm:
+  post:
+    tags:
+      - Policies
+    operationId: confirmApproval
+    summary: >-
+      The record's person confirms it, once, before it expires, from their own session in Nexus UI or their own key
+      (`approvals.decide`). An agent link never confirms: it gets 403 `person_only`, so a link cannot approve its own
+      write. Another person's record is 404 `approval_not_found`. Confirmed again, it answers the stored record. Refused
+      while chat writes are off, and for an operation the allowlist does not name. Audited as policy.approval.confirmed,
+      with the person as its actor.
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[A-Za-z0-9_-]+$
+        description: The approval's id (`apr_…`)
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKeyRequired
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Approval
+      "403":
+        description: >-
+          An agent link or another credential that is no person (`person_only`), chat writes are off
+          (`chat_writes_off`), or the operation is not on the allowlist (`operation_not_allowed`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "404":
+        description: No such approval of this person's (`approval_not_found`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "409":
+        description: Expired (`approval_expired`), or already decided another way or used (`approval_settled`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "428":
+        $ref: ../components/common.yaml#/responses/PreconditionRequired
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: approvals.decide
+    x-idempotency: required
+/v1/approvals/{id}/deny:
+  post:
+    tags:
+      - Policies
+    operationId: denyApproval
+    summary: >-
+      The record's person denies it, once, from their own session in Nexus UI or their own key (`approvals.decide`). An
+      agent link gets 403 `person_only` and cancels instead. Another person's record is 404 `approval_not_found`. Denied
+      again, it answers the stored record. Audited as policy.approval.denied.
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[A-Za-z0-9_-]+$
+        description: The approval's id (`apr_…`)
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKeyRequired
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Approval
+      "403":
+        description: An agent link or another credential that is no person (`person_only`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "404":
+        description: No such approval of this person's (`approval_not_found`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "409":
+        description: Expired (`approval_expired`), or already decided another way or used (`approval_settled`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "428":
+        $ref: ../components/common.yaml#/responses/PreconditionRequired
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: approvals.decide
+    x-idempotency: required
+/v1/policies/agent-writes:
+  get:
+    tags:
+      - Policies
+    operationId: getAgentWrites
+    summary: >-
+      Whether your agents may write in this organization: with it on, your agent links make the connector writes the
+      organization allows its agents (`/v1/policies/chat-writes`) with no approval record per call. On by default; a
+      saved OFF choice restores approval records per call. Your own session or key only (`approvals.decide`): an agent
+      link gets 403 `person_only`.
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/AgentWriteSetting
+      "403":
+        description: "Not your own session or key: an agent link or any other credential (`person_only`)"
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: approvals.decide
+  put:
+    tags:
+      - Policies
+    operationId: setAgentWrites
+    summary: >-
+      Turn your agents' writes on or off in this organization. On, your agent links make the connector writes the
+      organization allows its agents, while it has them on, with no approval record per call; the agent's own mode
+      decides whether it asks first. A `github` write runs as your own GitHub account (POST
+      /v1/connections/github/oauth), never as the Nexus GitHub App: without one connected it is refused (403
+      `connection_required`). Off, a write needs a record you confirmed. Your own session or key only
+      (`approvals.decide`): no agent link and no operator grant holds it. Audited as agent_write_setting.changed with
+      the setting before and after.
+    parameters:
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKey
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas.yaml#/AgentWriteSetting
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/AgentWriteSetting
+      "400":
+        description: Not a setting (`invalid_setting`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "403":
+        description: "Not your own session or key: an agent link or any other credential (`person_only`)"
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: approvals.decide
+    x-idempotency: optional
+/v1/policies/agents/{agent}:
+  get:
+    tags:
+      - Policies
+    operationId: getAgentPolicy
+    summary: A coding agent's model policy (was the old agent policy, migrated as its allow list and default).
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/ModelPolicy
+            example:
+              level: agent
+              subject: claude
+              rule:
+                allow:
+                  - anthropic/claude-opus-*
+                  - anthropic/claude-haiku-*
+                defaults:
+                  claude: anthropic/claude-opus-5.5
+              custom: true
+              updatedAt: "2026-10-29T16:05:42.000Z"
+              inherited:
+                - level: organization
+                  subject: organization
+                  rule:
+                    deny:
+                      - anthropic/claude-fable-*
+              effective:
+                allowed:
+                  - anthropic/claude-opus-5.5
+                  - anthropic/claude-haiku-5.5
+                defaults:
+                  chat:
+                    from:
+                      level: catalog
+                  claude:
+                    model: anthropic/claude-opus-5.5
+                    from:
+                      level: agent
+                      subject: claude
+                      list: defaults
+                  codex:
+                    from:
+                      level: catalog
+        headers:
+          ETag:
+            $ref: ../components/common.yaml#/headers/ETag
+      "400":
+        description: >-
+          The path names no coding agent: `agent` must be `claude`, `codex`, `antigravity` or `cursor`
+          (`invalid_request`); or it names one without a Gateway route, which has no model policy (`route_unsupported`).
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+            example:
+              error:
+                message: "agent must be one of: claude, codex, antigravity, cursor"
+                type: invalid_request_error
+                code: invalid_request
+      "403":
+        description: >-
+          The credential does not hold `policy.read`. Every person in the organization holds it; a service account or
+          sandbox key does not (`role_required`), nor a scoped module key (`module_key`).
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+            example:
+              error:
+                message: >-
+                  only the org's owner or admins can read the model policies (organization, teams, coding agents) and
+                  test them for yourself (policy.read)
+                type: permission_error
+                code: role_required
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: policy.read
+    parameters:
+      - name: agent
+        in: path
+        required: true
+        schema:
+          $ref: ../components/schemas.yaml#/AgentId
+          pattern: ^[a-z][a-z0-9-]*$
+  put:
+    tags:
+      - Policies
+    operationId: setAgentPolicy
+    summary: Replace a coding agent's model policy (owners and admins). Audited.
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/ModelPolicy
+            example:
+              level: agent
+              subject: claude
+              rule:
+                allow:
+                  - anthropic/claude-opus-*
+                  - anthropic/claude-haiku-*
+                defaults:
+                  claude: anthropic/claude-opus-5.5
+              custom: true
+              updatedAt: "2026-10-29T16:05:42.000Z"
+              inherited:
+                - level: organization
+                  subject: organization
+                  rule:
+                    deny:
+                      - anthropic/claude-fable-*
+              effective:
+                allowed:
+                  - anthropic/claude-opus-5.5
+                  - anthropic/claude-haiku-5.5
+                defaults:
+                  chat:
+                    from:
+                      level: catalog
+                  claude:
+                    model: anthropic/claude-opus-5.5
+                    from:
+                      level: agent
+                      subject: claude
+                      list: defaults
+                  codex:
+                    from:
+                      level: catalog
+              notes: []
+        headers:
+          ETag:
+            $ref: ../components/common.yaml#/headers/ETag
+      "400":
+        description: >-
+          Not a valid rule (`invalid_policy`), including `providers`, which is set on the organization's policy only; or
+          the path names no coding agent (`invalid_request`); or it names one without a Gateway route, which has no
+          model policy (`route_unsupported`).
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+            example:
+              error:
+                message: "unknown field models: a rule has allow, deny, defaults, maxPrice, denyCountries and providers"
+                type: invalid_request_error
+                code: invalid_policy
+      "403":
+        description: >-
+          The caller does not hold `policy.manage`: only owners and admins set the coding agents' policies
+          (`role_required`).
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+            example:
+              error:
+                message: only the org's owner or admins can set the coding agents' model policies (policy.manage)
+                type: permission_error
+                code: role_required
+      "412":
+        $ref: ../components/common.yaml#/responses/VersionMismatch
+      "428":
+        $ref: ../components/common.yaml#/responses/PreconditionRequired
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: policy.manage
+    parameters:
+      - name: agent
+        in: path
+        required: true
+        schema:
+          $ref: ../components/schemas.yaml#/AgentId
+          pattern: ^[a-z][a-z0-9-]*$
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKey
+      - $ref: ../components/common.yaml#/parameters/IfMatch
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas.yaml#/ModelRule
+          example:
+            allow:
+              - anthropic/claude-opus-*
+              - anthropic/claude-haiku-*
+            defaults:
+              claude: anthropic/claude-opus-5.5
+    x-idempotency: optional
+    x-if-match: required
+/v1/policies/chat-writes:
+  get:
+    tags:
+      - Policies
+    operationId: getChatWrites
+    summary: >-
+      Whether this organization lets a person's confirmed write from chat run, and which connector operations it may run
+      (owners, admins, leads and members: `policy.read`). On with every registered connector write by default. Saved
+      organization choices, including empty operation lists, take precedence. `default` is true while the organization
+      never chose.
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/ChatWriteSetting
+        headers:
+          ETag:
+            $ref: ../components/common.yaml#/headers/ETag
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: policy.read
+  put:
+    tags:
+      - Policies
+    operationId: setChatWrites
+    summary: >-
+      Turn writes from chat on or off for this organization and, with `operations`, replace its allowlist of connector
+      operations; left out, the list is kept (owners and admins: `policy.manage`; an operator may only turn them off,
+      and never sets the list). Each entry must be a connector write Core has. A write of an operation the list does not
+      name is refused (403 `operation_not_allowed`), even with a confirmed record. Off, a chat agent's approval record
+      is not made, confirmed or used, so a record confirmed before stops working too. What an allowed write lets a
+      member's agent do: a `github` write runs as that member's own GitHub account, connected with POST
+      /v1/connections/github/oauth, so GitHub allows it only what it allows the member, and it is refused (403
+      `connection_required`) while they have none connected; a module's write runs as the Nexus GitHub App. Audited as
+      chat_write_setting.changed with the setting before and after.
+    parameters:
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKey
+      - $ref: ../components/common.yaml#/parameters/IfMatch
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas.yaml#/SetChatWrites
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/ChatWriteSetting
+        headers:
+          ETag:
+            $ref: ../components/common.yaml#/headers/ETag
+      "400":
+        description: Not a setting, or an entry that is no connector write (`invalid_setting`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "412":
+        $ref: ../components/common.yaml#/responses/VersionMismatch
+      "428":
+        $ref: ../components/common.yaml#/responses/PreconditionRequired
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: policy.manage
+    x-idempotency: optional
+    x-if-match: required
+/v1/policies/connectors:
+  get:
+    tags:
+      - Policies
+    operationId: listConnectorAvailability
+    summary: >-
+      Every connector Gateway offers, with its availability in this organization (owners, admins, leads and members:
+      `policy.read`): disabled, available (members opt in) or enabled_for_all, the teams it is limited to, and whether
+      it is the connector's default (the organization never chose: enabled_for_all for github, disabled for every other
+      connector).
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/ConnectorAvailabilityList
+            example:
+              connectors:
+                - name: asana
+                  availability: available
+                  teams:
+                    - platform
+                  default: false
+                  offered: true
+                  changedBy: usr_3Kd9TqW2bNxe
+                  changedAt: "2026-10-24T15:20:11.000Z"
+                - name: github
+                  availability: enabled_for_all
+                  teams: null
+                  default: true
+                  offered: true
+                - name: slack
+                  availability: disabled
+                  teams: null
+                  default: true
+                  offered: false
+      "403":
+        description: >-
+          The credential does not hold `policy.read`. Every person in the organization holds it; a service account or
+          sandbox key does not (`role_required`), nor a scoped module key (`module_key`).
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+            example:
+              error:
+                message: >-
+                  only the org's owner or admins can read the model policies (organization, teams, coding agents) and
+                  test them for yourself (policy.read)
+                type: permission_error
+                code: role_required
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: policy.read
+/v1/policies/connectors/{name}:
+  put:
+    tags:
+      - Policies
+    operationId: setConnectorAvailability
+    summary: >-
+      Set one connector's availability in this organization, in full (owners and admins: `policy.manage`; an operator
+      may only turn it off). With teams, only their members and the members of the teams under them may use it, and a
+      module acting for no person may not. Every connector call reads it first: a person, or a module acting for one, it
+      does not reach is refused with 403 connector_disabled. Audited as connector_availability.changed with the
+      availability before and after.
+    parameters:
+      - name: name
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[a-z][a-z0-9-]*$
+        description: The connector (`github`)
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKey
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas.yaml#/SetConnectorAvailability
+          example:
+            availability: available
+            teams:
+              - platform
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/ConnectorAvailability
+            example:
+              name: asana
+              availability: available
+              teams:
+                - platform
+              default: false
+              offered: true
+              changedBy: usr_3Kd9TqW2bNxe
+              changedAt: "2026-10-24T15:20:11.000Z"
+      "400":
+        description: >-
+          Not an availability: an empty or unknown team, or a state the connector cannot hold (`available` for one only
+          the organization connects, `enabled_for_all` for one only a person connects) (`invalid_availability`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+            example:
+              error:
+                message: no team design in this organization
+                type: invalid_request_error
+                code: invalid_availability
+      "403":
+        description: >-
+          The caller does not hold `policy.manage`: only owners and admins choose which connectors members may use
+          (`role_required`). Under an operator grant, only `disabled` is allowed (`operator_scope`). A connector this
+          Gateway does not offer may only be set to `disabled` (`connector_not_offered`).
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+            example:
+              error:
+                message: only the org's owner or admins can choose which connectors members may use (policy.manage)
+                type: permission_error
+                code: role_required
+      "404":
+        description: No such connector
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+            example:
+              error:
+                message: no connector trello
+                type: not_found
+                code: not_found
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: policy.manage
+    x-idempotency: optional
+/v1/policies/controls:
+  get:
+    tags:
+      - Policies
+    operationId: listOperatorControls
+    summary: >-
+      The operator controls in force (`policy.read`). Owners and admins see every unexpired control of the organization.
+      A lead or member sees only the controls that apply to them: the organization's, those on every team they are in
+      and the teams above them, their own and their key's. An expired control is not listed.
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/OperatorControls
+            example:
+              controls:
+                - id: ctl_9Rf2KpL7mQxA
+                  tenantId: ten_8Hq2LmP4xRtK
+                  kind: limit
+                  subjectLevel: team
+                  subject: team_x7Ka2LmPq9Rd
+                  models:
+                    - anthropic/claude-haiku-5.5
+                  reason: "Opus latency incident: keep the platform team on Haiku until it is resolved"
+                  createdBy: usr_3Kd9TqW2bNxe
+                  createdAt: "2026-10-30T09:15:00.000Z"
+                  expiresAt: "2026-10-31T09:15:00.000Z"
+      "403":
+        description: >-
+          The credential does not hold `policy.read`. Every person in the organization holds it; a service account or
+          sandbox key does not (`role_required`), nor a scoped module key (`module_key`).
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+            example:
+              error:
+                message: >-
+                  only the org's owner or admins can read the model policies (organization, teams, coding agents) and
+                  test them for yourself (policy.read)
+                type: permission_error
+                code: role_required
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: policy.read
+  post:
+    tags:
+      - Policies
+    operationId: setOperatorControl
+    summary: >-
+      Put an operator control in force (owners and admins: `policy.manage`). A pause refuses every model call of its
+      subject, a limit allows only the listed models and an override allows the listed models over the rules. A control
+      expires at `expiresAt` and applies from the next decision. An unknown team, person or key answers 404. It is
+      audited (policy.control_set).
+    parameters:
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKeyRequired
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas.yaml#/SetOperatorControl
+          example:
+            kind: limit
+            level: team
+            subject: platform
+            models:
+              - anthropic/claude-haiku-5.5
+            reason: "Opus latency incident: keep the platform team on Haiku until it is resolved"
+            expiresAt: "2026-10-31T09:15:00.000Z"
+    responses:
+      "201":
+        description: Created
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/OperatorControl
+            example:
+              id: ctl_9Rf2KpL7mQxA
+              tenantId: ten_8Hq2LmP4xRtK
+              kind: limit
+              subjectLevel: team
+              subject: team_x7Ka2LmPq9Rd
+              models:
+                - anthropic/claude-haiku-5.5
+              reason: "Opus latency incident: keep the platform team on Haiku until it is resolved"
+              createdBy: usr_3Kd9TqW2bNxe
+              createdAt: "2026-10-30T09:15:00.000Z"
+              expiresAt: "2026-10-31T09:15:00.000Z"
+      "400":
+        description: >-
+          Not a valid control (`invalid_control`): an unknown kind, level or model, no reason, an expiry in the past,
+          models on a pause, or none on a limit or an override. Also when the organization already holds 200 live
+          controls.
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+            example:
+              error:
+                message: "a pause names no models: it refuses them all"
+                type: invalid_request_error
+                code: invalid_control
+      "403":
+        description: >-
+          The caller does not hold `policy.manage`: only owners and admins set an organization-wide control
+          (`role_required`). Team leads use the team's controls route.
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+            example:
+              error:
+                message: only the org's owner or admins can pause, limit or override model traffic (policy.manage)
+                type: permission_error
+                code: role_required
+      "404":
+        description: No such team, person or key in this organization
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+            example:
+              error:
+                message: no team design in this organization
+                type: not_found
+                code: not_found
+      "428":
+        $ref: ../components/common.yaml#/responses/PreconditionRequired
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: policy.manage
+    x-idempotency: required
+/v1/policies/controls/{id}:
+  delete:
+    tags:
+      - Policies
+    operationId: clearOperatorControl
+    summary: >-
+      Take an operator control out of force (owners and admins: `policy.manage`). It answers with the cleared control.
+      It is audited (policy.control_cleared).
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[A-Za-z0-9_-]+$
+        description: The control's id
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKey
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/OperatorControl
+            example:
+              id: ctl_9Rf2KpL7mQxA
+              tenantId: ten_8Hq2LmP4xRtK
+              kind: limit
+              subjectLevel: team
+              subject: team_x7Ka2LmPq9Rd
+              models:
+                - anthropic/claude-haiku-5.5
+              reason: "Opus latency incident: keep the platform team on Haiku until it is resolved"
+              createdBy: usr_3Kd9TqW2bNxe
+              createdAt: "2026-10-30T09:15:00.000Z"
+              expiresAt: "2026-10-31T09:15:00.000Z"
+      "403":
+        description: >-
+          The caller does not hold `policy.manage`: only owners and admins clear a control here (`role_required`). Team
+          leads use the team's controls route.
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+            example:
+              error:
+                message: only the org's owner or admins can clear an operator control (policy.manage)
+                type: permission_error
+                code: role_required
+      "404":
+        description: No such control in this organization
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+            example:
+              error:
+                message: no operator control ctl_4Wd7NbQ1zYcE in this organization
+                type: not_found
+                code: not_found
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: policy.manage
+    x-idempotency: optional
+/v1/policies/grants:
+  get:
+    tags:
+      - Policies
+    operationId: listWriteGrants
+    summary: >-
+      The organization's write grants (owners, admins, leads and members: `policy.read`; not module keys): which module
+      may write through which connector operation (for Nexus Review: robustness/review may github/pull_review,
+      check_run, issue_comment, reaction, resolve_thread; pull_review also covers pull_review_dismiss; pull_ready,
+      pull_merge, pull_edit, pull_state, pull_reviewers and pull_labels each have their own grant, and no other grant
+      covers a merge), who granted each and when, and the write operations that may be granted. A connector write
+      without its grant is refused (403 write_not_granted).
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/WriteGrants
+            example:
+              grants:
+                - module: robustness/review
+                  connector: github
+                  action: check_run
+                  grantedBy: usr_3Kd9TqW2bNxe
+                  at: "2026-10-21T11:02:37.000Z"
+                - module: robustness/review
+                  connector: github
+                  action: pull_review
+                  grantedBy: usr_3Kd9TqW2bNxe
+                  at: "2026-10-21T11:02:37.000Z"
+              grantable:
+                github:
+                  - pull_review
+                  - check_run
+                  - issue_comment
+                  - reaction
+                  - resolve_thread
+                  - pull_create
+                  - pull_ready
+                  - pull_merge
+                  - pull_edit
+                  - pull_state
+                  - pull_reviewers
+                  - pull_labels
+        headers:
+          ETag:
+            $ref: ../components/common.yaml#/headers/ETag
+      "403":
+        description: >-
+          The credential does not hold `policy.read`. Every person in the organization holds it; a service account or
+          sandbox key does not (`role_required`), nor a scoped module key (`module_key`).
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+            example:
+              error:
+                message: >-
+                  only the org's owner or admins can read the model policies (organization, teams, coding agents) and
+                  test them for yourself (policy.read)
+                type: permission_error
+                code: role_required
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: policy.read
+/v1/policies/grants/{product}/{capability}:
+  put:
+    tags:
+      - Policies
+    operationId: setWriteGrants
+    summary: >-
+      Set the write operations of one connector a module may run in this organization (owners and admins:
+      `policy.manage`), in full: the operations not listed are revoked, and an empty list revokes them all. Each grant
+      and each revocation is audited (connector_grant.granted, connector_grant.revoked); a revocation applies from the
+      module's next call. Policy's decide_call reads these grants before every scoped connector call. Each write attempt
+      is audited as connector.write: outcome written; denied with the refusal's code (no grant, a review event other
+      than COMMENT, a thread of another repository); or failed with the error's code and status when an allowed write
+      failed (a rate limit, a timeout). A grant is per organization, module, connector and operation, not per
+      repository: the module scopes repositories itself.
+    parameters:
+      - name: product
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[a-z][a-z0-9-]*$
+        description: The module's product slug (`robustness`)
+      - name: capability
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[a-z][a-z0-9-]*$
+        description: The module's capability slug (`review`)
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKey
+      - $ref: ../components/common.yaml#/parameters/IfMatch
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas.yaml#/SetWriteGrants
+          example:
+            connector: github
+            actions:
+              - pull_review
+              - check_run
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/WriteGrantsSet
+            example:
+              module: robustness/review
+              connector: github
+              actions:
+                - check_run
+                - pull_review
+              granted:
+                - check_run
+              revoked: []
+        headers:
+          ETag:
+            $ref: ../components/common.yaml#/headers/ETag
+      "400":
+        description: Not a connector with writes, or not one of its write operations (`invalid_grant`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+            example:
+              error:
+                message: >-
+                  github/merge is not a write operation; the writes are: pull_review, check_run, issue_comment,
+                  reaction, resolve_thread, pull_create, pull_ready, pull_merge, pull_edit, pull_state, pull_reviewers,
+                  pull_labels
+                type: invalid_request_error
+                code: invalid_grant
+      "403":
+        description: >-
+          The caller does not hold `policy.manage`: only owners and admins grant connector writes (`role_required`).
+          Under an operator grant, only a revoke (an empty `actions` list) is allowed (`operator_scope`).
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+            example:
+              error:
+                message: only the org's owner or admins can grant modules connector writes (policy.manage)
+                type: permission_error
+                code: role_required
+      "412":
+        $ref: ../components/common.yaml#/responses/VersionMismatch
+      "428":
+        $ref: ../components/common.yaml#/responses/PreconditionRequired
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: policy.manage
+    x-idempotency: optional
+    x-if-match: required
+/v1/policies/organization:
+  get:
+    tags:
+      - Policies
+    operationId: getOrganizationPolicy
+    summary: The organization's model policy, what it inherits from this Gateway, and what it allows.
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/ModelPolicy
+            example:
+              level: organization
+              subject: organization
+              rule:
+                deny:
+                  - anthropic/claude-fable-*
+              custom: true
+              updatedAt: "2026-10-27T14:32:08.000Z"
+              inherited: []
+              effective:
+                allowed:
+                  - anthropic/claude-opus-5.5
+                  - anthropic/claude-sonnet-5.5
+                  - anthropic/claude-haiku-5.5
+                  - openai/gpt-5.3-codex
+                  - openai/gpt-6-sol
+                defaults:
+                  chat:
+                    model: anthropic/claude-sonnet-5.5
+                    from:
+                      level: catalog
+                  claude:
+                    model: anthropic/claude-opus-5.5
+                    from:
+                      level: catalog
+                  codex:
+                    model: openai/gpt-5.3-codex
+                    from:
+                      level: catalog
+        headers:
+          ETag:
+            $ref: ../components/common.yaml#/headers/ETag
+      "403":
+        description: >-
+          The credential does not hold `policy.read`. Every person in the organization holds it; a service account or
+          sandbox key does not (`role_required`), nor a scoped module key (`module_key`).
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+            example:
+              error:
+                message: >-
+                  only the org's owner or admins can read the model policies (organization, teams, coding agents) and
+                  test them for yourself (policy.read)
+                type: permission_error
+                code: role_required
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: policy.read
+  put:
+    tags:
+      - Policies
+    operationId: setOrganizationPolicy
+    summary: >-
+      Replace the organization's model policy (owners and admins). An empty rule removes it. Audited as
+      `policy.changed`.
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/ModelPolicy
+            example:
+              level: organization
+              subject: organization
+              rule:
+                deny:
+                  - anthropic/claude-fable-*
+              custom: true
+              updatedAt: "2026-10-27T14:32:08.000Z"
+              inherited: []
+              effective:
+                allowed:
+                  - anthropic/claude-opus-5.5
+                  - anthropic/claude-sonnet-5.5
+                  - anthropic/claude-haiku-5.5
+                  - openai/gpt-5.3-codex
+                  - openai/gpt-6-sol
+                defaults:
+                  chat:
+                    model: anthropic/claude-sonnet-5.5
+                    from:
+                      level: catalog
+                  claude:
+                    model: anthropic/claude-opus-5.5
+                    from:
+                      level: catalog
+                  codex:
+                    model: openai/gpt-5.3-codex
+                    from:
+                      level: catalog
+              notes: []
+        headers:
+          ETag:
+            $ref: ../components/common.yaml#/headers/ETag
+      "400":
+        description: >-
+          Not a valid rule (`invalid_policy`), or `providers` names an id that is not a catalog provider
+          (`unknown_provider`), or `providers.allow` is empty (`providers_allow_empty`): omit `allow` to allow every
+          provider
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+            example:
+              error:
+                message: "\"acme\" is not a provider in Nexus's catalog (GET /v1/providers lists them)"
+                type: invalid_request_error
+                code: unknown_provider
+      "403":
+        description: >-
+          The caller does not hold `policy.manage`: only owners and admins set the organization's policy
+          (`role_required`).
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+            example:
+              error:
+                message: only the org's owner or admins can set the organization's model policy (policy.manage)
+                type: permission_error
+                code: role_required
+      "412":
+        $ref: ../components/common.yaml#/responses/VersionMismatch
+      "428":
+        $ref: ../components/common.yaml#/responses/PreconditionRequired
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: policy.manage
+    parameters:
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKey
+      - $ref: ../components/common.yaml#/parameters/IfMatch
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas.yaml#/ModelRule
+          example:
+            deny:
+              - anthropic/claude-fable-*
+    x-idempotency: optional
+    x-if-match: required
+/v1/policies/review-events:
+  get:
+    tags:
+      - Policies
+    operationId: getReviewEvents
+    summary: >-
+      Which review events a module may post on this organization's pull requests (owners, admins, leads and members:
+      `policy.read`; not module keys): `comment` (COMMENT only), `request_changes` (COMMENT and REQUEST_CHANGES) or
+      `full` (COMMENT, REQUEST_CHANGES and APPROVE). `full` by default: `default` is true while the organization never
+      chose.
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/ReviewEventSetting
+            example:
+              level: full
+              default: true
+        headers:
+          ETag:
+            $ref: ../components/common.yaml#/headers/ETag
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: policy.read
+  put:
+    tags:
+      - Policies
+    operationId: setReviewEvents
+    summary: >-
+      Choose which review events a module may post on this organization's pull requests (owners and admins:
+      `policy.manage`; an operator may only lower it to `comment`). The github connector refuses a `pull_review` whose
+      event is above it (403 `review_event_refused`) on the next call. Nexus Review reads it to choose its event: it
+      requests changes on a failing check and approves a pull request it read in full with none, each only where the
+      level allows. Audited as review_event_setting.changed with the setting before and after.
+    parameters:
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKey
+      - $ref: ../components/common.yaml#/parameters/IfMatch
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas.yaml#/SetReviewEvents
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/ReviewEventSetting
+            example:
+              level: request_changes
+              default: false
+              changedBy: usr_3Kd9TqW2bNxe
+              changedAt: "2026-11-04T14:00:00.000Z"
+        headers:
+          ETag:
+            $ref: ../components/common.yaml#/headers/ETag
+      "400":
+        description: Not a level (`invalid_setting`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "412":
+        $ref: ../components/common.yaml#/responses/VersionMismatch
+      "428":
+        $ref: ../components/common.yaml#/responses/PreconditionRequired
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: policy.manage
+    x-idempotency: optional
+    x-if-match: required
+/v1/policies/teams/{slug}:
+  get:
+    tags:
+      - Policies
+    operationId: getTeamPolicy
+    summary: >-
+      A team's model policy: its own rule, the organization's and its parent teams' (it only narrows them), and what
+      they add up to.
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/ModelPolicy
+            example:
+              level: team
+              subject: platform
+              team:
+                id: team_x7Ka2LmPq9Rd
+                slug: platform
+                name: Platform
+              rule:
+                allow:
+                  - anthropic/*
+                defaults:
+                  chat: anthropic/claude-haiku-5.5
+              custom: true
+              updatedAt: "2026-10-28T09:41:15.000Z"
+              inherited:
+                - level: organization
+                  subject: organization
+                  rule:
+                    deny:
+                      - anthropic/claude-fable-*
+              effective:
+                allowed:
+                  - anthropic/claude-opus-5.5
+                  - anthropic/claude-sonnet-5.5
+                  - anthropic/claude-haiku-5.5
+                defaults:
+                  chat:
+                    model: anthropic/claude-haiku-5.5
+                    from:
+                      level: team
+                      subject: platform
+                      list: defaults
+                  claude:
+                    model: anthropic/claude-opus-5.5
+                    from:
+                      level: catalog
+                  codex:
+                    from:
+                      level: catalog
+        headers:
+          ETag:
+            $ref: ../components/common.yaml#/headers/ETag
+      "403":
+        description: >-
+          The credential does not hold `policy.read`. Every person in the organization holds it; a service account or
+          sandbox key does not (`role_required`), nor a scoped module key (`module_key`).
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+            example:
+              error:
+                message: >-
+                  only the org's owner or admins can read the model policies (organization, teams, coding agents) and
+                  test them for yourself (policy.read)
+                type: permission_error
+                code: role_required
+      "404":
+        description: No team with this slug or id in this organization (`unknown_team`).
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+            example:
+              error:
+                message: no team design in this organization
+                type: not_found
+                code: unknown_team
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: policy.read
+    parameters:
+      - name: slug
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^(?:[a-z0-9][a-z0-9-]{0,126}|team_[A-Za-z0-9]+)$
+  put:
+    tags:
+      - Policies
+    operationId: setTeamPolicy
+    summary: >-
+      Replace a team's model policy (owners and admins; a team lead for a team they lead or one under it, and only to
+      narrow it). Audited.
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/ModelPolicy
+            example:
+              level: team
+              subject: platform
+              team:
+                id: team_x7Ka2LmPq9Rd
+                slug: platform
+                name: Platform
+              rule:
+                allow:
+                  - anthropic/*
+                defaults:
+                  chat: anthropic/claude-haiku-5.5
+              custom: true
+              updatedAt: "2026-10-28T09:41:15.000Z"
+              inherited:
+                - level: organization
+                  subject: organization
+                  rule:
+                    deny:
+                      - anthropic/claude-fable-*
+              effective:
+                allowed:
+                  - anthropic/claude-opus-5.5
+                  - anthropic/claude-sonnet-5.5
+                  - anthropic/claude-haiku-5.5
+                defaults:
+                  chat:
+                    model: anthropic/claude-haiku-5.5
+                    from:
+                      level: team
+                      subject: platform
+                      list: defaults
+                  claude:
+                    model: anthropic/claude-opus-5.5
+                    from:
+                      level: catalog
+                  codex:
+                    from:
+                      level: catalog
+              notes: []
+        headers:
+          ETag:
+            $ref: ../components/common.yaml#/headers/ETag
+      "400":
+        description: >-
+          Not a valid rule (`invalid_policy`). `providers` is refused here too: it is set on the organization's policy
+          only.
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+            example:
+              error:
+                message: providers is set on the organization's policy only
+                type: invalid_request_error
+                code: invalid_policy
+      "403":
+        description: >-
+          The caller is not an owner, an admin or a team lead (`role_required`); a lead names a team outside their teams
+          (`outside_led_teams`); or a lead's rule widens the stored one (`policy_widens`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+            example:
+              error:
+                message: team platform is not one you lead
+                type: permission_error
+                code: outside_led_teams
+      "404":
+        $ref: ../components/common.yaml#/responses/NotFound
+      "412":
+        $ref: ../components/common.yaml#/responses/VersionMismatch
+      "428":
+        $ref: ../components/common.yaml#/responses/PreconditionRequired
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: policy.manage_team
+    parameters:
+      - name: slug
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^(?:[a-z0-9][a-z0-9-]{0,126}|team_[A-Za-z0-9]+)$
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKey
+      - $ref: ../components/common.yaml#/parameters/IfMatch
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas.yaml#/ModelRule
+          example:
+            allow:
+              - anthropic/*
+            defaults:
+              chat: anthropic/claude-haiku-5.5
+    x-idempotency: optional
+    x-if-match: required
+/v1/policies/teams/{slug}/controls:
+  get:
+    tags:
+      - Policies
+    operationId: listTeamOperatorControls
+    summary: >-
+      The operator controls in force on a team, on the teams under it, and on the people and keys in them (owners and
+      admins; a team lead for a team they lead). Controls on the organization and on the teams above it are not listed.
+      An expired control is not listed.
+    parameters:
+      - name: slug
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^(?:[a-z0-9][a-z0-9-]{0,126}|team_[A-Za-z0-9]+)$
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/OperatorControls
+            example:
+              controls:
+                - id: ctl_9Rf2KpL7mQxA
+                  tenantId: ten_8Hq2LmP4xRtK
+                  kind: limit
+                  subjectLevel: team
+                  subject: team_x7Ka2LmPq9Rd
+                  models:
+                    - anthropic/claude-haiku-5.5
+                  reason: "Opus latency incident: keep the platform team on Haiku until it is resolved"
+                  createdBy: usr_3Kd9TqW2bNxe
+                  createdAt: "2026-10-30T09:15:00.000Z"
+                  expiresAt: "2026-10-31T09:15:00.000Z"
+      "403":
+        description: >-
+          The caller is not an owner, an admin or a team lead (`role_required`), or the team is not one they lead
+          (`outside_led_teams`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+            example:
+              error:
+                message: team platform is not one you lead
+                type: permission_error
+                code: outside_led_teams
+      "404":
+        description: No such team in this organization (`unknown_team`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+            example:
+              error:
+                message: no team design in this organization
+                type: not_found
+                code: unknown_team
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: policy.manage_team
+  post:
+    tags:
+      - Policies
+    operationId: setTeamOperatorControl
+    summary: >-
+      Put an operator control in force on a team, or on a person or key in it or in a team under it (owners and admins;
+      a team lead for a team they lead, who may pause or limit but not override). It works as `setOperatorControl`
+      otherwise. It is audited (policy.control_set).
+    parameters:
+      - name: slug
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^(?:[a-z0-9][a-z0-9-]{0,126}|team_[A-Za-z0-9]+)$
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKeyRequired
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas.yaml#/SetOperatorControl
+          example:
+            kind: pause
+            level: person
+            subject: usr_7Jm4RwX9cTqa
+            reason: "Runaway script: pause until it is fixed"
+            expiresAt: "2026-10-30T18:00:00.000Z"
+    responses:
+      "201":
+        description: Created
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/OperatorControl
+            example:
+              id: ctl_2Hc6VsM8pLnB
+              tenantId: ten_8Hq2LmP4xRtK
+              kind: pause
+              subjectLevel: person
+              subject: usr_7Jm4RwX9cTqa
+              reason: "Runaway script: pause until it is fixed"
+              createdBy: usr_3Kd9TqW2bNxe
+              createdAt: "2026-10-30T14:02:51.000Z"
+              expiresAt: "2026-10-30T18:00:00.000Z"
+      "400":
+        description: >-
+          Not a valid control (`invalid_control`): an unknown kind, level or model, no reason, an expiry in the past,
+          models on a pause, or none on a limit or an override. Also when the organization already holds 200 live
+          controls.
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+            example:
+              error:
+                message: a control must expire in the future
+                type: invalid_request_error
+                code: invalid_control
+      "403":
+        description: >-
+          The caller is not an owner, an admin or a team lead (`role_required`), the team is not one they lead
+          (`outside_led_teams`), the subject is outside the team and the teams under it (`outside_team`), or a lead
+          asked for an override (`override_needs_admin`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+            example:
+              error:
+                message: "team leads may pause or limit, not override: ask an owner or admin"
+                type: permission_error
+                code: override_needs_admin
+      "404":
+        description: >-
+          No such team in this organization (`unknown_team` for the team in the path), or no such team, person or key as
+          the subject
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+            example:
+              error:
+                message: no person usr_9Pq3XkT6wRmZ in this organization
+                type: not_found
+                code: not_found
+      "428":
+        $ref: ../components/common.yaml#/responses/PreconditionRequired
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: policy.manage_team
+    x-idempotency: required
+/v1/policies/teams/{slug}/controls/{id}:
+  delete:
+    tags:
+      - Policies
+    operationId: clearTeamOperatorControl
+    summary: >-
+      Take an operator control on a team, or on a person or key in it or in a team under it, out of force (owners and
+      admins; a team lead for a team they lead, only a control that lead set and never an override). It answers with the
+      cleared control. It is audited (policy.control_cleared).
+    parameters:
+      - name: slug
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^(?:[a-z0-9][a-z0-9-]{0,126}|team_[A-Za-z0-9]+)$
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[A-Za-z0-9_-]+$
+        description: The control's id
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKey
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/OperatorControl
+            example:
+              id: ctl_2Hc6VsM8pLnB
+              tenantId: ten_8Hq2LmP4xRtK
+              kind: pause
+              subjectLevel: person
+              subject: usr_7Jm4RwX9cTqa
+              reason: "Runaway script: pause until it is fixed"
+              createdBy: usr_3Kd9TqW2bNxe
+              createdAt: "2026-10-30T14:02:51.000Z"
+              expiresAt: "2026-10-30T18:00:00.000Z"
+      "403":
+        description: >-
+          The caller is not an owner, an admin or a team lead (`role_required`), the team is not one they lead
+          (`outside_led_teams`), the control's subject is outside the team and the teams under it (`outside_team`), a
+          lead tried to clear an override (`override_needs_admin`), or a lead tried to clear a control someone else set
+          (`control_needs_admin`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+            example:
+              error:
+                message: this person is outside team platform and the teams under it
+                type: permission_error
+                code: outside_team
+      "404":
+        description: No such team (`unknown_team`), or no such control in this organization
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+            example:
+              error:
+                message: no operator control ctl_4Wd7NbQ1zYcE in this organization
+                type: not_found
+                code: not_found
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: policy.manage_team
+    x-idempotency: optional
+/v1/policies/test:
+  post:
+    tags:
+      - Policies
+    operationId: testPolicy
+    summary: >-
+      Would this person (or key) be allowed this model, in this team, with this agent, and by which rule? The same
+      decision enforcement makes, plus warnings (e.g. a rule that blocks Claude Code's small background Haiku model).
+      Testing for someone else needs owner or admin.
+    parameters:
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKey
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              as:
+                type: string
+                description: "An email, a user id or a key id; default: you"
+              team:
+                type: string
+              agent:
+                $ref: ../components/schemas.yaml#/AgentId
+              model:
+                type: string
+                description: "Default: nexus/default"
+              surface:
+                type: string
+                enum:
+                  - chat
+                  - anthropic_messages
+                  - openai_responses
+                  - decisions
+          example:
+            agent: claude
+            model: claude-haiku-5-5
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              allOf:
+                - $ref: ../components/schemas.yaml#/ModelDecision
+                - type: object
+                  properties:
+                    as:
+                      type: object
+                    team:
+                      type: string
+                    agent:
+                      $ref: ../components/schemas.yaml#/AgentId
+                    allowedModels:
+                      type: array
+                      items:
+                        type: string
+                    warnings:
+                      type: array
+                      items:
+                        type: string
+            example:
+              allowed: true
+              requested: claude-haiku-5-5
+              model: anthropic/claude-haiku-5.5
+              providerModel: claude-haiku-5-5
+              surface: anthropic_messages
+              reason: allowed by "anthropic/claude-haiku-*" on the allow list of the agent claude policy
+              rule:
+                level: agent
+                subject: claude
+                list: allow
+                pattern: anthropic/claude-haiku-*
+              notes: []
+              as:
+                userId: usr_3Kd9TqW2bNxe
+                email: ana@acme.com
+                keyId: key_5Tn8WqR2xLmD
+              team: platform
+              agent: claude
+              allowedModels:
+                - anthropic/claude-opus-5.5
+                - anthropic/claude-haiku-5.5
+              warnings: []
+      "400":
+        description: >-
+          A field has the wrong type or value: `agent` is not `claude`, `codex`, `antigravity` or `cursor`, `surface` is
+          not one of its values, or `as`, `team` or `model` is not a string (`invalid_request`); or `agent` has no
+          Gateway route (`route_unsupported`).
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+            example:
+              error:
+                message: "surface must be one of: chat, anthropic_messages, openai_responses, decisions"
+                type: invalid_request_error
+                code: invalid_request
+      "403":
+        description: >-
+          `as` names someone else and the caller does not hold `policy.manage`: only owners and admins test the policy
+          for others (`role_required`). A credential without `policy.read` (a service account or sandbox key) gets the
+          same code; a scoped module key gets `module_key`.
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+            example:
+              error:
+                message: only the org's owner or admins can test the policy for someone else
+                type: permission_error
+                code: role_required
+      "404":
+        description: >-
+          `team` names no team in this organization (`unknown_team`), or `as` names no member or key in it
+          (`not_found`).
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+            example:
+              error:
+                message: no member bruno@acme.com in this organization
+                type: not_found
+                code: not_found
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: policy.read
+    x-idempotency: optional
+    description: "Exempt: this POST only reads. It changes no state."
