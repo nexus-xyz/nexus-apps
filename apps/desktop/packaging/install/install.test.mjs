@@ -6,7 +6,7 @@ import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { existsSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { delimiter, join } from "node:path";
+import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
 
@@ -125,12 +125,6 @@ function linuxFixture(t, { corrupt = false } = {}) {
   return dir;
 }
 
-// The environment without its PATH. On Windows the name is `Path` and names ignore case, so a second `PATH` would be
-// a second variable, and the child could read either.
-function withoutPath(env) {
-  return Object.fromEntries(Object.entries(env).filter(([name]) => name.toUpperCase() !== "PATH"));
-}
-
 // A path as the script's shell names it. On Windows the shell is Git for Windows' sh, which names `C:\a\b` `/c/a/b`.
 // Elsewhere a path is already that.
 const posix = (value) =>
@@ -138,22 +132,25 @@ const posix = (value) =>
     ? `/${value[0].toLowerCase()}${value.slice(2).replaceAll("\\", "/")}`
     : value;
 
-// The script's environment, with `bin` first on its PATH. Git for Windows' sh turns PATH (with `;`) into its own form,
-// but not the other variables, so a path in one is given as the shell names it. Its `ln -s` copies unless MSYS asks
-// for real symbolic links, and the Linux install links its launcher.
-function shEnv(env, bin) {
-  const out = Object.fromEntries(Object.entries(env).map(([name, value]) => [name, posix(value)]));
-  const msys = process.platform === "win32" ? { MSYS: "winsymlinks:nativestrict" } : {};
-  return { ...out, ...msys, PATH: `${bin}${delimiter}${process.env.PATH}` };
+// The script's environment: this process's, and the test's own variables. Git for Windows' sh turns PATH into its own
+// form, but not the other variables, so a path in one of the test's is given as the shell names it. Its `ln -s` copies
+// unless MSYS asks for real symbolic links, and the Linux install links its launcher.
+function shEnv(own) {
+  const mapped = Object.fromEntries(Object.entries(own).map(([name, value]) => [name, posix(value)]));
+  return { ...process.env, ...mapped, ...(process.platform === "win32" ? { MSYS: "winsymlinks:nativestrict" } : {}) };
 }
 
+// The fake tools go first on PATH inside the shell, which then runs the script. Set from outside, they would not stay
+// first on Windows: the `sh` on a runner's PATH is Git's bin/sh.exe, which puts its own /mingw64/bin and /usr/bin (the
+// real uname, mv and so on) ahead of the PATH it was given.
+const FAKES_FIRST = 'PATH="$1:$PATH"; export PATH; shift; exec sh "$@"';
+
 function run(dir, { args = [], env = {}, cwd } = {}) {
-  const result = spawnSync("sh", [shScript, ...args], {
+  const result = spawnSync("sh", ["-c", FAKES_FIRST, "sh", posix(join(dir, "bin")), shScript, ...args], {
     encoding: "utf8",
     cwd,
     timeout: 20_000,
     env: shEnv({
-      ...withoutPath(process.env),
       HOME: join(dir, "home"),
       TMPDIR: join(dir, "tmp"),
       FIXTURE: dir,
@@ -168,7 +165,7 @@ function run(dir, { args = [], env = {}, cwd } = {}) {
       DISPLAY: "",
       WAYLAND_DISPLAY: "",
       ...env,
-    }, join(dir, "bin")),
+    }),
   });
   assert.equal(result.error, undefined);
   const calls = existsSync(join(dir, "calls")) ? readFileSync(join(dir, "calls"), "utf8") : "";
