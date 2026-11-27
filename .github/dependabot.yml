@@ -1,0 +1,24 @@
+# Dependabot version updates. One grouped pull request per ecosystem each week, so updates do not flood the queue.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      github-actions:
+        patterns: ["*"]
+
+  - package-ecosystem: cargo
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      # Minor and patch updates in one pull request; a major update gets its own.
+      cargo-minor-and-patch:
+        update-types: ["minor", "patch"]
+    ignore:
+      # glib (GHSA-wrw7-89jp-8q8g) comes in through gtk3. The alerts were dismissed as a tolerable risk;
+      # ENG-30690 tracks the move off gtk3, which removes glib.
+      - dependency-name: glib
