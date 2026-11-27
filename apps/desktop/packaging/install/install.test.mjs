@@ -93,7 +93,8 @@ function tarball(dir, name = "nexus-desktop-9.9.9-linux-x86_64") {
   writeFileSync(join(root, "nexus-desktop-gpui"), `#!/bin/sh\nprintf launched > "$HOME/launched"\n`, { mode: 0o755 });
   writeFileSync(join(root, "install.sh"), `#!/bin/sh\nmkdir -p "$HOME/.local/share/applications"\nprintf menu > "$HOME/.local/share/applications/nexus-desktop-gpui.desktop"\n`, { mode: 0o755 });
   const file = join(dir, "files", `${name}.tar.xz`);
-  const made = spawnSync("tar", ["-C", join(dir, "pack"), "-cJf", file, name]);
+  // Relative paths: GNU tar (Git for Windows') reads the `C:` of a Windows path as a remote host.
+  const made = spawnSync("tar", ["-C", "pack", "-cJf", join("files", `${name}.tar.xz`), name], { cwd: dir });
   assert.equal(made.status, 0, String(made.stderr));
   return { file: `${name}.tar.xz`, bytes: readFileSync(file) };
 }
@@ -124,14 +125,32 @@ function linuxFixture(t, { corrupt = false } = {}) {
   return dir;
 }
 
+// A path as the script's shell names it. On Windows the shell is Git for Windows' sh, which names `C:\a\b` `/c/a/b`.
+// Elsewhere a path is already that.
+const posix = (value) =>
+  process.platform === "win32" && /^[A-Za-z]:[\\/]/.test(value)
+    ? `/${value[0].toLowerCase()}${value.slice(2).replaceAll("\\", "/")}`
+    : value;
+
+// The script's environment: this process's, and the test's own variables. Git for Windows' sh turns PATH into its own
+// form, but not the other variables, so a path in one of the test's is given as the shell names it. Its `ln -s` copies
+// unless MSYS asks for real symbolic links, and the Linux install links its launcher.
+function shEnv(own) {
+  const mapped = Object.fromEntries(Object.entries(own).map(([name, value]) => [name, posix(value)]));
+  return { ...process.env, ...mapped, ...(process.platform === "win32" ? { MSYS: "winsymlinks:nativestrict" } : {}) };
+}
+
+// The fake tools go first on PATH inside the shell, which then runs the script. Set from outside, they would not stay
+// first on Windows: the `sh` on a runner's PATH is Git's bin/sh.exe, which puts its own /mingw64/bin and /usr/bin (the
+// real uname, mv and so on) ahead of the PATH it was given.
+const FAKES_FIRST = 'PATH="$1:$PATH"; export PATH; shift; exec sh "$@"';
+
 function run(dir, { args = [], env = {}, cwd } = {}) {
-  const result = spawnSync("sh", [shScript, ...args], {
+  const result = spawnSync("sh", ["-c", FAKES_FIRST, "sh", posix(join(dir, "bin")), shScript, ...args], {
     encoding: "utf8",
     cwd,
     timeout: 20_000,
-    env: {
-      ...process.env,
-      PATH: `${join(dir, "bin")}:${process.env.PATH}`,
+    env: shEnv({
       HOME: join(dir, "home"),
       TMPDIR: join(dir, "tmp"),
       FIXTURE: dir,
@@ -146,7 +165,7 @@ function run(dir, { args = [], env = {}, cwd } = {}) {
       DISPLAY: "",
       WAYLAND_DISPLAY: "",
       ...env,
-    },
+    }),
   });
   assert.equal(result.error, undefined);
   const calls = existsSync(join(dir, "calls")) ? readFileSync(join(dir, "calls"), "utf8") : "";
@@ -336,7 +355,7 @@ test("Linux: a failed restore leaves the previous install at the reported path",
   assert.equal(existsSync(install), false);
   const [stage] = readdirSync(home).filter((name) => name.startsWith(".nexus-desktop-install."));
   const backup = join(home, stage, "previous");
-  assert.ok(r.stderr.includes(backup));
+  assert.ok(r.stderr.includes(posix(backup)), r.stderr);
   assert.equal(readFileSync(join(backup, "marker"), "utf8"), "old contents");
   assert.deepEqual(r.leftovers, []);
 });
@@ -380,7 +399,8 @@ test("Linux: preserves an unrelated directory that replaces the app during downl
   const dir = linuxFixture(t);
   const app = join(dir, "home", "chosen-install");
   mkdirSync(app);
-  writeFileSync(join(app, "nexus-desktop-gpui"), "previous", { mode: 0o755 });
+  // A script, so it is executable on Windows too, where Git for Windows' sh reads `#!` instead of a mode.
+  writeFileSync(join(app, "nexus-desktop-gpui"), "#!/bin/sh\nprevious\n", { mode: 0o755 });
   writeFileSync(join(app, "install.sh"), "previous", { mode: 0o755 });
   writeFileSync(join(app, "keep"), "unrelated");
   const result = run(dir, { env: {
@@ -427,6 +447,14 @@ test("both scripts read only the stable manifest, add no query string and need n
 const pwsh = spawnSync("pwsh", ["-NoProfile", "-Command", "$PSVersionTable.PSVersion.Major"], { encoding: "utf8" });
 const hasPwsh = pwsh.status === 0;
 
+// The fake machine's environment. PROCESSOR_ARCHITEW6432 is left out, not set empty: Windows starts a 64-bit process
+// with PROCESSOR_ARCHITECTURE taken from it whenever it is set, so an empty one would erase the architecture.
+function psEnv(env) {
+  const all = { ...process.env, ...env };
+  delete all.PROCESSOR_ARCHITEW6432;
+  return all;
+}
+
 // Runs the script's functions with its last line (the call) removed and Invoke-*, Start-Process stubbed.
 function runPs(t, { manifest, body, env = {} }) {
   const dir = mkdtempSync(join(tmpdir(), "nexus-public-install-ps-"));
@@ -457,7 +485,7 @@ $script:log | ForEach-Object { Write-Host "LOG $_" }
   const r = spawnSync("pwsh", ["-NoProfile", "-File", join(dir, "run.ps1")], {
     encoding: "utf8",
     timeout: 60_000,
-    env: { ...process.env, LOCALAPPDATA: join(dir, "local"), PROCESSOR_ARCHITECTURE: "AMD64", PROCESSOR_ARCHITEW6432: "", NEXUS_NO_LAUNCH: "", FAKE_EXIT: "0", ...env },
+    env: psEnv({ LOCALAPPDATA: join(dir, "local"), PROCESSOR_ARCHITECTURE: "AMD64", NEXUS_NO_LAUNCH: "", FAKE_EXIT: "0", ...env }),
   });
   return { ...r, dir };
 }

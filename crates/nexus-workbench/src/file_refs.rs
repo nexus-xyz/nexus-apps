@@ -106,7 +106,7 @@ pub fn locate(root: &Path, path: &str, touched: &[String], list: impl Fn(&Path) 
     let tail = format!("/{path}");
     let touched_file = touched
         .iter()
-        .find(|file| file.ends_with(&tail) && Path::new(file).is_file())
+        .find(|file| slashed(file).ends_with(&tail) && Path::new(file).is_file())
         .map(|file| (from_root(root, file), file));
     // The newest copy the agent touched is outside `root`: that copy, even when `root` has one too.
     if let Some((file, absolute)) = &touched_file
@@ -135,6 +135,16 @@ pub fn locate(root: &Path, path: &str, touched: &[String], list: impl Fn(&Path) 
     });
     let first = found.next()?;
     found.next().is_none().then(|| first.to_string_lossy().into_owned())
+}
+
+/// `file` with `/` between its parts. A Windows tool call names `C:\repo\src\a.rs`: its `\` count as `/` there, so
+/// the tail matches on every system. A `\` in a Unix file name stays one.
+fn slashed(file: &str) -> std::borrow::Cow<'_, str> {
+    if cfg!(windows) {
+        file.replace('\\', "/").into()
+    } else {
+        file.into()
+    }
 }
 
 /// `file`, an absolute path, as a path from `root` when it is in it; else as it is.
