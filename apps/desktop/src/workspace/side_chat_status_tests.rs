@@ -96,6 +96,36 @@ fn the_tooltip_names_the_entry_then_its_state() {
     );
 }
 
+#[test]
+fn a_side_chat_that_needs_the_person_fills_its_sessions_dot() {
+    use nexus_workbench::attention::Mark;
+    for mark in [Mark::Idle, Mark::Running, Mark::Failed, Mark::Background] {
+        assert_eq!(roll_up(mark, [Some(Attention::Needs)]), Mark::You, "{mark:?}");
+    }
+}
+
+#[test]
+fn a_failed_side_chat_shows_only_while_its_session_rests() {
+    use nexus_workbench::attention::Mark;
+    assert_eq!(roll_up(Mark::Idle, [Some(Attention::Error)]), Mark::Failed);
+    for mark in [Mark::Running, Mark::You, Mark::Background] {
+        assert_eq!(roll_up(mark, [Some(Attention::Error)]), mark, "{mark:?}");
+    }
+}
+
+#[test]
+fn working_and_unread_side_chats_leave_the_sidebar_alone() {
+    use nexus_workbench::attention::Mark;
+    let quiet = [
+        None,
+        Some(Attention::Working),
+        Some(Attention::Unread),
+        Some(Attention::Limited),
+    ];
+    assert_eq!(roll_up(Mark::Idle, quiet), Mark::Idle);
+    assert_eq!(roll_up(Mark::Running, []), Mark::Running);
+}
+
 /// A window with the arc, and a count of the times it asked to draw again.
 fn arc(cx: &mut gpui_kit::TestAppContext) -> (Rc<Cell<usize>>, &mut gpui_kit::VisualTestContext) {
     let (view, cx) = cx.add_window_view(|_, _| TurningMark);
