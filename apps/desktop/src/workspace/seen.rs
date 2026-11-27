@@ -130,7 +130,14 @@ impl Workspace {
             attention::attention_of(activity, session.limited, seen_at(&session.id, cx), pull_needs_you)
         };
         let mark = attention::mark_of(Some(activity.status), attention);
-        status_of(attention::with_background(mark, attention, session.background_busy))
+        let mark = attention::with_background(mark, attention, session.background_busy);
+        // Its side chats never list: one that needs the person, or failed, shows here (`side_chat_status::roll_up`).
+        let shown = open && self.side.open && self.side.side_chat_visible;
+        let sides = session.side_chats.iter().map(|side| {
+            let shown = shown && self.side.side_chat_for.get(&session.id) == Some(&side.id);
+            super::side_chat_status::state_of(side, seen_at(&side.id, cx), shown)
+        });
+        status_of(super::side_chat_status::roll_up(mark, sides))
     }
 
     /// The sessions were read again: each one seen for the first time counts as seen, and the open one is seen now.

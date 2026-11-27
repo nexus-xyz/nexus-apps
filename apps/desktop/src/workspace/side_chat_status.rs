@@ -1,6 +1,6 @@
 //! What the Workbench's Side chat entry tells about its side chat while the person is not looking at it: the overview's
-//! row, the strip's tab and the "+" menu's row. A side chat never lists in the sidebar, so these are the only places
-//! that say it works, waits on the person or failed.
+//! row, the strip's tab and the "+" menu's row. A side chat never lists in the sidebar, so its parent session's row
+//! there also shows one that needs the person or failed ([`roll_up`]).
 //!
 //! The state is the sidebar's rule (`nexus_workbench::attention::attention_of`), read from the side chat's summary,
 //! which the sessions' overview keeps on its parent (`CodeSession::side_chats`). The marks follow brand v5's
@@ -20,7 +20,7 @@ use std::time::Duration;
 use gpui_kit::assets::IconName as Lucide;
 use gpui_kit::component::Icon;
 use gpui_kit::*;
-use nexus_workbench::attention::{self, Attention};
+use nexus_workbench::attention::{self, Attention, Mark};
 
 use super::{View, Workspace};
 use crate::code::SideChatActivity;
@@ -54,6 +54,21 @@ pub(super) fn tooltip(name: &str, state: Option<Attention>) -> String {
         Some(state) => format!("{name} · {}", state.label()),
         None => name.to_string(),
     }
+}
+
+/// A session's sidebar mark once its side chats count, since a side chat never lists there. One that needs the person
+/// fills the session's dot, as an approval of its own would (`attention::mark_of` puts it over a running turn). One
+/// that failed shows the cross only while the session itself rests, so a failed side chat never hides a session at
+/// work. Working and unread side chats leave the mark alone: the Workbench's entry tells those.
+pub(super) fn roll_up(mark: Mark, sides: impl IntoIterator<Item = Option<Attention>>) -> Mark {
+    let sides: Vec<Attention> = sides.into_iter().flatten().collect();
+    if sides.contains(&Attention::Needs) {
+        return Mark::You;
+    }
+    if sides.contains(&Attention::Error) && mark == Mark::Idle {
+        return Mark::Failed;
+    }
+    mark
 }
 
 /// The mark for `state`. `arc`: the window's turning mark; without it the arc stands still.
