@@ -1,0 +1,401 @@
+# Path items. The root openapi.yaml references each one.
+/v1/sessions:
+  post:
+    tags:
+      - Sessions
+    operationId: createSession
+    summary: >-
+      Start a headless cloud session: a cloud session with no desktop app. Gateway creates your cloud machine for the
+      session (as POST /v1/cloud/machines does, with its limits and charges), the machine clones `repo` and runs its
+      `.agents/setup` at boot with the organization's Nexus GitHub App, and Gateway then starts the agent on the machine
+      with `prompt` as its first message. The prompt never goes to the provider: Gateway sends it to the machine's host
+      once the host is online. The agent runs on the Nexus route, charged to the organization, in `auto` permission
+      mode. Send `idempotencyKey` (or an `Idempotency-Key` header): the session's id is derived from it, so a resend
+      answers the same session. Read the session (GET) to see it move from `starting` to `running`. Off unless a server
+      setting is on.
+    parameters:
+      - name: x-nexus-github-token
+        in: header
+        required: false
+        description: >-
+          Your own GitHub token. Gateway asks GitHub with it whether you may read `repo`. Used for that check only,
+          never kept, and never sent to the machine. Without it, Gateway uses your own `github` connection (connect it
+          with `POST /v1/connections/github/oauth`).
+        schema:
+          type: string
+      - name: x-nexus-github-account
+        in: header
+        required: false
+        description: The id of your linked GitHub account when you have more than one.
+        schema:
+          type: string
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKeyRequired
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas.yaml#/CreateSession
+    responses:
+      "200":
+        description: The session a start with this key made
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Session
+      "201":
+        description: "Created: the machine starts, and the prompt waits for its host"
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Session
+      "400":
+        description: >-
+          A field is wrong: `invalid_repo` (not GitHub `owner/name`), `invalid_agent` (not an agent this Gateway runs in
+          cloud sessions), `invalid_model`, `model_required` (no agent and no model), `unknown_model`,
+          `model_coming_soon` or `unsupported_cloud_model` (no cloud agent runs the model), `agent_model_mismatch` (the
+          model runs on another agent; `error.nexus` names `agent`, `model` and `modelAgent`), `invalid_prompt`,
+          `invalid_started_by`, `idempotency_key_required`, or `project_id_unsupported` (`projectId` is reserved).
+      "402":
+        description: >-
+          Nothing covers 15 minutes of the machine's cloud compute (`budget_exceeded`), or the organization is past due
+          (`payment_past_due`).
+      "403":
+        description: >-
+          Cloud machines are disabled (`cloud_not_enabled`), the organization disallows the GitHub connection
+          (`connector_disabled`), or it needs reconnecting (`connection_expired`).
+      "404":
+        description: a server setting is off.
+      "409":
+        description: >-
+          No `x-nexus-github-token` header and no `github` connection of your own (`github_connection_required`, with
+          `error.nexus.connect` set to `github`): connect your GitHub account, then start again. Or the machine may not
+          set the repository up (`repo_setup_unavailable`): you cannot read it, or the organization's Nexus GitHub App
+          does not reach it.
+      "422":
+        description: This key names another session (`idempotency_key_reused`); send a new key.
+      "428":
+        $ref: ../components/common.yaml#/responses/PreconditionRequired
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      "502":
+        description: The cloud provider failed or did not answer (`cloud_provider_error`); try again.
+      "503":
+        description: No provider account on this Gateway (`cloud_unavailable`); try again later.
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: cloud.machines.use
+    x-internal-stability: beta
+    x-idempotency: required
+  get:
+    tags:
+      - Sessions
+    operationId: listSessions
+    summary: Your headless cloud sessions in this organization, newest first (at most 50), each with its cloud machine.
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/SessionList
+      "404":
+        description: a server setting is off.
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      "503":
+        description: No provider account on this Gateway (`cloud_unavailable`); try again later.
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: cloud.machines.use
+    x-internal-stability: beta
+/v1/sessions/{id}:
+  get:
+    tags:
+      - Sessions
+    operationId: getSession
+    summary: "Your session: its state, its id on the machine once it started, its lineage and its cloud machine."
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[A-Za-z0-9_-]+$
+        description: The session's id (`cs_…`), as POST /v1/sessions answered it
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Session
+      "404":
+        description: >-
+          No such session of yours: another person's session and another organization's are as absent as a missing one.
+          Every sessions route answers 404 while a server setting is off.
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      "503":
+        description: No provider account on this Gateway (`cloud_unavailable`); try again later.
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: cloud.machines.use
+    x-internal-stability: beta
+/v1/sessions/{id}/messages:
+  post:
+    tags:
+      - Sessions
+    operationId: sendSessionMessage
+    summary: >-
+      Send the session's agent its next message. It waits for the machine's host, after the messages before it, and a
+      sleeping machine wakes for it (with the wake's limits and charges). A message whose answer the host lost is not
+      sent again: the session's `error` says so.
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[A-Za-z0-9_-]+$
+        description: The session's id (`cs_…`), as POST /v1/sessions answered it
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKeyRequired
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas.yaml#/SessionMessage
+    responses:
+      "202":
+        description: "Accepted: the message waits for the machine's host"
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Session
+      "400":
+        description: "`text` is blank or longer than 100000 characters (`invalid_text`)."
+      "404":
+        description: >-
+          No such session of yours: another person's session and another organization's are as absent as a missing one.
+          Every sessions route answers 404 while a server setting is off.
+      "409":
+        description: The session stopped or failed (`session_ended`).
+      "428":
+        $ref: ../components/common.yaml#/responses/PreconditionRequired
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      "503":
+        description: No provider account on this Gateway (`cloud_unavailable`); try again later.
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: cloud.machines.use
+    x-internal-stability: beta
+    x-idempotency: required
+/v1/sessions/{id}/runner:
+  post:
+    tags:
+      - Sessions
+    operationId: takeSessionRunner
+    summary: >-
+      Take the session as its runner: the desktop app, nexus-host or a cloud machine that runs its agent. The runner
+      gets the session's next fencing token and a lease of 60 seconds, which it renews every 20 seconds (POST
+      /v1/sessions/{id}/runner/renew). Without `seenToken`, the take succeeds only when no runner's lease is live: the
+      first take, or a takeover after the lease passed. With `seenToken` (the session's `fencingToken` as you read it),
+      it is a handoff: it takes the session from whoever holds it, while that is still the session's token. Each take
+      raises the token by one, so the runner it replaced gets 409 `lost_runner` on its next renewal or connector write.
+      Of two takes at once, one wins and the other gets 409 `takeover_conflict`.
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[A-Za-z0-9_-]+$
+        description: The session's id (`cs_…`), as POST /v1/sessions answered it
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKeyRequired
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas.yaml#/TakeSessionRunner
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/SessionRunner
+      "400":
+        description: "`invalid_runner_id` or `invalid_token`."
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "404":
+        description: >-
+          No such session of yours: another person's session and another organization's are as absent as a missing one.
+          Every sessions route answers 404 while a server setting is off.
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "409":
+        description: >-
+          `takeover_conflict`: another runner's lease is live and the take named no `seenToken`, or the token you saw is
+          no longer the session's (`error.nexus.currentFencingToken`). `session_ended`: the session stopped or failed.
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "428":
+        $ref: ../components/common.yaml#/responses/PreconditionRequired
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      "503":
+        description: No provider account on this Gateway (`cloud_unavailable`); try again later.
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: cloud.machines.use
+    x-internal-stability: beta
+    x-idempotency: required
+/v1/sessions/{id}/runner/renew:
+  post:
+    tags:
+      - Sessions
+    operationId: renewSessionRunner
+    summary: >-
+      Renew the runner's lease for 60 seconds more. Only the holder of the session's current fencing token renews; a
+      lease that passed renews too while no other runner took the session. Send it without `Idempotency-Key`: a retry
+      has the same effect while the token is current. A key, when sent, is kept and replayed as on any write.
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[A-Za-z0-9_-]+$
+        description: The session's id (`cs_…`), as POST /v1/sessions answered it
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKey
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas.yaml#/RenewSessionRunner
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/SessionRunner
+      "400":
+        description: The body is not `{ fencingToken }`.
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "404":
+        description: >-
+          No such session of yours: another person's session and another organization's are as absent as a missing one.
+          Every sessions route answers 404 while a server setting is off.
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "409":
+        description: >-
+          `lost_runner`: another runner took the session, so stop running it and stop writing for it
+          (`error.nexus.currentFencingToken`). `session_ended`: the session stopped or failed.
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      "503":
+        description: No provider account on this Gateway (`cloud_unavailable`); try again later.
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: cloud.machines.use
+    x-internal-stability: beta
+    x-idempotency: optional
+    description: "Exempt: a heartbeat. A repeat only renews the same state."
+/v1/sessions/{id}/stop:
+  post:
+    tags:
+      - Sessions
+    operationId: stopSession
+    summary: >-
+      Stop the session. Before its agent started, it ends now and its machine goes to sleep. After, Gateway asks the
+      machine's host to stop the agent, and the session ends (`stopped`) once it did; the machine then sleeps when idle.
+      A stop of an ended session changes nothing.
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[A-Za-z0-9_-]+$
+        description: The session's id (`cs_…`), as POST /v1/sessions answered it
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKeyRequired
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Session
+      "404":
+        description: >-
+          No such session of yours: another person's session and another organization's are as absent as a missing one.
+          Every sessions route answers 404 while a server setting is off.
+      "428":
+        $ref: ../components/common.yaml#/responses/PreconditionRequired
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      "503":
+        description: No provider account on this Gateway (`cloud_unavailable`); try again later.
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: cloud.machines.use
+    x-internal-stability: beta
+    x-idempotency: required

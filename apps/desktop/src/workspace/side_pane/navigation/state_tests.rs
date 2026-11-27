@@ -76,6 +76,7 @@ fn tool(id: &str, output: Option<&str>) -> crate::code::Block {
             id: id.into(),
             input: serde_json::json!({}),
             output: output.map(|text| crate::code::ToolOutput {
+                handoff: None,
                 text: text.into(),
                 error: false,
                 truncated: false,

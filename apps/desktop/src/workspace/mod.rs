@@ -165,6 +165,7 @@ pub(crate) use session_menu::pull_color;
 #[cfg(test)]
 mod browser_origin_tests;
 mod first_connection;
+mod handoff_card;
 #[cfg(test)]
 pub(crate) use first_connection::tests as first_connection_tests;
 #[cfg(test)]

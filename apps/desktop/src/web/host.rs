@@ -36,8 +36,10 @@ const BATCH: usize = 32;
 const CLOSE_WAIT: Duration = Duration::from_secs(2);
 /// A hidden blank page the host opens at start and closes again. It starts Chromium's first page process, and
 /// Chromium keeps a spare one ready after it, so the app's first page skips that start: about 150ms, measured.
+/// On macOS `process_limits.rs` turns the spare off, so there the primer only starts the GPU and network
+/// services before the first page. Its saving on macOS is not measured.
 const PRIMER: u32 = u32::MAX;
-/// How long the blank page stays: long enough for its page process to start.
+/// The blank page closes after this long, or as soon as the app opens a page of its own.
 const PRIMER_FOR: Duration = Duration::from_secs(1);
 /// A paced page the app has not asked for a frame for this long gets one from the host, so a page that changes on
 /// its own (a timer, a load) still shows it. Its first new frame then has the app pace it again.
@@ -94,6 +96,11 @@ thread_local! {
     /// those of them the app closed already.
     static PENDING: RefCell<HashMap<u32, StateRef>> = RefCell::new(HashMap::new());
     static CLOSED_EARLY: RefCell<std::collections::HashSet<u32>> = RefCell::new(std::collections::HashSet::new());
+    /// Keep a page alive until CEF exposes its native host and accepts its close request. Such a page stays in
+    /// `pages` on purpose. It has no host yet, so `idle_frames` skips it. It counts as an explicit page for the
+    /// primer, which only retires the primer earlier. The app sends nothing for a page after closing it (ids are
+    /// never reused), so no other command reaches it.
+    static CLOSING: RefCell<std::collections::HashSet<u32>> = RefCell::new(std::collections::HashSet::new());
     /// DevTools messages for pages not created yet, sent once they are, in order.
     static EARLY_CDP: RefCell<HashMap<u32, Vec<String>>> = RefCell::new(HashMap::new());
     /// Each website profile's request context, made on its first page and kept while the host runs.
@@ -239,18 +246,18 @@ fn settle(pages: &mut HashMap<u32, Page>) {
     for (id, browser, state) in ADOPTED.with_borrow_mut(std::mem::take) {
         PENDING.with_borrow_mut(|pending| pending.remove(&id));
         let early = EARLY_CDP.with_borrow_mut(|early| early.remove(&id)).unwrap_or_default();
-        if CLOSED_EARLY.with_borrow_mut(|closed| closed.remove(&id)) {
-            // The app closed it before the engine made it.
-            if let Some(host) = browser.host() {
-                host.close_browser(1);
-            }
-            continue;
-        }
+        let closed_early = CLOSED_EARLY.with_borrow_mut(|closed| closed.remove(&id));
         let mut page = Page {
             browser,
             state,
             dev_tools: None,
         };
+        if closed_early {
+            // Its native host may still be unavailable: retain it until the queued close can complete.
+            pages.insert(id, page);
+            request_close(id, pages);
+            continue;
+        }
         for message in early {
             send_cdp(id, &mut page, &message);
         }
@@ -266,6 +273,7 @@ fn settle(pages: &mut HashMap<u32, Page>) {
         #[cfg(target_os = "linux")]
         super::frames::forget(id);
     }
+    close_pages(pages);
 }
 
 /// Ask each paced page the app has not asked lately for a frame.
@@ -454,11 +462,10 @@ pub(super) fn run() -> i32 {
     // The last turn was the extra turn after a long one (below).
     let mut extra = false;
     'run: loop {
-        if primed.is_some_and(|at| at.elapsed() >= PRIMER_FOR) {
+        settle(&mut pages);
+        if primed.is_some_and(|at| at.elapsed() >= PRIMER_FOR || pages.keys().any(|id| *id != PRIMER)) {
             primed = None;
-            if let Some(host) = pages.remove(&PRIMER).and_then(|page| page.host()) {
-                host.close_browser(1);
-            }
+            request_close(PRIMER, &mut pages);
         }
         idle_frames(&pages);
         // CEF's work runs when it asks for it, and at least every `fallback` from the last run. The deadline is fixed
@@ -536,19 +543,55 @@ pub(super) fn run() -> i32 {
         summarise_loop(pages.len());
     }
     // Close every page, let CEF finish closing them, then stop it.
-    for page in pages.values() {
-        if let Some(host) = page.host() {
-            host.close_browser(1);
-        }
+    let mut ids = pages.keys().copied().collect::<Vec<_>>();
+    ids.extend(PENDING.with_borrow(|pending| pending.keys().copied().collect::<Vec<_>>()));
+    for id in ids {
+        request_close(id, &mut pages);
     }
     let deadline = Instant::now() + CLOSE_WAIT;
     while OPEN.load(Ordering::Relaxed) > 0 && Instant::now() < deadline {
         cef::do_message_loop_work();
+        settle(&mut pages);
         std::thread::sleep(Duration::from_millis(10));
     }
     drop(pages);
     cef::shutdown();
     0
+}
+
+/// Close through one path, including a page that is not created yet or whose native host is not ready.
+fn request_close(id: u32, pages: &mut HashMap<u32, Page>) {
+    if PENDING.with_borrow_mut(|pending| pending.remove(&id)).is_some() {
+        CLOSED_EARLY.with_borrow_mut(|closed| closed.insert(id));
+    }
+    CLOSING.with_borrow_mut(|closing| closing.insert(id));
+    close_pages(pages);
+}
+
+fn close_pages(pages: &mut HashMap<u32, Page>) {
+    CLOSING.with_borrow_mut(|closing| {
+        settle_closes(pages, closing, |page| {
+            let Some(host) = page.host() else { return false };
+            host.close_browser(1);
+            true
+        })
+    });
+}
+
+/// A native resource stays owned while its close cannot run. A later turn retries the same request.
+fn settle_closes<T>(
+    pages: &mut HashMap<u32, T>,
+    closing: &mut std::collections::HashSet<u32>,
+    mut close: impl FnMut(&T) -> bool,
+) {
+    closing.retain(|id| {
+        if pages.get(id).is_none_or(&mut close) {
+            pages.remove(id);
+            false
+        } else {
+            true
+        }
+    });
 }
 
 /// Open the [`PRIMER`] page. Returns when it opened.
@@ -630,12 +673,7 @@ fn handle(command: Command, pages: &mut HashMap<u32, Page>) {
             None => emit(&Event::Failed { id }),
         },
         Command::Close { id } => {
-            if PENDING.with_borrow_mut(|pending| pending.remove(&id)).is_some() {
-                CLOSED_EARLY.with_borrow_mut(|closed| closed.insert(id));
-            }
-            if let Some(host) = pages.remove(&id).and_then(|page| page.host()) {
-                host.close_browser(1);
-            }
+            request_close(id, pages);
             super::page_drag::forget(id);
             #[cfg(target_os = "linux")]
             super::frames::forget(id);
@@ -1235,6 +1273,36 @@ mod tests {
     use core::prelude::v1::test;
 
     use super::*;
+
+    #[test]
+    fn retiring_the_primer_before_its_native_host_exists_keeps_it_owned_until_close() {
+        use std::cell::Cell;
+        let ready = Cell::new(false);
+        let closes = Cell::new(0);
+        let mut pages = HashMap::from([(PRIMER, &ready), (7, &ready)]);
+        let mut closing = std::collections::HashSet::from([PRIMER]);
+        let close = |ready: &&Cell<bool>| {
+            if !ready.get() {
+                return false;
+            }
+            closes.set(closes.get() + 1);
+            true
+        };
+        settle_closes(&mut pages, &mut closing, close);
+        assert!(
+            pages.contains_key(&PRIMER),
+            "an unavailable host must not orphan its browser"
+        );
+        assert!(closing.contains(&PRIMER));
+        assert_eq!(closes.get(), 0);
+        ready.set(true);
+        settle_closes(&mut pages, &mut closing, close);
+        assert!(!pages.contains_key(&PRIMER));
+        assert!(pages.contains_key(&7), "the real page stays alive");
+        assert!(closing.is_empty());
+        settle_closes(&mut pages, &mut closing, close);
+        assert_eq!(closes.get(), 1, "close exactly once when its host becomes ready");
+    }
 
     #[test]
     fn a_profile_is_saved_in_its_own_folder_or_kept_in_memory() {

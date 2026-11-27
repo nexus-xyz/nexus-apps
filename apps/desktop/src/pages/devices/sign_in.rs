@@ -20,7 +20,7 @@ pub(super) enum Registration {
     Approvals,
     /// The organization keeps encrypted session sync off on this computer: nothing changed.
     Managed,
-    /// Gateway lists this computer's key already, in any state: nothing changed.
+    /// Gateway lists this computer's key already, trusted or revoked: nothing changed.
     Listed,
     /// This computer registered now.
     Registered,
@@ -69,7 +69,11 @@ pub(super) fn register(
         let (key, made) = off_thread(load_key).await?;
         let encryption_key = e2e::b64u(&key.encryption_key());
         let signing_key = e2e::b64u(&key.signing_key());
-        if this_device(&read_devices(&directory), &encryption_key, &signing_key).is_some() {
+        // A key left pending from approvals registers again: Gateway trusts the same key now. A trusted key needs
+        // nothing, and a revoked one waits for the person, who revoked it.
+        if this_device(&read_devices(&directory), &encryption_key, &signing_key)
+            .is_some_and(|device| device.state != "pending")
+        {
             return Ok(Registration::Listed);
         }
         let body = json!({

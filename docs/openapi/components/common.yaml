@@ -1,0 +1,490 @@
+# Shared parameters, responses and headers.
+parameters:
+  AgentSessionAgent:
+    name: agent
+    in: query
+    required: false
+    description: "`claude`, `codex`, `antigravity` or `cursor`"
+    schema:
+      $ref: ./schemas.yaml#/AgentId
+  AgentSessionFrom:
+    name: from
+    in: query
+    required: false
+    description: The first UTC day a session started, YYYY-MM-DD; default 29 days before `to`
+    schema:
+      type: string
+      format: date
+  AgentSessionStatus:
+    name: status
+    in: query
+    required: false
+    description: A comma-separated set of `running`, `succeeded`, `failed` and `interrupted`; default all four
+    schema:
+      type: string
+  AgentSessionTeam:
+    name: team
+    in: query
+    required: false
+    description: "A team slug or id: that team and every team under it; `unassigned` for sessions with no team"
+    schema:
+      type: string
+  AgentSessionTo:
+    name: to
+    in: query
+    required: false
+    description: The last UTC day a session started, YYYY-MM-DD, included; default today. A range covers at most 366 days
+    schema:
+      type: string
+      format: date
+  AgentSessionVia:
+    name: via
+    in: query
+    required: false
+    description: "`nexus`, `subscription` or `ori`"
+    schema:
+      type: string
+      enum:
+        - nexus
+        - subscription
+        - ori
+  IdempotencyKey:
+    name: Idempotency-Key
+    in: header
+    required: false
+    description: "Optional here. A unique value per logical write, such as a UUID. Same rules as on a POST: see the README."
+    schema:
+      type: string
+      minLength: 1
+      maxLength: 255
+      pattern: ^[\x20-\x7E]+$
+  IdempotencyKeyRequired:
+    name: Idempotency-Key
+    in: header
+    required: true
+    description: >-
+      Required. A unique value per logical write, such as a UUID. Reuse it only to retry the same request. The first
+      answer is kept 24 hours and replayed with `Idempotent-Replayed: true`. Missing: 428 `idempotency_key_required`.
+      Malformed: 400 `invalid_idempotency_key`. Same key, different request: 422 `idempotency_key_reused`. First request
+      still running: 409 `idempotency_in_progress`.
+    schema:
+      type: string
+      minLength: 1
+      maxLength: 255
+      pattern: ^[\x20-\x7E]+$
+    example: 6f1c2a8e-3b7d-4f0e-9a51-2d4c8e7b9f10
+  IfMatch:
+    name: If-Match
+    in: header
+    required: true
+    description: >-
+      The `ETag` from your last read of this resource. The write applies only if the resource still has that version. It
+      takes `"42"`, `42` or `*` (any version). Missing: 428 `if_match_required`. Stale: 412 `version_mismatch`.
+    schema:
+      type: string
+    example: "\"42\""
+  ObservabilityFileCursor:
+    name: cursor
+    in: query
+    required: false
+    description: >-
+      A cut file's `manifest.nextCursor`: the next file of the same query. A manifest's `watermark` also works: it
+      starts the same series again. It is bound to the organization, the caller and the query: anywhere else it is a 400
+      `invalid_cursor`
+    schema:
+      type: string
+  ObservabilityFrom:
+    name: from
+    in: query
+    required: false
+    description: The first UTC day, YYYY-MM-DD; default 29 days before `to`
+    schema:
+      type: string
+      format: date
+  ObservabilityModel:
+    name: model
+    in: query
+    required: false
+    description: A model, as the rows name it; `-` for the calls with none (released calls), as Analytics groups them
+    schema:
+      type: string
+  ObservabilityPerson:
+    name: person
+    in: query
+    required: false
+    description: A person's user id
+    schema:
+      type: string
+  ObservabilityProduct:
+    name: product
+    in: query
+    required: false
+    description: "A product (`agents`) or a product and capability (`intelligence/wiki`): Analytics' group key"
+    schema:
+      type: string
+  ObservabilityProvider:
+    name: provider
+    in: query
+    required: false
+    description: >-
+      A provider, as the rows name it; `-` for the calls with none (refused and released calls), as Analytics groups
+      them
+    schema:
+      type: string
+  ObservabilityTeam:
+    name: team
+    in: query
+    required: false
+    description: "A team slug or id: that team and every team under it; `unassigned` for calls with no team"
+    schema:
+      type: string
+  ObservabilityTo:
+    name: to
+    in: query
+    required: false
+    description: The last UTC day, YYYY-MM-DD, included; default today. A range covers at most 366 days
+    schema:
+      type: string
+      format: date
+  SpendCallCursor:
+    name: cursor
+    in: query
+    required: false
+    description: >-
+      `nextCursor` from the previous page. It is bound to the organization, the caller and the query: anywhere else it
+      is a 400 `invalid_cursor`
+    schema:
+      type: string
+  SpendCallLimit:
+    name: limit
+    in: query
+    required: false
+    description: Calls per page, 1 to 500 (default 50)
+    schema:
+      type: integer
+      minimum: 1
+      maximum: 500
+  SpendCallSession:
+    name: session
+    in: query
+    required: false
+    description: "An agent session id or a chat session id: the calls attributed to it"
+    schema:
+      type: string
+  SpendCallStatus:
+    name: status
+    in: query
+    required: false
+    description: A comma-separated set of `settled`, `failed`, `refused` and `released`; default all four
+    schema:
+      type: string
+responses:
+  BadRequest:
+    description: >-
+      The request is not valid; the message names the field. A JSON body that is not an object, or a string in it that
+      holds U+0000 (`nul_in_string`), is a 400 on every route that reads one. So is an `Idempotency-Key` that is not 1
+      to 255 printable ASCII characters (`invalid_idempotency_key`).
+    content:
+      application/json:
+        schema:
+          $ref: ./schemas.yaml#/Error
+  Forbidden:
+    description: >-
+      The caller may not do this: for example, the role does not have the permission (`role_required`), or the team
+      named is not the caller's (`not_in_team`).
+    content:
+      application/json:
+        schema:
+          $ref: ./schemas.yaml#/Error
+  GatewayTimeout:
+    description: >-
+      The request passed Gateway's deadline, 30 seconds by default (`timeout`). Model calls that may stream are outside
+      it.
+    content:
+      application/json:
+        schema:
+          $ref: ./schemas.yaml#/Error
+  IdempotencyConflict:
+    description: >-
+      The `Idempotency-Key` cannot run or replay: its first request still runs (`idempotency_in_progress`), was a stream
+      (`idempotency_stream_replay`), or its answer was not kept, being over 2,000,000 bytes
+      (`idempotency_response_not_stored`). The request does not run again.
+    content:
+      application/json:
+        schema:
+          $ref: ./schemas.yaml#/Error
+  IdempotencyKeyReused:
+    description: >-
+      The `Idempotency-Key` was used for a different request: another method, path, query or body
+      (`idempotency_key_reused`).
+    content:
+      application/json:
+        schema:
+          $ref: ./schemas.yaml#/Error
+  NotFound:
+    description: >-
+      Nothing matches. A path parameter outside its pattern is a 404 "no such endpoint", before the credential is
+      checked. A team named that does not exist is `unknown_team`.
+    content:
+      application/json:
+        schema:
+          $ref: ./schemas.yaml#/Error
+  PayloadTooLarge:
+    description: >-
+      The request body is over the operation's limit (`request_too_large`): 1,000,000 bytes, unless the operation says
+      otherwise.
+    content:
+      application/json:
+        schema:
+          $ref: ./schemas.yaml#/Error
+  PreconditionRequired:
+    description: "A required header is missing: `idempotency_key_required` or `if_match_required`."
+    content:
+      application/json:
+        schema:
+          $ref: ./schemas.yaml#/Error
+  ProviderBadRequest:
+    description: >-
+      The request is not valid: for example, it has no `model`, or its body is not UTF-8, not a JSON object, or repeats
+      a field. So is an `Idempotency-Key` that is not 1 to 255 printable ASCII characters (`invalid_idempotency_key`).
+    content:
+      application/json:
+        schema:
+          $ref: ./schemas.yaml#/ProviderError
+  ProviderCallUnavailable:
+    description: >-
+      The provider's or the Gateway's own; every one may be retried. The provider's: its own 503 passes through as it
+      wrote it, with its `retry-after` (OpenAI's overload; Anthropic's is a 529, not a 503); `/metrics` and the request
+      log count it as `upstream_overloaded`. Retry after its wait, or try another model. The Gateway's, in the
+      provider's error shape: it is at its limit of requests in flight (`overloaded`, retry after 1 s); it is stopping
+      and takes no new request (`draining`, retry after 5 s); it stopped before the call answered (`gateway_stopping`,
+      send the call again: it reaches a running Gateway); or its database is busy (`database_busy`: nothing was
+      committed, retry shortly).
+    headers:
+      Retry-After:
+        description: >-
+          Whole seconds to wait: 1 on `overloaded`, 5 on `draining`, the provider's own on its 503 when it sent one;
+          none on `gateway_stopping` or `database_busy`.
+        schema:
+          type: integer
+    content:
+      application/json:
+        schema:
+          $ref: ./schemas.yaml#/ProviderError
+  ProviderCountUnavailable:
+    description: >-
+      The provider's or the Gateway's own; every one may be retried. The provider's: its own 503 passes through as it
+      wrote it, with its `retry-after` (OpenAI's overload; Anthropic's is a 529, not a 503); `/metrics` and the request
+      log count it as `upstream_overloaded`. Retry after its wait, or try another model. The Gateway's, in the
+      provider's error shape: it is at its limit of requests in flight (`overloaded`, retry after 1 s); it is stopping
+      and takes no new request (`draining`, retry after 5 s); or its database is busy (`database_busy`, retry shortly).
+      A count is never `gateway_stopping`.
+    headers:
+      Retry-After:
+        description: >-
+          Whole seconds to wait: 1 on `overloaded`, 5 on `draining`, the provider's own on its 503 when it sent one;
+          none on `database_busy`.
+        schema:
+          type: integer
+    content:
+      application/json:
+        schema:
+          $ref: ./schemas.yaml#/ProviderError
+  ProviderForbidden:
+    description: >-
+      The caller may not do this: for example, the role does not have the permission (`role_required`), or the team
+      named is not the caller's (`not_in_team`).
+    content:
+      application/json:
+        schema:
+          $ref: ./schemas.yaml#/ProviderError
+  ProviderIdempotencyConflict:
+    description: >-
+      The `Idempotency-Key` cannot run or replay: its first request still runs (`idempotency_in_progress`), was a stream
+      (`idempotency_stream_replay`), or its answer was not kept, being over 2,000,000 bytes
+      (`idempotency_response_not_stored`). The request does not run again.
+    content:
+      application/json:
+        schema:
+          $ref: ./schemas.yaml#/ProviderError
+  ProviderIdempotencyKeyReused:
+    description: >-
+      The `Idempotency-Key` was used for a different request: another method, path, query or body
+      (`idempotency_key_reused`).
+    content:
+      application/json:
+        schema:
+          $ref: ./schemas.yaml#/ProviderError
+  ProviderNotFound:
+    description: The team named in `x-nexus-team` does not exist (`unknown_team`).
+    content:
+      application/json:
+        schema:
+          $ref: ./schemas.yaml#/ProviderError
+  ProviderPayloadTooLarge:
+    description: The request body is over 32,000,000 bytes, the agent gateway's limit (`request_too_large`).
+    content:
+      application/json:
+        schema:
+          $ref: ./schemas.yaml#/ProviderError
+  ProviderRateLimited:
+    description: >-
+      Over the caller's rate limit, in the provider's error shape: retry after `Retry-After` seconds. Also a 429
+      `concurrency_limit`, with `Retry-After: 1`, when the organization already has its most requests in flight (off
+      unless Gateway sets a cap).
+    headers:
+      RateLimit-Limit:
+        $ref: "#/headers/RateLimit-Limit"
+      RateLimit-Remaining:
+        $ref: "#/headers/RateLimit-Remaining"
+      RateLimit-Reset:
+        $ref: "#/headers/RateLimit-Reset"
+      Retry-After:
+        $ref: "#/headers/Retry-After"
+    content:
+      application/json:
+        schema:
+          $ref: ./schemas.yaml#/ProviderError
+  ProviderRequestTimeout:
+    description: >-
+      The request body stopped arriving for 30 seconds, or took longer than 10 minutes in all (`request_timeout`;
+      `nexus` holds `gap_seconds` and `total_seconds`).
+    content:
+      application/json:
+        schema:
+          $ref: ./schemas.yaml#/ProviderError
+  ProviderUnauthorized:
+    description: >-
+      No key (`missing_credential`; send `Authorization: Bearer <key>` or `x-api-key`), or a key Gateway does not accept
+      (`invalid_credential`).
+    content:
+      application/json:
+        schema:
+          $ref: ./schemas.yaml#/ProviderError
+  ProviderUnavailable:
+    description: >-
+      Gateway takes no new request now: it is at its limit of requests in flight (`overloaded`), or it is stopping
+      (`draining`). Retry after `Retry-After` seconds.
+    headers:
+      Retry-After:
+        description: "Whole seconds to wait: 1 when Gateway is at its limit, 5 when it is stopping."
+        schema:
+          type: integer
+    content:
+      application/json:
+        schema:
+          $ref: ./schemas.yaml#/ProviderError
+  ProviderUpgradeRequired:
+    description: >-
+      The `nexus` CLI that sent `x-nexus-cli-version` is older than Gateway supports (`cli_too_old`; `minimum` names the
+      oldest it takes). A request without that header is never refused.
+    content:
+      application/json:
+        schema:
+          $ref: ./schemas.yaml#/ProviderError
+  ProviderUpstreamFailed:
+    description: The provider could not be reached, or the connection to it failed (`api_error`).
+    content:
+      application/json:
+        schema:
+          $ref: ./schemas.yaml#/ProviderError
+  ProviderUpstreamTimeout:
+    description: The provider passed one of the call's deadlines (`upstream_timeout`; `nexus.phase` names which).
+    content:
+      application/json:
+        schema:
+          $ref: ./schemas.yaml#/ProviderError
+  RateLimited:
+    description: >-
+      The caller or its OAuth client exceeded a rate limit (`rate_limited`). Wait for `Retry-After` seconds. An
+      organization concurrency cap returns `concurrency_limit`. A per-person cap for a third-party client returns
+      `client_concurrency_limit`. Both concurrency errors return `Retry-After: 1`.
+    headers:
+      RateLimit-Limit:
+        $ref: "#/headers/RateLimit-Limit"
+      RateLimit-Remaining:
+        $ref: "#/headers/RateLimit-Remaining"
+      RateLimit-Reset:
+        $ref: "#/headers/RateLimit-Reset"
+      Retry-After:
+        $ref: "#/headers/Retry-After"
+    content:
+      application/json:
+        schema:
+          $ref: ./schemas.yaml#/Error
+  RequestTimeout:
+    description: >-
+      The request body stopped arriving for 30 seconds, or took longer than 10 minutes in all (`request_timeout`;
+      `nexus` holds `gap_seconds` and `total_seconds`).
+    content:
+      application/json:
+        schema:
+          $ref: ./schemas.yaml#/Error
+  Unauthorized:
+    description: No credential (`missing_credential`), or a credential Gateway does not accept (`invalid_credential`).
+    content:
+      application/json:
+        schema:
+          $ref: ./schemas.yaml#/Error
+  Unavailable:
+    description: >-
+      Gateway takes no new request now: it is at its limit of requests in flight (`overloaded`), or it is stopping
+      (`draining`). Retry after `Retry-After` seconds.
+    headers:
+      Retry-After:
+        description: "Whole seconds to wait: 1 when Gateway is at its limit, 5 when it is stopping."
+        schema:
+          type: integer
+    content:
+      application/json:
+        schema:
+          $ref: ./schemas.yaml#/Error
+  UpgradeRequired:
+    description: >-
+      The `nexus` CLI that sent `x-nexus-cli-version` is older than Gateway supports (`cli_too_old`; `minimum` names the
+      oldest it takes). A request without that header is never refused.
+    content:
+      application/json:
+        schema:
+          $ref: ./schemas.yaml#/Error
+  VersionMismatch:
+    description: "`version_mismatch`: the `If-Match` value is not the current version."
+    headers:
+      ETag:
+        $ref: "#/headers/ETag"
+    content:
+      application/json:
+        schema:
+          $ref: ./schemas.yaml#/Error
+headers:
+  ETag:
+    description: The resource's current version, a strong entity tag such as `"42"`. Send it back in `If-Match`.
+    schema:
+      type: string
+    example: "\"42\""
+  Idempotent-Replayed:
+    description: "`true` when the answer is the kept answer of an earlier request with the same `Idempotency-Key`."
+    schema:
+      type: string
+      enum:
+        - "true"
+  RateLimit-Limit:
+    description: The most requests the caller may make in one window (a fixed minute, per caller).
+    schema:
+      type: integer
+  RateLimit-Remaining:
+    description: The requests the caller has left in this window.
+    schema:
+      type: integer
+  RateLimit-Reset:
+    description: Whole seconds until the window starts over.
+    schema:
+      type: integer
+  Retry-After:
+    description: "Whole seconds to wait before trying again: the same as `RateLimit-Reset`."
+    schema:
+      type: integer
+  x-nexus-export-id:
+    description: "The export's id (`exp_…`): the target id of its audit event, which holds a CSV file's manifest."
+    schema:
+      type: string

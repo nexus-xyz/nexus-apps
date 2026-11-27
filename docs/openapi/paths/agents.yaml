@@ -1,0 +1,947 @@
+# Path items. The root openapi.yaml references each one.
+/v1/agents/access:
+  get:
+    tags:
+      - Agents
+    operationId: getAgentAccess
+    summary: >-
+      Routes for coding agents with a released Nexus launcher: for each agent, the route it takes when you name none
+      (`from`: your preference, the default, or the organization when it turned subscriptions off), each route with who
+      pays (the organization's own key, Nexus, or your plan), whether it can run, and the commands that install and sign
+      in the agent.
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/AgentAccess
+        headers:
+          ETag:
+            $ref: ../components/common.yaml#/headers/ETag
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: products.use
+  put:
+    tags:
+      - Agents
+    operationId: setAgentAccess
+    summary: >-
+      Choose the route each of your coding agents takes when you name none (`nexus agents use`), in every client:
+      `gateway` or `subscription`; null forgets it (the default: subscription, or gateway when the organization turned
+      subscription mode off). Yours in every organization, not audited (each session records its route). 403
+      `subscriptions_disabled` for a subscription the organization turned off; 400 `route_unsupported` for the gateway
+      route of an agent that runs only on the person's own plan; 400 for a key-only organization key (a route belongs to
+      a person).
+    parameters:
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKey
+      - $ref: ../components/common.yaml#/parameters/IfMatch
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            minProperties: 1
+            additionalProperties: false
+            properties:
+              claude:
+                type:
+                  - string
+                  - "null"
+                enum:
+                  - gateway
+                  - subscription
+                  - null
+              codex:
+                type:
+                  - string
+                  - "null"
+                enum:
+                  - gateway
+                  - subscription
+                  - null
+              antigravity:
+                type:
+                  - string
+                  - "null"
+                description: "Antigravity runs only on the person's Google AI plan: `gateway` is a 400 `route_unsupported`."
+                enum:
+                  - subscription
+                  - null
+              cursor:
+                type:
+                  - string
+                  - "null"
+                description: "Cursor runs only on the person's Cursor plan: `gateway` is a 400 `route_unsupported`."
+                enum:
+                  - subscription
+                  - null
+              opencode:
+                type:
+                  - string
+                  - "null"
+                description: OpenCode uses its configured provider. Gateway refuses `gateway` with `route_unsupported`.
+                enum:
+                  - subscription
+                  - null
+            examples:
+              - claude: subscription
+                codex: null
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/AgentAccess
+        headers:
+          ETag:
+            $ref: ../components/common.yaml#/headers/ETag
+      "412":
+        $ref: ../components/common.yaml#/responses/VersionMismatch
+      "428":
+        $ref: ../components/common.yaml#/responses/PreconditionRequired
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: products.use
+    x-idempotency: optional
+    x-if-match: required
+/v1/agents/check:
+  post:
+    tags:
+      - Agents
+    operationId: checkAgent
+    summary: >-
+      May the agent launch on this model (no model: what `nexus/default` resolves to)? The model policy's decision, the
+      same the gateway makes on every call. An agent without a Gateway route (`antigravity`, `cursor`) is a 400
+      `route_unsupported`.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required:
+              - agent
+            properties:
+              agent:
+                $ref: ../components/schemas.yaml#/AgentId
+              model:
+                type: string
+                description: Model id (`provider/model`, the provider's own id, or nexus/auto); omit for the default
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/AgentCheck
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: products.use
+    parameters:
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKey
+    x-idempotency: optional
+    description: "Exempt: this POST only reads. It changes no state."
+/v1/agents/policy:
+  get:
+    tags:
+      - Agents
+    operationId: agentPolicy
+    summary: >-
+      Deprecated: an alias of `GET /v1/policies/agents/{agent}`. Allowed and default models for each coding agent
+      (`provider/model` ids), as the model policy resolves them. An agent without a Gateway route (`antigravity`,
+      `cursor`) allows none, and its `defaultModel` is empty.
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/AgentPolicy
+            example:
+              agents:
+                claude:
+                  allowedModels:
+                    - anthropic/claude-opus-*
+                    - anthropic/claude-haiku-*
+                  defaultModel: anthropic/claude-opus-5.5
+                codex:
+                  allowedModels:
+                    - openai/gpt-5.3-codex
+                    - openai/gpt-6-sol
+                    - openai/gpt-6.1-sol
+                  defaultModel: openai/gpt-5.3-codex
+      "403":
+        description: >-
+          The credential does not hold `org.read`: a service account or sandbox key (`role_required`), or a scoped
+          module key (`module_key`). Also `not_in_team` when `x-nexus-team` names a team the caller is not in.
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+            example:
+              error:
+                message: >-
+                  only the org's owner or admins can read the organization: who you are, its modules, provider keys
+                  (masked), linked repositories, the subscription, agent policy (deprecated alias) (org.read)
+                type: permission_error
+                code: role_required
+      "404":
+        description: "`x-nexus-team` names a team that does not exist in this organization (`unknown_team`)."
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+            example:
+              error:
+                message: no team design in this organization; see `nexus team list`
+                type: not_found
+                code: unknown_team
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: org.read
+    deprecated: true
+/v1/agents/profiles:
+  get:
+    tags:
+      - Agents
+    operationId: listAgentProfiles
+    summary: >-
+      Your agents' profiles, by name: your own personal agent and every company agent in the organization. The person,
+      or their own agent link that holds `agents.profiles` (on the person's opt-in); no operator grant names it. Another
+      person's personal agent is a 404 agent_profile_not_found. 503 not_configured when Gateway has no database.
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/AgentProfileList
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: agents.profiles
+  post:
+    tags:
+      - Agents
+    operationId: createAgentProfile
+    summary: >-
+      Create an agent profile: without `team`, your personal agent; with `team` (a slug or id), a company agent that
+      answers on that team's budget and policy (404 unknown_team). One profile per owner (409 agent_profile_exists). The
+      name is 1 to 40 characters of plain text, never Nexus nor a name that passes for an admin, except that a personal
+      agent may keep its own name, Nexus (agent_profile_name_invalid, agent_profile_name_reserved). At most 8 labels
+      (agent_profile_label_invalid), instructions of at most 4000 characters (agent_profile_instructions_invalid), and
+      at most 64 tools, each a connector Gateway has or one of its operations (agent_profile_tool_invalid,
+      agent_profile_tool_unknown). The tools narrow what the agent offers and never widen it: Policy still decides each
+      call. Audited as `agent.profile_created`, with the labels and never the instructions. Only a person, never an
+      agent link: your own personal agent, and as an owner or admin a company agent (403 agent_profile_admin_required
+      otherwise). No operator grant names it. 503 not_configured when Gateway has no database.
+    parameters:
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKeyRequired
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas.yaml#/CreateAgentProfileRequest
+    responses:
+      "201":
+        description: Created
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/AgentProfile
+      "428":
+        $ref: ../components/common.yaml#/responses/PreconditionRequired
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: agents.profiles_manage
+    x-idempotency: required
+/v1/agents/profiles/{id}:
+  put:
+    tags:
+      - Agents
+    operationId: setAgentProfile
+    summary: >-
+      Replace an agent profile's fields; its owner never changes. The name is 1 to 40 characters of plain text, never
+      Nexus nor a name that passes for an admin, except that a personal agent may keep its own name, Nexus
+      (agent_profile_name_invalid, agent_profile_name_reserved). At most 8 labels (agent_profile_label_invalid),
+      instructions of at most 4000 characters (agent_profile_instructions_invalid), and at most 64 tools, each a
+      connector Gateway has or one of its operations (agent_profile_tool_invalid, agent_profile_tool_unknown). The tools
+      narrow what the agent offers and never widen it: Policy still decides each call. Audited as
+      `agent.profile_updated`, with the labels and never the instructions. Only a person, never an agent link: your own
+      personal agent, and as an owner or admin a company agent (403 agent_profile_admin_required otherwise). No operator
+      grant names it. 503 not_configured when Gateway has no database.
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[A-Za-z0-9_-]+$
+        description: The profile's id (`agp_…`)
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKey
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas.yaml#/SetAgentProfileRequest
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/AgentProfile
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: agents.profiles_manage
+    x-idempotency: optional
+/v1/agents/route:
+  post:
+    tags:
+      - Agents
+    operationId: routeAgent
+    summary: >-
+      Auto for a coding agent's session before it starts: the model, who pays and why. A signed-in plan with room comes
+      first; a paid model is only returned as `ask_for_paid_fallback`, for the client to confirm. A dry run: it opens no
+      session and holds no money. A model the policy refuses is never returned.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required:
+              - agent
+            additionalProperties: false
+            properties:
+              agent:
+                description: The agent to start, or auto for Auto to pick among agents
+                anyOf:
+                  - $ref: ../components/schemas.yaml#/AgentId
+                  - type: string
+                    enum:
+                      - auto
+              agents:
+                type: array
+                maxItems: 8
+                description: "With agent auto: the person's agents Auto may pick from. Ignored otherwise"
+                items:
+                  $ref: ../components/schemas.yaml#/AgentId
+              team:
+                type: string
+                description: Team slug or id; omit for the caller's default
+              model:
+                type: string
+                description: "A pinned model: Auto then picks only who pays"
+              plans:
+                type: array
+                maxItems: 8
+                description: The plan accounts the agent is signed in to on this machine
+                items:
+                  type: object
+                  required:
+                    - account
+                    - models
+                  additionalProperties: false
+                  properties:
+                    agent:
+                      $ref: ../components/schemas.yaml#/AgentId
+                      description: The agent the account is signed in to; required with agent auto
+                    account:
+                      type: integer
+                      minimum: 0
+                      description: The client's handle for the account, never an email
+                    models:
+                      type: array
+                      maxItems: 64
+                      items:
+                        type: object
+                        required:
+                          - id
+                          - room
+                        additionalProperties: false
+                        properties:
+                          id:
+                            type: string
+                            description: The agent's own id or the catalog id
+                          room:
+                            type: string
+                            enum:
+                              - left
+                              - usedUp
+                              - unknown
+                            description: >-
+                              Every limit window that applies to the model, folded: usedUp when any is used up, unknown
+                              when a reading is missing or old
+              counts:
+                type: object
+                additionalProperties: false
+                description: The first prompt as counts, never its text; omit before the first prompt
+                properties:
+                  inputTokens:
+                    type: integer
+                    minimum: 0
+                  codeBlocks:
+                    type: integer
+                    minimum: 0
+                  images:
+                    type: boolean
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/AgentLaunchRoute
+      "428":
+        $ref: ../components/common.yaml#/responses/PreconditionRequired
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: products.use
+    parameters:
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKeyRequired
+    x-idempotency: required
+/v1/agents/sessions:
+  get:
+    tags:
+      - Agents
+    operationId: listAgentSessions
+    summary: This tenant's coding-agent sessions, newest first.
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                sessions:
+                  type: array
+                  items:
+                    $ref: ../components/schemas.yaml#/AgentSession
+            example:
+              sessions:
+                - id: sess_x7Ka2LmP9qRt
+                  agent: claude
+                  model: claude-sonnet-4-6
+                  via: nexus
+                  access: byok
+                  person: ana
+                  cwd: nexus
+                  startedAt: "2026-10-30T13:00:00.000Z"
+                  status: running
+                - id: sess_Lm3qR8tVx2Wk
+                  agent: claude
+                  model: claude-sonnet-4-6
+                  via: nexus
+                  access: byok
+                  person: ana
+                  cwd: nexus
+                  startedAt: "2026-10-30T13:00:00.000Z"
+                  status: succeeded
+                  endedAt: "2026-10-30T13:42:10.000Z"
+                  durationMs: 2530000
+                  exitCode: 0
+      "401":
+        description: No credential (`missing_credential`), or a credential Gateway does not accept (`invalid_credential`).
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+            example:
+              error:
+                message: the credential is not valid
+                type: authentication_error
+                code: invalid_credential
+      "403":
+        description: >-
+          The key does not hold `spend.read_own` (`role_required`: a service account, a sandbox, or an agent not granted
+          it).
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+            example:
+              error:
+                message: this agent was not granted this (spend.read_own)
+                type: permission_error
+                code: role_required
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: spend.read_own
+  post:
+    tags:
+      - Agents
+    operationId: openAgentSession
+    summary: >-
+      Open a session before launching an agent. Through the gateway (via nexus, the default) the model is checked on
+      every call; via ori (sessions from before the agent gateway) it is checked here (403 if not allowed).
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required:
+              - agent
+            properties:
+              agent:
+                $ref: ../components/schemas.yaml#/AgentId
+              via:
+                type: string
+                enum:
+                  - nexus
+                  - subscription
+                  - ori
+                description: >-
+                  nexus (default): the agent runs through the agent gateway; subscription: on the person's own Claude
+                  login, usage reported by Claude Code; ori: sessions from before the agent gateway
+              model:
+                type: string
+                description: The model the agent was started on, as the agent names it; omit for the agent's default
+              person:
+                type: string
+                maxLength: 80
+                description: Who runs it, e.g. the OS user
+              cwd:
+                type: string
+                description: Working directory; only its basename is kept
+              team:
+                type: string
+                description: "A team slug you are in; default: your default team"
+              plan:
+                type: string
+                description: >-
+                  The plan tier of the person's own account, as the app read it on the device. claude: free, pro, max,
+                  team, enterprise or unknown; codex (ChatGPT): free, plus, pro, team, enterprise or unknown. Any other
+                  string is kept as unknown: a plan never refuses a session. Kept only where plan collection is on, and
+                  never shown on GET /v1/agents/sessions. Never send the raw string, an account id or an email.
+    responses:
+      "201":
+        description: Created
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/AgentSession
+            example:
+              id: sess_x7Ka2LmP9qRt
+              agent: claude
+              model: claude-sonnet-4-6
+              via: nexus
+              access: byok
+              person: ana
+              cwd: nexus
+              startedAt: "2026-10-30T13:00:00.000Z"
+              status: running
+      "400":
+        description: >-
+          The body is not valid: `agent` not claude, codex, antigravity or cursor, `via` not nexus, subscription or ori,
+          `model`, `person` or `cwd` not a string, `team` not a slug, or a bad `Idempotency-Key`; or `via` nexus or ori
+          for an agent that runs only on the person's own plan (`route_unsupported`).
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+            example:
+              error:
+                message: "agent must be one of: claude, codex, antigravity, cursor"
+                type: invalid_request_error
+                code: invalid_request
+      "401":
+        description: No credential (`missing_credential`), or a credential Gateway does not accept (`invalid_credential`).
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+            example:
+              error:
+                message: the credential is not valid
+                type: authentication_error
+                code: invalid_credential
+      "403":
+        description: >-
+          The key does not hold `products.use` (`role_required`: a service account, a sandbox, or an agent not granted
+          it), the team named is not the caller's (`not_in_team`), or the organization turned subscription sessions off
+          (`subscriptions_disabled`).
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+            example:
+              error:
+                message: you are not in team platform; spend can only go to a team you belong to
+                type: permission_error
+                code: not_in_team
+      "404":
+        description: The team named does not exist in this organization (`unknown_team`).
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+            example:
+              error:
+                message: no team platfrom in this organization; see `nexus team list`
+                type: not_found
+                code: unknown_team
+      "409":
+        description: >-
+          The `Idempotency-Key`'s first request still runs (`idempotency_in_progress`) or was interrupted
+          (`idempotency_interrupted`). The request does not run again.
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+            example:
+              error:
+                message: a request with this Idempotency-Key is still running
+                type: invalid_request_error
+                code: idempotency_in_progress
+      "422":
+        description: The `Idempotency-Key` was used for a different request (`idempotency_key_reused`).
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+            example:
+              error:
+                message: this Idempotency-Key was used for a different request
+                type: invalid_request_error
+                code: idempotency_key_reused
+      "428":
+        $ref: ../components/common.yaml#/responses/PreconditionRequired
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: products.use
+    parameters:
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKeyRequired
+    x-idempotency: required
+/v1/agents/sessions/export.csv:
+  get:
+    tags:
+      - Agents
+    operationId: exportAgentSessionsCsv
+    summary: >-
+      Every coding-agent session of the organization that matches the filters, as CSV (owners and admins). Nexus Gateway
+      keeps an organization's newest 500 sessions, so an older one is in no file. At most 100,000 rows a file: past that
+      the file stops, and its manifest says `complete: false` and gives `nextCursor`. Each export is an audit event
+      (`observability.exported`) with the file's manifest, never its rows. An organization runs at most 60 exports an
+      hour: the 61st is a 429 `export_rate_limited`, whose `Retry-After` is the seconds until the hour frees one (the
+      `RateLimit-*` headers stay the per-minute limit's). A bad filter is a 400 before any row.
+    parameters:
+      - $ref: ../components/common.yaml#/parameters/AgentSessionFrom
+      - $ref: ../components/common.yaml#/parameters/AgentSessionTo
+      - $ref: ../components/common.yaml#/parameters/AgentSessionTeam
+      - $ref: ../components/common.yaml#/parameters/ObservabilityPerson
+      - $ref: ../components/common.yaml#/parameters/AgentSessionAgent
+      - $ref: ../components/common.yaml#/parameters/AgentSessionVia
+      - $ref: ../components/common.yaml#/parameters/AgentSessionStatus
+      - $ref: ../components/common.yaml#/parameters/ObservabilityFileCursor
+    responses:
+      "200":
+        description: "CSV with a header row: one column per field of `AgentSessionRow`, in its order."
+        headers:
+          x-nexus-export-id:
+            $ref: ../components/common.yaml#/headers/x-nexus-export-id
+        content:
+          text/csv:
+            schema:
+              type: string
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: spend.export
+/v1/agents/sessions/export.jsonl:
+  get:
+    tags:
+      - Agents
+    operationId: exportAgentSessionsJsonl
+    summary: >-
+      Every coding-agent session of the organization that matches the filters, as JSON Lines (owners and admins). Nexus
+      Gateway keeps an organization's newest 500 sessions, so an older one is in no file. At most 100,000 rows a file:
+      past that the file stops, and its manifest says `complete: false` and gives `nextCursor`. Each export is an audit
+      event (`observability.exported`) with the file's manifest, never its rows. An organization runs at most 60 exports
+      an hour: the 61st is a 429 `export_rate_limited`, whose `Retry-After` is the seconds until the hour frees one (the
+      `RateLimit-*` headers stay the per-minute limit's). A bad filter is a 400 before any row.
+    parameters:
+      - $ref: ../components/common.yaml#/parameters/AgentSessionFrom
+      - $ref: ../components/common.yaml#/parameters/AgentSessionTo
+      - $ref: ../components/common.yaml#/parameters/AgentSessionTeam
+      - $ref: ../components/common.yaml#/parameters/ObservabilityPerson
+      - $ref: ../components/common.yaml#/parameters/AgentSessionAgent
+      - $ref: ../components/common.yaml#/parameters/AgentSessionVia
+      - $ref: ../components/common.yaml#/parameters/AgentSessionStatus
+      - $ref: ../components/common.yaml#/parameters/ObservabilityFileCursor
+    responses:
+      "200":
+        description: "JSON Lines: one `AgentSessionRow` per line, then one line `{\"manifest\": ExportManifest}`."
+        headers:
+          x-nexus-export-id:
+            $ref: ../components/common.yaml#/headers/x-nexus-export-id
+        content:
+          application/jsonl:
+            schema:
+              type: string
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: spend.export
+/v1/agents/sessions/{id}:
+  get:
+    tags:
+      - Agents
+    operationId: getAgentSession
+    summary: >-
+      One coding-agent session with what its metered calls cost: yours, or any of the organization's for an owner or
+      admin. Anyone else gets 404, as for an unknown id.
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[A-Za-z0-9_-]+$
+        description: The session's id
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/AgentSessionWithSpend
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: spend.read_own
+/v1/agents/sessions/{id}/end:
+  post:
+    tags:
+      - Agents
+    operationId: endAgentSession
+    summary: Close a session with the agent's exit code and duration.
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[A-Za-z0-9_-]+$
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKeyRequired
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required:
+              - exitCode
+            properties:
+              exitCode:
+                type: integer
+                minimum: 0
+                maximum: 255
+              durationMs:
+                type: number
+                minimum: 0
+              signal:
+                type: string
+                examples:
+                  - SIGINT
+              agentSessionId:
+                type: string
+                pattern: ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$
+                description: >-
+                  The agent's own conversation id (Claude Code's session id, Codex's rollout id), so the session can be
+                  resumed.
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/AgentSession
+      "428":
+        $ref: ../components/common.yaml#/responses/PreconditionRequired
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: products.use
+    x-idempotency: required
+/v1/agents/sessions/{id}/heartbeat:
+  post:
+    tags:
+      - Agents
+    operationId: heartbeatAgentSession
+    summary: >-
+      Say the agent still runs. The CLI sends one every 5 minutes; a running session with none for 15 minutes reads as
+      lost until the next one or its end.
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[A-Za-z0-9_-]+$
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKeyRequired
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/AgentSession
+      "428":
+        $ref: ../components/common.yaml#/responses/PreconditionRequired
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: products.use
+    x-idempotency: required
+/v1/agents/sessions/{id}/usage:
+  post:
+    tags:
+      - Agents
+    operationId: reportAgentSessionUsage
+    summary: >-
+      Usage from a subscription session as an OpenTelemetry logs export (OTLP/HTTP JSON). Cursor sessions return 409
+      `usage_unsupported`. A record whose event.name (else its body) is api_request or claude_code.api_request counts as
+      one model call. A request_id seen among the session's last 512 does not count again. Codex's codex.sse_event for
+      response.completed counts too, once per conversation.id and event.timestamp. Other records are dropped unread. A
+      body without resourceLogs is a 400.
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[A-Za-z0-9_-]+$
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKeyRequired
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            description: An OTLP ExportLogsServiceRequest
+            properties:
+              resourceLogs:
+                type: array
+                items:
+                  type: object
+    responses:
+      "200":
+        description: >-
+          OK: an OTLP ExportLogsServiceResponse, empty, or with partialSuccess counting the entries that were not log
+          objects
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                partialSuccess:
+                  type: object
+                  properties:
+                    rejectedLogRecords:
+                      type: integer
+                    errorMessage:
+                      type: string
+      "428":
+        $ref: ../components/common.yaml#/responses/PreconditionRequired
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: products.use
+    x-idempotency: required

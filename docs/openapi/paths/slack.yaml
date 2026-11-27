@@ -1,0 +1,593 @@
+# Path items. The root openapi.yaml references each one.
+/v1/slack/installs:
+  post:
+    tags:
+      - Slack
+    operationId: startSlackInstall
+    summary: >-
+      Start a Slack install: Slack's authorize URL and the install's id. The URL's `state` names this organization, you,
+      the install and an expiry an hour away, and Gateway accepts it for one completion only. (GitHub's install `state`
+      names only the organization and an expiry, and works again within the hour.) Open the URL in the browser where you
+      are signed in to Nexus UI and approve the app in Slack. Nexus UI then completes the install
+      (`completeSlackInstall`) and you confirm it (`confirmSlackInstall`). People only: an agent link, a service account
+      or a module key answers 403 `person_required`. Writes nothing.
+    parameters:
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKeyRequired
+    responses:
+      "201":
+        description: Created
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/SlackInstallStarted
+      "403":
+        description: No owner or admin (`role_required`), or no person (`person_required`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "428":
+        $ref: ../components/common.yaml#/responses/PreconditionRequired
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      "503":
+        description: >-
+          The Slack app is not configured on this Gateway: `SLACK_CLIENT_ID`, `SLACK_CLIENT_SECRET` and a server setting
+          (`not_configured`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: chat_apps.manage
+    x-idempotency: required
+/v1/slack/installs/{id}:
+  get:
+    tags:
+      - Slack
+    operationId: getSlackInstall
+    summary: >-
+      An install of this organization, once it completed: its binding (`pending`, `active` or `revoked`) and workspace.
+      Before that it is a 404 `install_not_found`, as another organization's install is.
+    parameters:
+      - name: id
+        in: path
+        required: true
+        description: The install's id (`chw_…`)
+        schema:
+          type: string
+          pattern: ^[A-Za-z0-9_-]+$
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/SlackInstall
+      "403":
+        description: No owner or admin (`role_required`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "404":
+        description: "No such install here yet: not completed, or another organization's (`install_not_found`)"
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: chat_apps.manage
+/v1/slack/installs/{id}/complete:
+  post:
+    tags:
+      - Slack
+    operationId: completeSlackInstall
+    summary: >-
+      Finish an install from Slack's redirect, as the signed-in person: Nexus UI's install page sends the `code` and
+      `state` it received. The `state` must verify, name this install, and name your organization and you; otherwise 403
+      (`invalid_state`, `not_installer`) and Gateway calls Slack for nothing, keeps no token and writes no binding. This
+      is the login-CSRF guard: Slack's redirect lands in the browser of whoever approved the app, so someone else's
+      install link approved by you lands in your session, not theirs. Then Gateway exchanges the code with Slack's
+      `oauth.v2.access`, seals the bot token in the vault and writes the binding as `pending`, with the Slack user who
+      approved (`approvedBySlackUser`). Audited as `chat_workspace.installed`. Confirm it next (`confirmSlackInstall`);
+      a pending install declined or left past its `state`'s expiry is uninstalled from Slack and its token deleted.
+    parameters:
+      - name: id
+        in: path
+        required: true
+        description: The install's id (`chw_…`)
+        schema:
+          type: string
+          pattern: ^[A-Za-z0-9_-]+$
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKeyRequired
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas.yaml#/CompleteSlackInstall
+    responses:
+      "201":
+        description: "Created: the pending binding"
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/SlackInstall
+      "400":
+        description: >-
+          No `state` (`missing_state`), no usable code (`invalid_code`), a `state` Nexus did not sign (`invalid_state`),
+          or an org-wide Enterprise Grid install (`enterprise_install_refused`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "403":
+        description: >-
+          No owner or admin (`role_required`), no person (`person_required`), or someone else's install
+          (`not_installer`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "409":
+        description: >-
+          The install link expired (`invalid_state`), the install completed already (`state_used`), or the workspace is
+          bound to another organization (`installation_taken`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "428":
+        $ref: ../components/common.yaml#/responses/PreconditionRequired
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      "502":
+        description: Slack did not answer or refused the call (`slack_unavailable`, `slack_refused`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "503":
+        description: >-
+          The Slack app is not configured on this Gateway: `SLACK_CLIENT_ID`, `SLACK_CLIENT_SECRET` and a server setting
+          (`not_configured`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: chat_apps.manage
+    x-idempotency: required
+/v1/slack/installs/{id}/confirm:
+  post:
+    tags:
+      - Slack
+    operationId: confirmSlackInstall
+    summary: >-
+      Confirm a pending install: the workspace is bound to this organization. Only the person who started and completed
+      the install confirms it, before its `state` expires. A confirmed install answers as it is. A workspace bound to
+      another organization is a 409 `installation_taken`, and this install is revoked with its token. An older binding
+      of the same workspace here is replaced, and its bound channels move to this binding with their teams
+      (`chat_channel.moved`). Audited as `chat_workspace.confirmed`.
+    parameters:
+      - name: id
+        in: path
+        required: true
+        description: The install's id (`chw_…`)
+        schema:
+          type: string
+          pattern: ^[A-Za-z0-9_-]+$
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKeyRequired
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/SlackInstall
+      "403":
+        description: No owner or admin (`role_required`), or another person started the install (`not_installer`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "404":
+        description: No such install in this organization (`install_not_found`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "409":
+        description: >-
+          The workspace is bound to another organization (`installation_taken`), or this install was revoked
+          (`install_revoked`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "410":
+        description: The install's `state` expired before its confirm (`install_expired`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "428":
+        $ref: ../components/common.yaml#/responses/PreconditionRequired
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: chat_apps.manage
+    x-idempotency: required
+/v1/slack/workspaces:
+  get:
+    tags:
+      - Slack
+    operationId: listSlackWorkspaces
+    summary: The organization's Slack workspace bindings, pending and active, newest first. Never a token.
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/ChatWorkspaceList
+      "403":
+        description: No owner or admin (`role_required`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: chat_apps.manage
+/v1/slack/workspaces/{id}:
+  delete:
+    tags:
+      - Slack
+    operationId: disconnectSlackWorkspace
+    summary: >-
+      Unbind a workspace, or decline a pending install. Gateway first uninstalls the app with Slack's `apps.uninstall`,
+      which revokes every token of that install; if Slack fails, nothing changes (502). (A pending install whose
+      workspace is also active here shares that binding's token, so it is revoked without the uninstall.) Then the
+      binding is revoked, with any pending install of the same workspace here, and the bot token leaves the vault.
+      Audited as `chat_workspace.revoked` (`reason`: `unbound` or `declined`) and `connector_credential.revoked`.
+    parameters:
+      - name: id
+        in: path
+        required: true
+        description: The binding's id (`chw_…`)
+        schema:
+          type: string
+          pattern: ^[A-Za-z0-9_-]+$
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKey
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/ChatWorkspaceRemoved
+      "403":
+        description: No owner or admin (`role_required`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "404":
+        description: No live binding with this id in this organization (`workspace_not_found`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      "502":
+        description: Slack did not answer or refused the call (`slack_unavailable`, `slack_refused`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "503":
+        description: >-
+          The Slack app is not configured on this Gateway: `SLACK_CLIENT_ID`, `SLACK_CLIENT_SECRET` and a server setting
+          (`not_configured`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: chat_apps.manage
+    x-idempotency: optional
+/v1/slack/workspaces/{id}/channels:
+  get:
+    tags:
+      - Slack
+    operationId: listSlackChannels
+    summary: >-
+      The workspace's channels bound to a team. Owners and admins see every one; a team lead sees those bound to the
+      teams they lead and those under them. `nexus slack channel list` reads it.
+    parameters:
+      - name: id
+        in: path
+        required: true
+        description: The workspace binding's id (`chw_…`)
+        schema:
+          type: string
+          pattern: ^[A-Za-z0-9_-]+$
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/ChatChannelList
+      "403":
+        description: >-
+          Not an owner, an admin or a team lead (`role_required`), or a lead and the channel's team is not one they lead
+          (`outside_led_teams`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "404":
+        description: No live workspace binding with this id in this organization (`workspace_not_found`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "409":
+        description: The workspace binding waits for its confirm (`workspace_not_active`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: chat_apps.manage_team
+  post:
+    tags:
+      - Slack
+    operationId: bindSlackChannel
+    summary: >-
+      Bind a channel of an active workspace binding to a team: in that channel the chat app attributes each call to the
+      team, so its members, policy and caps apply. Owners and admins bind any team; a team lead binds a team they lead
+      or one under it. A channel binds to one team: a channel bound to this team answers 200 as it is, bound to another
+      a 409 `channel_bound` (unbind it first). Audited as `chat_channel.bound`, under the team. Ids only: no channel
+      name is stored.
+    parameters:
+      - name: id
+        in: path
+        required: true
+        description: The workspace binding's id (`chw_…`)
+        schema:
+          type: string
+          pattern: ^[A-Za-z0-9_-]+$
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKeyRequired
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas.yaml#/BindChatChannelRequest
+    responses:
+      "200":
+        description: The channel was bound to this team already
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/ChatChannelBinding
+      "201":
+        description: Created
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/ChatChannelBinding
+      "400":
+        description: "Not a channel id (`invalid_channel`: a direct message never binds), or the body lacks `channelId` or `team`"
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "403":
+        description: >-
+          Not an owner, an admin or a team lead (`role_required`), or a lead and the named team, or the team the channel
+          is bound to, is not one they lead (`outside_led_teams`), or no person (`person_required`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "404":
+        description: >-
+          No live workspace binding with this id in this organization (`workspace_not_found`), or no such team
+          (`unknown_team`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "409":
+        description: >-
+          The workspace binding waits for its confirm (`workspace_not_active`), or the channel is bound to another team
+          (`channel_bound`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "428":
+        $ref: ../components/common.yaml#/responses/PreconditionRequired
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: chat_apps.manage_team
+    x-idempotency: required
+/v1/slack/workspaces/{id}/channels/{channel}:
+  delete:
+    tags:
+      - Slack
+    operationId: unbindSlackChannel
+    summary: >-
+      Unbind a channel from its team: the binding goes, and `chat_channel.unbound` keeps what it was. Owners and admins
+      unbind any channel; a team lead one bound to a team they lead or one under it.
+    parameters:
+      - name: id
+        in: path
+        required: true
+        description: The workspace binding's id (`chw_…`)
+        schema:
+          type: string
+          pattern: ^[A-Za-z0-9_-]+$
+      - name: channel
+        in: path
+        required: true
+        description: Slack's channel id (`C…`, or `G…` for an older private channel)
+        schema:
+          type: string
+          pattern: ^[A-Za-z0-9]+$
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKey
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/ChatChannelUnbound
+      "403":
+        description: >-
+          Not an owner, an admin or a team lead (`role_required`), or a lead and the channel's team is not one they lead
+          (`outside_led_teams`), or no person (`person_required`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "404":
+        description: >-
+          No live workspace binding with this id in this organization (`workspace_not_found`), or the channel is not
+          bound (`channel_not_bound`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "409":
+        description: The workspace binding waits for its confirm (`workspace_not_active`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: chat_apps.manage_team
+    x-idempotency: optional
+/v1/slack/workspaces/{id}/channels/{channel}/settings:
+  get:
+    tags:
+      - Slack
+    operationId: getSlackChannelSettings
+    summary: >-
+      A bound channel's effective settings, each with the level that set it: the team (set by the channel's binding),
+      the open team caps on that team's path (each cap's limit for owners and admins only; a lead sees what they leave),
+      and the model policy levels that apply with the default chat model. The settings tree is not built, so a channel
+      holds no setting of its own yet, and the organization's budget is not read here. Owners and admins read any
+      channel; a team lead one bound to a team they lead or one under it.
+    parameters:
+      - name: id
+        in: path
+        required: true
+        description: The workspace binding's id (`chw_…`)
+        schema:
+          type: string
+          pattern: ^[A-Za-z0-9_-]+$
+      - name: channel
+        in: path
+        required: true
+        description: Slack's channel id (`C…`, or `G…` for an older private channel)
+        schema:
+          type: string
+          pattern: ^[A-Za-z0-9]+$
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/ChatChannelSettings
+      "403":
+        description: >-
+          Not an owner, an admin or a team lead (`role_required`), or a lead and the channel's team is not one they lead
+          (`outside_led_teams`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "404":
+        description: >-
+          No live workspace binding with this id in this organization (`workspace_not_found`), the channel is not bound
+          (`channel_not_bound`), or its team was deleted (`unknown_team`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "409":
+        description: The workspace binding waits for its confirm (`workspace_not_active`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: chat_apps.manage_team

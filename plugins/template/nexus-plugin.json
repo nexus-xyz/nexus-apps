@@ -1,0 +1,15 @@
+{
+  "apiVersion": 0,
+  "id": "my-plugin",
+  "name": "My Plugin",
+  "version": "0.1.0",
+  "description": "Replace this with one sentence on what your tools do.",
+  "author": "Your name",
+  "mcp": { "command": "bin/my-plugin" },
+  "secrets": [],
+  "permissions": {
+    "network": [],
+    "filesystem": [],
+    "commands": []
+  }
+}

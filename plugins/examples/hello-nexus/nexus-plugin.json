@@ -1,0 +1,9 @@
+{
+  "apiVersion": 0,
+  "id": "hello-nexus",
+  "name": "Hello Nexus",
+  "version": "0.1.0",
+  "description": "One tool, hello, that proves a plugin runs in your Code sessions.",
+  "author": "Nexus",
+  "mcp": { "command": "bin/hello-nexus" }
+}
