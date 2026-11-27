@@ -97,9 +97,11 @@ fn side_text_conversion_respects_pending_source_and_permission_guards(cx: &mut T
     chat.update(cx, |chat, cx| {
         chat.poll = None;
         chat.partial_poll = None;
+        // As the session composer: a send in flight has left the composer, so the next message takes a paste.
         chat.sending = true;
-        assert!(!chat.paste(&item, cx));
+        assert!(chat.paste(&item, cx));
         chat.sending = false;
+        chat.draft = Default::default();
         chat.request = Some("approval".into());
         assert!(!chat.paste(&item, cx));
         chat.request = None;

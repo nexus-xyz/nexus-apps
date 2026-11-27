@@ -67,6 +67,10 @@ pub(super) struct SideChat {
     streamed: Option<(String, Entity<TextViewState>)>,
     input: Entity<TextareaState>,
     draft: crate::attachments::Draft,
+    /// Messages sent but not yet handed to the core, oldest first (`commands.rs`, `flush_outbox`).
+    outbox: std::collections::VecDeque<operations::Outgoing>,
+    /// The sent message's files while they go up in pieces (`uploads.rs`).
+    uploading: Option<crate::attachments::Draft>,
     answers: Vec<Entity<InputState>>,
     request: Option<String>,
     permission_reason: Entity<InputState>,
@@ -110,7 +114,11 @@ impl SideChat {
                 return;
             }
             match event {
-                InputEvent::PressEnter { .. } => this.send(window, cx),
+                // As the session composer: Enter sends into the running turn, Ctrl+Enter (Cmd+Enter) queues it for after.
+                InputEvent::PressEnter {
+                    shift: false,
+                    secondary,
+                } => this.send(*secondary, window, cx),
                 InputEvent::Change => {
                     let text = this.input.read(cx).value().to_string();
                     if text != this.draft_text {
@@ -154,6 +162,8 @@ impl SideChat {
             streamed: None,
             input,
             draft: Default::default(),
+            outbox: Default::default(),
+            uploading: None,
             answers: vec![],
             request: None,
             permission_reason: cx.new(|cx| InputState::new(window, cx).placeholder("Reason (optional)")),
@@ -323,6 +333,8 @@ impl SideChat {
         self.preserve_gone_rewrite(window, cx);
         self.follow_secret(window, cx);
         self.start_partials(window, cx);
+        // A restored side chat waits for its first read before its line moves on.
+        self.flush_outbox(window, cx);
     }
 
     fn follow_request(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -368,7 +380,8 @@ impl SideChat {
     }
 
     fn attach_files(&mut self, files: Vec<crate::attachments::Incoming>, cx: &mut Context<Self>) {
-        if self.retired || !self.pending.valid() || self.sending {
+        // A message in flight has left the composer: files attach for the next one meanwhile.
+        if self.retired || !self.pending.valid() {
             return;
         }
         let work = cx.background_spawn(async move { crate::attachments::prepare(files) });

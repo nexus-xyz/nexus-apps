@@ -25,7 +25,7 @@ impl SideChat {
             self.attach_files(pasted.files, cx);
             return pasted.take;
         }
-        if !self.can_command() || self.request.is_some() || self.secret_id.is_some() {
+        if !self.can_compose() || self.request.is_some() || self.secret_id.is_some() {
             return false;
         }
         let Some(file) =
@@ -44,7 +44,7 @@ impl SideChat {
     /// Claim literal paste before the textarea's platform paste action can turn it into a file.
     pub(super) fn paste_as_text(&mut self, key: &Keystroke, window: &mut Window, cx: &mut Context<Self>) -> bool {
         if !crate::workspace::text_paste::paste_as_text_key(key)
-            || !self.can_command()
+            || !self.can_compose()
             || self.request.is_some()
             || self.secret_id.is_some()
             || !self.input.focus_handle(cx).is_focused(window)
@@ -93,18 +93,15 @@ impl SideChat {
             .when(!open, |button| {
                 button.tooltip(|window, cx| Tooltip::new("Add files and more").build(window, cx))
             })
-            .when(!self.sending, |button| {
-                button.on_mouse_down(
-                    MouseButton::Left,
-                    cx.listener(|this, _, _, cx| {
-                        cx.stop_propagation();
-                        this.attach_open = !this.attach_open;
-                        this.settings = None;
-                        cx.notify();
-                    }),
-                )
-            })
-            .when(self.sending, |button| button.opacity(0.4));
+            .on_mouse_down(
+                MouseButton::Left,
+                cx.listener(|this, _, _, cx| {
+                    cx.stop_propagation();
+                    this.attach_open = !this.attach_open;
+                    this.settings = None;
+                    cx.notify();
+                }),
+            );
         let item = |id: &'static str, icon: Lucide, label: &'static str, keys: Option<&'static str>| {
             h_flex()
                 .id(id)
@@ -256,10 +253,8 @@ impl SideChat {
         let weak = cx.weak_entity();
         let remove = Rc::new(move |id, _: &mut Window, cx: &mut App| {
             let _ = weak.update(cx, |this, cx| {
-                if !this.sending {
-                    this.draft.remove(id);
-                    cx.notify();
-                }
+                this.draft.remove(id);
+                cx.notify();
             });
         });
         let weak = cx.weak_entity();
@@ -272,14 +267,26 @@ impl SideChat {
         };
         let busy = self.summary.status.busy();
         let has_text = !(self.input.read(cx).value().trim().is_empty() && self.draft.is_empty());
-        let enabled = self.can_command() && self.request.is_none() && has_text;
+        // A send in flight does not hold the next message: it waits in line (`commands.rs`).
+        let enabled = self.can_compose() && self.request.is_none() && self.secret_id.is_none() && has_text;
+        let send_tip = if busy {
+            "Send now: the agent reads it at its next step (Enter)"
+        } else {
+            "Send"
+        };
         let send = send_circle("send-side-chat", enabled, p)
             .debug_selector(|| "side-send".into())
-            .tooltip(|window, cx| Tooltip::new("Send").build(window, cx))
-            .on_click(cx.listener(|this, _, window, cx| this.send(window, cx)));
+            .tooltip(move |window, cx| Tooltip::new(send_tip).build(window, cx))
+            .on_click(cx.listener(|this, _, window, cx| this.send(false, window, cx)));
+        let queue_tip: SharedString = format!(
+            "Queue: sent when this turn ends ({})",
+            crate::workspace::composer::queue_keys()
+        )
+        .into();
         let queue = queue_pill("queue-side-chat", p)
-            .tooltip(|window, cx| Tooltip::new("Queue: sent when this turn ends").build(window, cx))
-            .on_click(cx.listener(|this, _, window, cx| this.send(window, cx)));
+            .debug_selector(|| "side-queue".into())
+            .tooltip(move |window, cx| Tooltip::new(queue_tip.clone()).build(window, cx))
+            .on_click(cx.listener(|this, _, window, cx| this.send(true, window, cx)));
         let stop = stop_ring("stop-side-chat", p.working(), cx.reduce_motion(), p)
             .debug_selector(|| "side-stop".into())
             .tooltip(|window, cx| Tooltip::new("Stop (Esc)").build(window, cx))
@@ -294,25 +301,43 @@ impl SideChat {
                 )
             }));
         let focused = self.input.focus_handle(cx).contains_focused(window, cx);
+        // The sent message's files stay over the composer while they go up, as the session's (`render_uploading`).
+        let uploading = self.uploading.as_ref().filter(|draft| !draft.is_empty());
+        let shown = uploading.is_some() || !self.draft.is_empty();
         let shell = composer_shell(false, p)
             .debug_selector(|| "side-chat-composer".into())
             // The attachments open and close in height, as the session composer's.
             .child(motion::reveal(
                 "side-draft-row",
-                !self.draft.is_empty(),
-                (!self.draft.is_empty()).then(|| {
+                shown,
+                shown.then(|| {
                     div()
                         .pt(px(14.))
                         .pr(px(12.))
                         .pl(px(16.))
-                        .child(crate::workspace::composer::attachment_chips(
-                            "side-draft",
-                            &self.draft,
-                            p,
-                            Some(remove),
-                            Some(cancel),
-                            None,
-                        ))
+                        .flex()
+                        .flex_col()
+                        .gap(px(8.))
+                        .when_some(uploading, |row, up| {
+                            row.child(crate::workspace::composer::attachment_chips(
+                                "side-uploading",
+                                up,
+                                p,
+                                None,
+                                Some(cancel),
+                                None,
+                            ))
+                        })
+                        .when(!self.draft.is_empty(), |row| {
+                            row.child(crate::workspace::composer::attachment_chips(
+                                "side-draft",
+                                &self.draft,
+                                p,
+                                Some(remove),
+                                None,
+                                None,
+                            ))
+                        })
                         .into_any_element()
                 }),
             ))
@@ -329,10 +354,11 @@ impl SideChat {
                     .child(self.render_attach(p, cx))
                     .child(self.render_chips(p, cx))
                     .child(div().flex_1())
-                    // Stop slides in as Send slides out (`toolbar_slot`).
+                    // As the session's: Stop slides in as Send slides out (`toolbar_slot`), and once there is a
+                    // message, Queue (after the turn) and Send (into it now) stand beside Stop.
                     .child(toolbar_slot("side-stop-slot", busy, stop))
                     .child(toolbar_slot("side-queue-slot", busy && enabled, queue))
-                    .child(toolbar_slot("side-send-slot", !busy, send)),
+                    .child(toolbar_slot("side-send-slot", !busy || enabled, send)),
             );
         composer_frame(shell, focused, p).into_any_element()
     }

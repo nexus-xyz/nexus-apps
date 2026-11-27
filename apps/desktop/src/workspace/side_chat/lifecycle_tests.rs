@@ -116,14 +116,14 @@ fn side_chat_pending_send_success_and_failure_survive_a_destroyed_window(cx: &mu
                 .update(cx, |input, cx| input.set_value("submitted A", window, cx))
         });
         cx.run_until_parked();
-        chat.update_in(cx, |chat, window, cx| chat.send(window, cx));
+        chat.update_in(cx, |chat, window, cx| chat.send(false, window, cx));
         cx.run_until_parked();
         let write = old.take("wb_send_files");
         assert_eq!(write.args["text"], "submitted A");
         let old_id = chat.entity_id();
         let saved = chat.update_in(cx, |chat, window, cx| {
             let saved = chat.retain(cx);
-            chat.send(window, cx);
+            chat.send(false, window, cx);
             window.remove_window();
             saved
         });
@@ -148,7 +148,7 @@ fn side_chat_pending_send_success_and_failure_survive_a_destroyed_window(cx: &mu
             .update(cx, |input, cx| input.set_value("retry B", window, cx))
     });
     cx.run_until_parked();
-    chat.update_in(cx, |chat, window, cx| chat.send(window, cx));
+    chat.update_in(cx, |chat, window, cx| chat.send(false, window, cx));
     cx.run_until_parked();
     fresh
         .take("wb_send_files")
@@ -159,7 +159,10 @@ fn side_chat_pending_send_success_and_failure_survive_a_destroyed_window(cx: &mu
     chat.read_with(cx, |chat, cx| {
         assert_eq!(chat.input.read(cx).value().as_ref(), "retry B");
         assert!(!chat.sending);
-        assert_eq!(chat.problem.as_deref(), Some("fixture rejected"));
+        assert_eq!(
+            chat.problem.as_deref(),
+            Some("fixture rejected The message was not sent; it is back in the composer.")
+        );
     });
     assert_eq!(old.count("wb_send_files"), 1);
     assert_eq!(fresh.count("wb_send_files"), 1);
@@ -183,7 +186,7 @@ fn side_chat_pending_submission_never_erases_a_later_draft(cx: &mut TestAppConte
             chat.input.update(cx, |input, cx| input.set_value("A", window, cx))
         });
         cx.run_until_parked();
-        chat.update_in(cx, |chat, window, cx| chat.send(window, cx));
+        chat.update_in(cx, |chat, window, cx| chat.send(false, window, cx));
         cx.run_until_parked();
         let write = rpc.take("wb_send_files");
         chat.update_in(cx, |chat, window, cx| {
@@ -669,7 +672,7 @@ fn side_chat_pending_chunk_upload_finishes_parked_and_clears_only_submitted_ids(
             chat.draft.files.push(attachment(7, bytes));
             chat.input
                 .update(cx, |input, cx| input.set_value("upload A", window, cx));
-            chat.send(window, cx);
+            chat.send(false, window, cx);
         });
         cx.run_until_parked();
         let first = rpc.take("wb_attachment_chunk");
@@ -722,17 +725,28 @@ fn side_chat_upload_shows_progress_and_cancel_keeps_the_message(cx: &mut TestApp
         chat.draft.files.push(attachment(7, size));
         chat.input
             .update(cx, |input, cx| input.set_value("keep me", window, cx));
-        chat.send(window, cx);
+        chat.send(false, window, cx);
     });
     cx.run_until_parked();
     chunk_answer(rpc.take("wb_attachment_chunk"));
     cx.run_until_parked();
-    let share = chat.read_with(cx, |chat, _| chat.draft.upload.as_ref().and_then(|run| run.share(7)));
+    let share = chat.read_with(cx, |chat, _| {
+        chat.uploading
+            .as_ref()
+            .and_then(|draft| draft.upload.as_ref())
+            .and_then(|run| run.share(7))
+    });
     assert!(
         share.is_some_and(|share| share > 0. && share < 1.),
         "the chip shows progress: {share:?}"
     );
-    chat.update(cx, |chat, _| chat.draft.upload.as_ref().unwrap().cancel(7));
+    chat.update(cx, |chat, _| {
+        chat.uploading
+            .as_ref()
+            .and_then(|draft| draft.upload.as_ref())
+            .unwrap()
+            .cancel(7)
+    });
     chunk_answer(rpc.take("wb_attachment_chunk"));
     cx.run_until_parked();
     rpc.take("wb_attachment_cancel").answer.send(Ok(Value::Null)).unwrap();
@@ -741,7 +755,7 @@ fn side_chat_upload_shows_progress_and_cancel_keeps_the_message(cx: &mut TestApp
     assert_eq!(rpc.count("wb_send_files"), 0);
     chat.read_with(cx, |chat, cx| {
         assert!(!chat.sending);
-        assert!(chat.draft.upload.is_none());
+        assert!(chat.uploading.is_none());
         assert_eq!(chat.draft.files.iter().map(|file| file.id).collect::<Vec<_>>(), [7]);
         assert_eq!(chat.input.read(cx).value().as_ref(), "keep me");
         assert_eq!(chat.problem, None);
@@ -773,7 +787,7 @@ fn side_chat_revoked_upload_issues_no_later_chunk_or_final_send(cx: &mut TestApp
             chat.draft
                 .files
                 .push(attachment(7, nexus_workbench::attachments::CHUNK_BYTES + 3));
-            chat.send(window, cx);
+            chat.send(false, window, cx);
         });
         cx.run_until_parked();
         let first = rpc.take("wb_attachment_chunk");
@@ -884,7 +898,7 @@ fn side_chat_unavailable_source_preview_projects_confirmed_send_without_resendin
                 chat.input
                     .update(cx, |input, cx| input.set_value("known submitted A", window, cx));
                 chat.draft.files.push(attachment(7, 5));
-                chat.send(window, cx);
+                chat.send(false, window, cx);
             });
         });
         cx.run_until_parked();
@@ -1154,3 +1168,4 @@ fn side_chat_local_store_locator_requires_matching_data_path_and_scope(cx: &mut 
 }
 
 mod partial_tests;
+mod send_tests;

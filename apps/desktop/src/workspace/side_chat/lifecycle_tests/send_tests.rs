@@ -1,0 +1,89 @@
+//! The side chat sends as the session composer does: the composer clears at once, messages leave in order, Ctrl+Enter
+//! queues, and a refused message comes back ahead of what was typed since.
+use super::super::SideChat;
+use super::{Rpc, attachment, summary};
+use gpui_kit::{Entity, TestAppContext, VisualTestContext};
+use serde_json::json;
+
+fn chat<'a>(cx: &'a mut TestAppContext, rpc: &Rpc) -> (Entity<SideChat>, &'a mut VisualTestContext) {
+    cx.update(gpui_kit::init);
+    cx.add_window_view(|window, cx| {
+        SideChat::new(
+            summary("send-side", "parent"),
+            "Parent".into(),
+            rpc.runs("machine"),
+            window,
+            cx,
+        )
+    })
+}
+
+fn type_and_send(chat: &Entity<SideChat>, cx: &mut VisualTestContext, text: &str, queued: bool) {
+    chat.update_in(cx, |chat, window, cx| {
+        chat.input.update(cx, |input, cx| input.set_value(text, window, cx));
+        chat.send(queued, window, cx);
+    });
+    cx.run_until_parked();
+}
+
+#[gpui_kit::test]
+fn a_sent_message_leaves_the_composer_at_once_and_the_next_waits_its_turn(cx: &mut TestAppContext) {
+    let rpc = Rpc::default();
+    let (chat, cx) = chat(cx, &rpc);
+    chat.update(cx, |chat, _| chat.draft.files.push(attachment(7, 5)));
+    type_and_send(&chat, cx, "first", false);
+    chat.read_with(cx, |chat, cx| {
+        assert_eq!(
+            chat.input.read(cx).value().as_ref(),
+            "",
+            "the text left before the answer"
+        );
+        assert!(chat.draft.is_empty(), "the files left with it");
+    });
+    // The next message is typed and sent while the first is in flight: it waits in line.
+    type_and_send(&chat, cx, "second", true);
+    assert_eq!(rpc.count("wb_send_files"), 1);
+    chat.read_with(cx, |chat, cx| assert_eq!(chat.input.read(cx).value().as_ref(), ""));
+    let first = rpc.take("wb_send_files");
+    assert_eq!(first.args["text"], "first");
+    assert_eq!(first.args["files"].as_array().unwrap().len(), 1);
+    assert!(first.args.get("queued").is_none(), "Enter joins the turn");
+    first.answer.send(Ok(json!(true))).unwrap();
+    cx.run_until_parked();
+    let second = rpc.take("wb_send_files");
+    assert_eq!(second.args["text"], "second");
+    assert_eq!(second.args["queued"], true, "Ctrl+Enter queues behind the turn");
+    second.answer.send(Ok(json!(true))).unwrap();
+    cx.run_until_parked();
+    chat.read_with(cx, |chat, _| {
+        assert!(!chat.sending);
+        assert!(chat.outbox.is_empty());
+        assert_eq!(chat.problem, None);
+    });
+}
+
+#[gpui_kit::test]
+fn a_refused_message_comes_back_ahead_of_what_was_typed_since(cx: &mut TestAppContext) {
+    let rpc = Rpc::default();
+    let (chat, cx) = chat(cx, &rpc);
+    chat.update(cx, |chat, _| chat.draft.files.push(attachment(7, 5)));
+    type_and_send(&chat, cx, "refused", false);
+    chat.update_in(cx, |chat, window, cx| {
+        chat.input
+            .update(cx, |input, cx| input.set_value("typed since", window, cx));
+        chat.draft.files.push(attachment(8, 5));
+    });
+    rpc.take("wb_send_files")
+        .answer
+        .send(Err("The host refused it.".into()))
+        .unwrap();
+    cx.run_until_parked();
+    chat.read_with(cx, |chat, cx| {
+        assert_eq!(chat.input.read(cx).value().as_ref(), "refused\n\ntyped since");
+        assert_eq!(chat.draft.files.iter().map(|file| file.id).collect::<Vec<_>>(), [7, 8]);
+        assert_eq!(
+            chat.problem.as_deref(),
+            Some("The host refused it. The message was not sent; it is back in the composer.")
+        );
+    });
+}

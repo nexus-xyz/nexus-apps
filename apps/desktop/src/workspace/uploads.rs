@@ -36,7 +36,8 @@ fn kept(mut draft: Draft) -> Draft {
 }
 
 /// The text of a message that did not go, back in the composer ahead of what was typed since; None when it had none.
-fn restored(sent: &str, typed: &str) -> Option<String> {
+/// The side chat's composer puts a message back the same way (`side_chat/commands.rs`).
+pub(super) fn restored(sent: &str, typed: &str) -> Option<String> {
     if sent.trim().is_empty() {
         return None;
     }
@@ -48,7 +49,7 @@ fn restored(sent: &str, typed: &str) -> Option<String> {
 }
 
 /// `front`'s attachments ahead of `back`'s, as the composer shows them.
-fn ahead(front: Draft, back: Draft) -> Draft {
+pub(super) fn ahead(front: Draft, back: Draft) -> Draft {
     Draft {
         images: front.images.into_iter().chain(back.images).collect(),
         files: front.files.into_iter().chain(back.files).collect(),
