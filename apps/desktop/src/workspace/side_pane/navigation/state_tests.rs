@@ -175,10 +175,17 @@ fn late_result_retains_the_revision_from_before_human_input() {
 }
 #[test]
 fn edits_cannot_target_another_folder() {
-    let folder = std::path::Path::new("/repo");
-    assert_eq!(super::scoped_path("/repo/src/a.rs", folder), Some("src/a.rs".into()));
-    for path in ["/repo-two/a.rs", "../private/a.rs", "src/../../private"] {
-        assert_eq!(super::scoped_path(path, folder), None);
+    // Full paths on this system: `/repo` is not one on Windows.
+    let folder = std::env::temp_dir().join("repo");
+    let inside = folder.join("src").join("a.rs");
+    let relative = std::path::Path::new("src").join("a.rs");
+    assert_eq!(
+        super::scoped_path(&inside.to_string_lossy(), &folder),
+        Some(relative.to_string_lossy().into_owned())
+    );
+    let sibling = folder.with_file_name("repo-two").join("a.rs");
+    for path in [&*sibling.to_string_lossy(), "../private/a.rs", "src/../../private"] {
+        assert_eq!(super::scoped_path(path, &folder), None);
     }
 }
 #[test]

@@ -1243,9 +1243,10 @@ mod tests {
             folder: "0e9a4c1b-1111-4222-8333-944455556666".into(),
             persistent: true,
         };
+        let folder = root.join("browser-0e9a4c1b-1111-4222-8333-944455556666");
         assert_eq!(
-            profile_folder(root, &saved).as_deref(),
-            Some("/cache/cef/browser-0e9a4c1b-1111-4222-8333-944455556666")
+            profile_folder(root, &saved),
+            Some(folder.to_string_lossy().into_owned())
         );
         let memory = WebProfile {
             persistent: false,
