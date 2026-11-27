@@ -2946,6 +2946,94 @@ mod tests {
         Ok(())
     }
 
+    /// Nexus: a dark shadow's fade over a dark window is dithered, not drawn as flat bands. Over #1b1b1b a black
+    /// shadow has only a few levels to fade through; undithered, each 4x4 block inside a band is one flat value.
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn a_dark_shadow_fades_without_bands() -> anyhow::Result<()> {
+        let mut renderer = WgpuHeadlessRenderer::new()?;
+        let ground = gpui::Hsla::from(gpui::Rgba {
+            r: 27. / 255.,
+            g: 27. / 255.,
+            b: 27. / 255.,
+            a: 1.,
+        });
+        let mut scene = Scene::default();
+        scene.insert_primitive(solid_quad(0.0, 0.0, 256.0, 64.0, ground));
+        let element = solid_quad(-200.0, -200.0, 232.0, 464.0, gpui::transparent_black());
+        scene.insert_primitive(Shadow {
+            order: 0,
+            blur_radius: 24.0.into(),
+            bounds: element.bounds,
+            corner_radii: Corners::default(),
+            content_mask: ContentMask {
+                bounds: solid_quad(0.0, 0.0, 256.0, 64.0, ground).bounds,
+            },
+            color: gpui::black().opacity(0.7),
+            element_bounds: element.bounds,
+            element_corner_radii: Corners::default(),
+            inset: 0,
+            pad: 0,
+        });
+        scene.finish();
+        let image = renderer.render_scene_to_image(&scene, device_size(256, 64))?;
+        let red = |x: u32, y: u32| image.get_pixel(x, y).0[0];
+        // The fade runs right of the element's edge (x = 32), from about 14 up to 27.
+        assert!(red(34, 32) < 20 && red(250, 32) >= 26, "{} .. {}", red(34, 32), red(250, 32));
+        // The shadow is the same down each column. Undithered, a column is one flat value (a band); dithered, its
+        // pixels mix neighbouring levels in the share of the true value: no speckles brighter than that.
+        // Past about 2 sigma the shadow is under half a level, and the ground's own value is right.
+        let mut mixed = 0;
+        for x in 36..100 {
+            let column: Vec<i32> = (16..48).map(|y| i32::from(red(x, y))).collect();
+            let spread = column.iter().max().unwrap() - column.iter().min().unwrap();
+            assert!(spread <= 2, "column {x} spreads {spread} levels");
+            mixed += usize::from(spread >= 1 && x < 80);
+        }
+        assert!(mixed >= 40, "only {mixed} of 44 columns in the fade are dithered");
+        Ok(())
+    }
+
+    /// Nexus: a drop shadow paints only outside its element, as CSS `box-shadow` does, so a see-through element
+    /// (a frosted dialog) does not show its own shadow through its fill.
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn a_drop_shadow_paints_only_outside_its_element() -> anyhow::Result<()> {
+        const WHITE: [u8; 4] = [255, 255, 255, 255];
+        let mut renderer = WgpuHeadlessRenderer::new()?;
+        let mut scene = Scene::default();
+        scene.insert_primitive(solid_quad(0.0, 0.0, 64.0, 64.0, gpui::white()));
+        let element = solid_quad(16.0, 16.0, 32.0, 32.0, gpui::transparent_black());
+        for (blur, spread) in [(0.0, 4.0), (6.0, 2.0)] {
+            let shadow_bounds = element.bounds.dilate(spread.into());
+            let corner_radii = Corners::all(8.0.into());
+            scene.insert_primitive(Shadow {
+                order: 0,
+                blur_radius: blur.into(),
+                bounds: shadow_bounds,
+                corner_radii,
+                content_mask: ContentMask {
+                    bounds: solid_quad(0.0, 0.0, 64.0, 64.0, gpui::white()).bounds,
+                },
+                color: gpui::black(),
+                element_bounds: element.bounds,
+                element_corner_radii: corner_radii,
+                inset: 0,
+                pad: 0,
+            });
+        }
+        scene.finish();
+
+        let image = renderer.render_scene_to_image(&scene, device_size(64, 64))?;
+        // Under the element: the page, untouched.
+        assert_pixel(&image, 32, 32, WHITE);
+        assert_pixel(&image, 18, 32, WHITE);
+        // Just outside it: the solid spread.
+        assert_pixel(&image, 14, 32, BLACK);
+        assert_pixel(&image, 50, 32, BLACK);
+        Ok(())
+    }
+
     #[cfg(target_os = "linux")]
     #[test]
     fn headless_renderer_captures_each_requested_size() -> anyhow::Result<()> {

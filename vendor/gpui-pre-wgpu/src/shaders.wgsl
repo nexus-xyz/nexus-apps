@@ -1040,9 +1040,39 @@ fn fs_shadow(input: ShadowVarying) -> @location(0) vec4<f32> {
         let element_distance = quad_sdf(input.position.xy, shadow.element_bounds,
                                         shadow.element_corner_radii);
         alpha *= saturate(0.5 - element_distance);
+    } else {
+        // Nexus: a drop shadow paints only outside its element, as CSS `box-shadow` does. Under a see-through
+        // element (a frosted dialog) the shadow would otherwise show through the fill, and a backdrop blur inside
+        // the element would blur it in.
+        let element_distance = quad_sdf(input.position.xy, shadow.element_bounds,
+                                        shadow.element_corner_radii);
+        alpha *= saturate(0.5 + element_distance);
     }
 
-    return blend_color(input.color, alpha);
+    return dither_over(blend_color(input.color, alpha), input.position.xy);
+}
+
+// Nexus: dithering for soft fills. An 8-bit frame has few levels in the dark: a black shadow over a #1b1b1b window
+// fades through only 7 of them, so its 60 px fade shows as flat bands with hard steps. A fill that blends over what
+// is under it adds this noise of up to one level, so each pixel rounds up or down by its own share, and the eye sees
+// the smooth fade instead of the bands. Interleaved gradient noise (Jimenez 2014): cheap, and even at every scale.
+fn dither_noise(position: vec2<f32>) -> f32 {
+    return fract(52.9829189 * fract(dot(position, vec2<f32>(0.06711056, 0.00583715))));
+}
+
+// `color` blends over the frame (premultiplied or straight, as the surface is). The noise is added after the blend
+// whatever is under it: premultiplied, the source's color is added as it is; straight, it is multiplied by alpha
+// first. A unorm target clamps the source at 0, so the noise is 0 to +1 level, not centered: half a level brighter
+// on average, which is below what the eye sees. It fades in with the fill's alpha, so nothing outside the fill moves.
+fn dither_over(color: vec4<f32>, position: vec2<f32>) -> vec4<f32> {
+    let noise = dither_noise(position) / 255.0 * saturate(color.a * 64.0);
+    if (globals.premultiplied_alpha != 0u) {
+        return vec4<f32>(color.rgb + noise, color.a);
+    }
+    if (color.a <= 0.0) {
+        return color;
+    }
+    return vec4<f32>(color.rgb + noise / color.a, color.a);
 }
 
 // --- path rasterization --- //
@@ -1495,7 +1525,13 @@ fn fs_backdrop_blur(input: BackdropBlurVarying) -> @location(0) vec4<f32> {
     // The blurred texture covers `source_rect` of the frame, downsampled by a constant factor: normalized UVs
     // map over it whatever that factor is.
     let local = input.device_position - params.source_rect.xy;
-    let blurred = textureSampleLevel(t_backdrop_blurred, s_backdrop_blurred, local / params.source_rect.zw, 0.0);
+    let sampled = textureSampleLevel(t_backdrop_blurred, s_backdrop_blurred, local / params.source_rect.zw, 0.0);
+    // Nexus: a blur turns what is under it into slow gradients, which an 8-bit frame shows as bands. This pass
+    // replaces the frame (no blending), so a centered noise of one level dithers it without brightening it. A
+    // premultiplied color stays within its alpha.
+    let noise = (dither_noise(input.device_position) - 0.5) / 255.0;
+    let ceiling = select(1.0, sampled.a, globals.premultiplied_alpha != 0u);
+    let blurred = vec4<f32>(clamp(sampled.rgb + noise, vec3<f32>(0.0), vec3<f32>(ceiling)), sampled.a);
     if (coverage >= 1.0) {
         return blurred;
     }

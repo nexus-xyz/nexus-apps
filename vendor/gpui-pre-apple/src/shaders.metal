@@ -549,6 +549,13 @@ fragment float4 shadow_fragment(ShadowFragmentInput input [[stage_in]],
     float element_distance = quad_sdf(input.position.xy, shadow.element_bounds,
                                       shadow.element_corner_radii);
     alpha *= saturate(0.5 - element_distance);
+  } else {
+    // Nexus: a drop shadow paints only outside its element, as CSS `box-shadow` does. Under a see-through
+    // element (a frosted dialog) the shadow would otherwise show through the fill, and a backdrop blur inside
+    // the element would blur it in.
+    float element_distance = quad_sdf(input.position.xy, shadow.element_bounds,
+                                      shadow.element_corner_radii);
+    alpha *= saturate(0.5 + element_distance);
   }
 
   return input.color * float4(1., 1., 1., alpha);

@@ -155,6 +155,14 @@ entries that name them. Every other change has a comment that starts with "Nexus
   - `gpui-pre-apple/src/metal_renderer.rs`, `shaders.metal` and `build.rs`: the same on Metal, with two MSL passes
     in place of zui's `MPSImageGaussianBlur`. A blit needs a drawable that is not framebuffer-only. The layer turns
     `framebufferOnly` off when a frame blurs. It turns it back on after 30 frames without a blur.
+- `gpui-pre-wgpu/src/shaders.wgsl`, `gpui-pre-windows/src/shaders.hlsl` and `gpui-pre-apple/src/shaders.metal`: a drop
+  shadow paints only outside its element, as CSS `box-shadow` does. Upstream paints it under the whole element. A
+  see-through element (a frosted dialog) then showed its own shadow, and its backdrop blur smeared that shadow in.
+  `wgpu_renderer.rs` has a pixel test.
+- `gpui-pre-wgpu/src/shaders.wgsl`: shadows and the backdrop blur's composite are dithered (`dither_over`,
+  `dither_noise`). A dark shadow over a dark window fades through only a few 8-bit levels and showed flat bands; a
+  noise of up to one level lets each pixel round its own way. `wgpu_renderer.rs` has a pixel test. Metal and D3D11
+  are not dithered yet.
 
 To update GPUI or global-hotkey, copy the new versions from `~/.cargo/registry/src/*/` and apply the changes again.
 Remove this folder when gpui-kit's GPUI draws external textures itself, or move the changes to a fork.
