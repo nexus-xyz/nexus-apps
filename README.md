@@ -23,11 +23,8 @@ Download a package for your platform from the [download page](https://nexus.inc/
 
 ## Build from source
 
-You need Rust 1.97.
-
-```sh
-rustup toolchain install 1.97
-```
+You need Rust 1.97. `rust-toolchain.toml` pins it, so rustup installs it, with rustfmt and clippy, on the first
+`cargo` command in the repository.
 
 Then install the system packages for your platform.
 
@@ -41,7 +38,7 @@ Then install the system packages for your platform.
 Build and run from the repository root:
 
 ```sh
-cargo +1.97 run -p nexus-desktop-gpui --locked --release
+cargo run -p nexus-desktop-gpui --locked --release
 ```
 
 The first build takes several minutes. Use the committed `Cargo.lock`.
@@ -50,7 +47,7 @@ A debug build of GPUI is much slower, so use `--release` to judge how the app fe
 For a faster edit loop, use the `fast` profile:
 
 ```sh
-cargo +1.97 run -p nexus-desktop-gpui --locked --profile fast
+cargo run -p nexus-desktop-gpui --locked --profile fast
 ```
 
 Two optional settings save time when you build more than once:

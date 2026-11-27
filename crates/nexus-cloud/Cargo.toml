@@ -9,7 +9,7 @@ name = "nexus-cloud"
 description = "Nexus for desktop's cloud machines: a provider client (boat.dev), and the link that wakes a machine and reaches its nexus-host over SSH."
 version = "0.1.0"
 edition = "2024"
-rust-version = "1.94"
+rust-version.workspace = true
 publish = false
 license = "MIT"
 

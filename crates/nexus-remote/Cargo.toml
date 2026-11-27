@@ -7,7 +7,7 @@ name = "nexus-remote"
 description = "Nexus for desktop's remote machines: installs, reaches and updates nexus-host over SSH, and relays the Code workbench's calls and events."
 version = "0.1.0"
 edition = "2024"
-rust-version = "1.94"
+rust-version.workspace = true
 publish = false
 license = "MIT"
 

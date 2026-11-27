@@ -4,7 +4,7 @@
 name = "nexus-desktop-gpui"
 version = "0.11.2"
 edition = "2024"
-rust-version = "1.94"
+rust-version.workspace = true
 publish = false
 license = "MIT"
 description = "Nexus Desktop on GPUI, over nexus-client and the shared desktop core."

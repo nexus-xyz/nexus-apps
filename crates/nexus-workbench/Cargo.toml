@@ -8,7 +8,7 @@ name = "nexus-workbench"
 description = "Nexus for desktop's Code workbench: drives Claude Code and Codex sessions, relays approvals, keeps their event logs."
 version = "0.1.0"
 edition = "2024"
-rust-version = "1.94"
+rust-version.workspace = true
 publish = false
 license = "MIT"
 
