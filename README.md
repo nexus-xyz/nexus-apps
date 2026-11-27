@@ -3,7 +3,14 @@
 Nexus Desktop is a native desktop app for working with AI agents. It runs on macOS, Linux and Windows.
 It draws its interface on the GPU with [GPUI](https://www.gpui.rs), the UI framework behind the Zed editor.
 
-<!-- Screenshot placeholder: add a window screenshot at docs/images/screenshot.png, then replace this comment with ![The app window](docs/images/screenshot.png) -->
+This repository also holds the `nexus` command-line tool and the Rust crates the two share:
+
+| Path | What it is |
+| --- | --- |
+| `apps/desktop` | Nexus Desktop. |
+| `apps/cli` | The `nexus` CLI. See [The `nexus` CLI](#the-nexus-cli). |
+| `crates/` | The shared crates. See [Crates](#crates). |
+| `vendor/` | Patched copies of GPUI's crates and `global-hotkey`. See [vendor/README.md](vendor/README.md). |
 
 ## What it does
 
@@ -57,6 +64,51 @@ Two optional settings save time when you build more than once:
 
 - `CEF_PATH=$HOME/.cache/nexus-cef` shares one download of the embedded browser (CEF) between checkouts.
 - `NEXUS_BUILD_SHA=local` stops each commit from rebuilding the app for its version string.
+
+### Stand-in logos
+
+Some logos are not in this repository, because they are not cleared for open-source use.
+The repository's `.cargo/config.toml` sets `NEXUS_HELD_STAND_INS=1`, so `build.rs` draws a plain stand-in for each
+missing logo. A build from source therefore shows stand-ins where an official package shows those logos.
+The tests that check a real logo's drawing skip in such a build.
+
+### Prebuilt rich-text renderer
+
+`apps/desktop/rich-text/assets/renderer.js` and `renderer.css` are prebuilt files. The app loads them in its
+embedded browser to draw rich Markdown, with math and diagrams. Their source is not published yet. We plan to
+publish it later.
+The third-party packages in the bundle, and their licenses, are listed in `renderer.js.packages.json` beside them.
+
+## The `nexus` CLI
+
+`apps/cli` is the `nexus` command-line tool. It signs in to Nexus, chats with models, starts coding agents
+(`nexus claude`, `nexus codex`), manages a team's settings, and runs the Nexus MCP server (`nexus mcp`).
+It needs the same Rust toolchain as the app, but not the app's system packages.
+
+Build and run it from the repository root:
+
+```sh
+cargo run -p nexus-cli --locked -- help
+```
+
+Build it on its own, with `-p nexus-cli`, not with `--workspace`. The desktop app turns on features of shared crates
+that the CLI leaves off, so a workspace build gives a different CLI.
+
+## Crates
+
+The crates in `crates/` are shared by the app and the CLI. Five are meant for crates.io (`publish = ["crates-io"]`).
+None is published there yet.
+
+| Crate | What it is |
+| --- | --- |
+| [`nexus-client`](crates/nexus-client) | The client core for the Nexus API: HTTP, sign-in, config, streaming. |
+| [`nexus-agents`](crates/nexus-agents) | The coding agents Nexus launches, and the facts about each one. |
+| [`nexus-providers`](crates/nexus-providers) | How a coding agent's session is reached and paid. Plain values, no I/O. |
+| [`nexus-local-agents`](crates/nexus-local-agents) | What this machine has of each coding agent: binary, version, sign-in. |
+| [`nexus-agent-memory`](crates/nexus-agent-memory) | Local memory notes that coding agents share. |
+
+The other crates (`nexus-workbench`, `nexus-host`, `nexus-remote` and the `nexus-desktop-*` crates, among others) are
+internal to this repository and are not published. Each of the five has a README with a short example.
 
 ## Architecture
 
