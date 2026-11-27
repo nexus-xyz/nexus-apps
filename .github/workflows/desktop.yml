@@ -4,6 +4,7 @@
 name: desktop
 
 on:
+  workflow_dispatch:
   pull_request:
     paths: ["apps/desktop/**", "crates/**", "vendor/**", "Cargo.toml", "Cargo.lock", "rustfmt.toml", "deny.toml", ".cargo/**", "build/**", ".github/workflows/desktop.yml"]
   push:

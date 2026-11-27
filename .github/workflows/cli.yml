@@ -4,6 +4,7 @@
 name: cli
 
 on:
+  workflow_dispatch:
   pull_request:
     paths: ["apps/cli/**", "crates/**", "Cargo.toml", "Cargo.lock", "rustfmt.toml", "deny.toml", ".cargo/**", "build/**", ".github/workflows/cli.yml"]
   push:
