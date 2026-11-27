@@ -44,7 +44,10 @@ fn claude_import_reads_worktrees_and_profiles_and_exports_to_the_primary_checkou
     let fixture = |home: &Path, suffix: &str, text: &str| -> io::Result<PathBuf> {
         let folder = home.join("projects").join(format!("{prefix}{suffix}")).join("memory");
         fs::create_dir_all(&folder)?;
-        fs::write(folder.join("note.md"), format!("---\nname: note\n---\n{text}\n"))?;
+        fs::write(
+            folder.join("note.md"),
+            format!("---\nname: 'Imported note'\ndescription: >-\n  A note from\n  a Claude profile\n---\n{text}\n"),
+        )?;
         Ok(folder)
     };
     fixture(&profiles[0], "-repo", "A note from the main checkout")?;
@@ -57,6 +60,13 @@ fn claude_import_reads_worktrees_and_profiles_and_exports_to_the_primary_checkou
     assert_eq!(import(&store, Agent::Claude, &profiles, &repo)?, 4);
     assert_eq!(import(&store, Agent::Claude, &profiles, &worktree)?, 0);
     let repository = Repository::discover(&worktree).expect("worktree repository");
+    let imported = store.entries(Some(&repository))?;
+    let note = imported
+        .iter()
+        .find(|entry| entry.text == "A note from the main checkout")
+        .expect("imported note");
+    assert_eq!(note.name.as_deref(), Some("Imported note"));
+    assert_eq!(note.description.as_deref(), Some("A note from a Claude profile"));
     let entry = store.remember(repository.scope(), Source::Person, "An independent note")?;
     assert_eq!(export(&store, Agent::Claude, &profiles[1], &worktree)?, 1);
     let topic = selected.join(format!("nexus-shared-{}.md", entry.id));
@@ -80,6 +90,47 @@ fn claude_import_reads_worktrees_and_profiles_and_exports_to_the_primary_checkou
         fs::read_to_string(selected.join("MEMORY.md"))?,
         "A handwritten index note\n"
     );
+    Ok(())
+}
+
+#[test]
+fn claude_import_preserves_metadata_from_malformed_frontmatter() -> io::Result<()> {
+    let tmp = tempfile::tempdir()?;
+    let checkout = repository(tmp.path(), "repo")?.canonicalize()?;
+    let profile = tmp.path().join("profile");
+    let folder = profile
+        .join("projects")
+        .join(crate::agents::claude_project_name(&checkout))
+        .join("memory");
+    fs::create_dir_all(&folder)?;
+    let cases = [
+        ("eod", r#""EOD memory entry": the user's personal EOD routine"#),
+        ("commands", "`nexus memory list` shows local notes"),
+        ("two-phrases", r#""One phrase": "a separate phrase""#),
+    ];
+    for (name, description) in cases {
+        let header =
+            format!("nested:\n  name: ignored\n  description: ignored\nname: '{name}'\ndescription: {description}");
+        assert!(yaml_serde::from_str::<NoteMetadata>(&header).is_err());
+        fs::write(
+            folder.join(format!("{name}.md")),
+            format!("---\n{header}\n---\nBody for {name}.\n"),
+        )?;
+    }
+
+    let store = Store::new(tmp.path().join("store"));
+    store.set_enabled(true)?;
+    assert_eq!(import(&store, Agent::Claude, &[profile], &checkout)?, cases.len());
+    let repo = Repository::discover(&checkout).expect("repository");
+    let entries = store.entries(Some(&repo))?;
+    for (name, description) in cases {
+        let note = entries
+            .iter()
+            .find(|note| note.name.as_deref() == Some(name))
+            .expect("top-level name");
+        assert_eq!(note.description.as_deref(), Some(description));
+        assert_eq!(note.text, format!("Body for {name}."));
+    }
     Ok(())
 }
 

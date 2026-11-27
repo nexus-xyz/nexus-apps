@@ -417,11 +417,7 @@ fn prompt_in_file_for_store(
     dir: &Path,
     memory: Option<&nexus_agent_memory::Store>,
 ) -> Vec<String> {
-    let batch = bin
-        .extension()
-        .and_then(|e| e.to_str())
-        .is_some_and(|e| e.eq_ignore_ascii_case("cmd") || e.eq_ignore_ascii_case("bat"));
-    if !batch {
+    if !batch_file(bin) {
         return args;
     }
     let own = args.iter().position(|a| a == "--").unwrap_or(args.len());
@@ -469,8 +465,22 @@ fn prompt_in_file_for_store(
     out
 }
 
+fn batch_file(bin: &Path) -> bool {
+    bin.extension()
+        .and_then(|extension| extension.to_str())
+        .is_some_and(|extension| extension.eq_ignore_ascii_case("cmd") || extension.eq_ignore_ascii_case("bat"))
+}
+
+// Microsoft Learn (KB 830473) caps the entire cmd.exe command line at 8,191 characters.
+const CMD_EXE_LIMIT: usize = 8_191;
+// Reserve 256 characters for cmd.exe and the npm shim on Codex batch launches.
+const CODEX_BATCH_COMMAND_BUDGET: usize = CMD_EXE_LIMIT - 256;
+// On batch launches, cache the base instructions if they leave too little room for memory guidance and rows.
+const CODEX_BATCH_PREFERRED_MEMORY: usize = 2 * 1024;
+
 fn launch_instructions(
     agent: Agent,
+    bin: &Path,
     employee: bool,
     cwd: &Path,
     env: &dyn Fn(&str) -> Option<String>,
@@ -482,6 +492,10 @@ fn launch_instructions(
     let Ok(store) = nexus_agent_memory::Store::from_env(env) else {
         return Ok((text, None));
     };
+    if agent == Agent::Codex && batch_file(bin) {
+        // A batch launch needs the final argument vector to budget for cmd.exe.
+        return Ok((text, store.enabled()?.then_some(store)));
+    }
     let guidance = nexus_agent_memory::tools::launch_guidance(crate::mcp::MEMORY_SERVER, agent == Agent::Claude);
     let notes = store.instructions(cwd, Some(&guidance))?;
     if notes.is_empty() {
@@ -490,6 +504,89 @@ fn launch_instructions(
     text.push_str("\n\n");
     text.push_str(&notes);
     Ok((text, Some(store)))
+}
+
+/// Add shared memory to a Codex batch launch after its complete argument vector is known.
+fn add_codex_batch_memory(
+    bin: &Path,
+    args: &mut [String],
+    base: &str,
+    memory: &nexus_agent_memory::Store,
+    cwd: &Path,
+) -> std::io::Result<()> {
+    let setting = |text: &str| with_instructions(Agent::Codex, &[], text).remove(1);
+    let base_setting = setting(base);
+    let index = args
+        .iter()
+        .position(|arg| arg == &base_setting)
+        .ok_or_else(|| std::io::Error::other("Codex session instructions are missing from the launch arguments."))?;
+    let base_chars = batch_argument_chars(&base_setting);
+    let other_chars = batch_command_chars(bin, args) - base_chars;
+    let setting_budget = CODEX_BATCH_COMMAND_BUDGET.saturating_sub(other_chars);
+
+    // Pages and connector guidance already take most of the budget. When needed, keep
+    // that text in the existing private prompt cache and put its path in the inline prompt.
+    let mut file_hint = None;
+    if setting_budget.saturating_sub(base_chars) < CODEX_BATCH_PREFERRED_MEMORY {
+        let hint = format!(
+            "Before doing any work, read the Nexus session instructions in `{}`.",
+            memory.prompt_file(base)?.display()
+        );
+        let hint_setting = setting(&hint);
+        if batch_argument_chars(&hint_setting) <= setting_budget {
+            // Keep the shorter baseline even if the remaining space cannot hold startup notes.
+            args[index] = hint_setting;
+            file_hint = Some(hint);
+        }
+    }
+    let base = file_hint.as_deref().unwrap_or(base);
+    let prefix = format!("{base}\n\n");
+    let mut limit = setting_budget.saturating_sub(batch_argument_chars(&setting(&prefix)));
+    let guidance = nexus_agent_memory::tools::launch_guidance(crate::mcp::MEMORY_SERVER, false);
+    while limit >= guidance.len() {
+        let notes = memory.instructions_with_limit(cwd, Some(&guidance), limit)?;
+        if !notes.starts_with(&guidance) {
+            break;
+        }
+        let candidate = setting(&format!("{prefix}{notes}"));
+        let excess = batch_argument_chars(&candidate).saturating_sub(setting_budget);
+        if excess == 0 {
+            args[index] = candidate;
+            return Ok(());
+        }
+        // JSON and cmd.exe quoting expand some characters. Re-render at a tighter UTF-8
+        // limit so the last complete row and the omission count still agree.
+        limit = limit.saturating_sub(excess);
+    }
+    Err(std::io::Error::other(
+        "The Codex command line has too little room for startup memory. Use recall to read shared notes.",
+    ))
+}
+
+fn batch_command_chars(bin: &Path, args: &[String]) -> usize {
+    bin.to_string_lossy().encode_utf16().count() + args.iter().map(|arg| batch_argument_chars(arg)).sum::<usize>()
+}
+
+// Bound the argument's UTF-16 length after Rust's Windows batch quoting. Count a separator
+// and outer quotes even for bare arguments. Rust doubles quotes and preceding backslashes,
+// and adds seven characters when protecting a percent sign or carriage return from cmd.exe.
+fn batch_argument_chars(arg: &str) -> usize {
+    let mut chars = 3;
+    let mut backslashes = 0;
+    for ch in arg.chars() {
+        chars += ch.len_utf16();
+        match ch {
+            '\\' => {
+                backslashes += 1;
+                continue;
+            }
+            '"' => chars += backslashes + 1,
+            '%' | '\r' => chars += 7,
+            _ => {}
+        }
+        backslashes = 0;
+    }
+    chars + backslashes
 }
 
 fn configure_memory_launch(
@@ -740,11 +837,12 @@ pub fn launch_agent(agent: Agent, argv: &[String], ctx: &Context, config: &Confi
     // own people while Nexus tries it on its own work first. The agent is told, or it offers to undo it.
     // An agent that takes no instructions gets no trailer either: it would not know where the trailer came from.
     let employee = core.get("/v1/tenants/me").is_ok_and(|me| is_employee(&me)) && takes_instructions(agent);
-    let (instructions, memory) = launch_instructions(agent, employee, &cwd, &ctx.env_fn()).unwrap_or_else(|error| {
-        ctx.io
-            .err(&format!("{} Could not load shared memory: {error}", style.warn));
-        (session_instructions(employee), None)
-    });
+    let (instructions, memory) =
+        launch_instructions(agent, &bin, employee, &cwd, &ctx.env_fn()).unwrap_or_else(|error| {
+            ctx.io
+                .err(&format!("{} Could not load shared memory: {error}", style.warn));
+            (session_instructions(employee), None)
+        });
     forwarded = with_instructions(agent, &forwarded, &instructions);
     let mut named = asked.clone();
     let model: Option<String>;
@@ -898,7 +996,7 @@ pub fn launch_agent(agent: Agent, argv: &[String], ctx: &Context, config: &Confi
     if employee {
         commit_trailer::mark(&mut env, Surface::Cli);
     }
-    let (launch_args, mut launch_env) = agent_launch(
+    let (mut launch_args, mut launch_env) = agent_launch(
         agent,
         LaunchOptions {
             route,
@@ -920,6 +1018,18 @@ pub fn launch_agent(agent: Agent, argv: &[String], ctx: &Context, config: &Confi
         }
         Agent::Codex | Agent::Antigravity | Agent::Cursor | Agent::Opencode => {}
     }
+    let codex_batch = agent == Agent::Codex && batch_file(&bin);
+    if codex_batch
+        && let Some(memory) = &memory
+        && let Err(error) = add_codex_batch_memory(&bin, &mut launch_args, &instructions, memory, &cwd)
+    {
+        ctx.io
+            .err(&format!("{} Could not load shared memory: {error}", style.warn));
+    }
+    let codex_batch_overflow = cfg!(windows)
+        && codex_batch
+        && memory.is_some()
+        && batch_command_chars(&bin, &launch_args) > CODEX_BATCH_COMMAND_BUDGET;
     let launch_args = prompt_in_file_for_store(
         &bin,
         launch_args,
@@ -1007,7 +1117,14 @@ pub fn launch_agent(agent: Agent, argv: &[String], ctx: &Context, config: &Confi
     let beating = Heartbeat::start(&core, &session_id, every);
     // Active minutes while the person uses the terminal (Unix; see `usage_signals`).
     let activity = usage_signals::ActivityBeat::start(&config.url, api_key);
-    let ran = run(&bin, &launch_args, &launch_env, &cwd, ctx.interactive);
+    let ran = if codex_batch_overflow {
+        Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            "The Codex batch command is too long. Shorten the forwarded arguments and try again.",
+        ))
+    } else {
+        run(&bin, &launch_args, &launch_env, &cwd, ctx.interactive)
+    };
     #[cfg(unix)]
     drop(codex_server);
     activity.stop();
@@ -2930,12 +3047,144 @@ mod shared_memory_launch_tests {
         let store = nexus_agent_memory::Store::from_env(&env).expect("store");
         store.set_enabled(true).expect("enable shared memory");
 
-        let (prompt, memory) = launch_instructions(Agent::Claude, false, &fixture, &env).expect("launch");
+        let (prompt, memory) =
+            launch_instructions(Agent::Claude, Path::new("claude"), false, &fixture, &env).expect("launch");
         assert!(memory.is_some());
         let (instruction, _) = prompt.split_once("<nexus-shared-memory>").expect("notes block");
         assert!(instruction.contains("Use the `nexus_memory` MCP server by default"));
         assert!(instruction.contains("select:mcp__nexus_memory__remember"));
         std::fs::remove_dir_all(fixture).expect("remove fixture");
+    }
+
+    #[test]
+    fn codex_inline_memory_fits_the_windows_batch_command() {
+        let fixture = std::env::temp_dir().join(format!("nexus-codex-memory-prompt-{}", uuid::Uuid::new_v4()));
+        let env_fn = |name: &str| match name {
+            "HOME" | "XDG_DATA_HOME" | "LOCALAPPDATA" => Some(fixture.display().to_string()),
+            _ => None,
+        };
+        let store = nexus_agent_memory::Store::from_env(&env_fn).expect("open the memory store");
+        store.set_enabled(true).expect("turn shared memory on");
+        let wide = r#"界"&<%\"#.repeat(80);
+        let mut newest = None;
+        for index in 0..100 {
+            newest = Some(
+                store
+                    .remember(
+                        nexus_agent_memory::Scope::Personal,
+                        nexus_agent_memory::Source::Person,
+                        &format!("Note {index} {wide}\nSecond line with quotes \" and a backslash \\."),
+                    )
+                    .expect("save a note")
+                    .id,
+            );
+        }
+        let bin = Path::new(r"C:\Users\Nexus User\AppData\Roaming\npm\codex.cmd");
+        let (base, memory) =
+            launch_instructions(Agent::Codex, bin, true, &fixture, &env_fn).expect("launch instructions");
+        let memory = memory.as_ref().expect("enabled memory");
+        let executable = Path::new(r"C:\Program Files\Nexus\nexus.exe");
+        let catalog = Path::new(r"C:\Users\Nexus User\AppData\Local\Nexus\models.json");
+        let session = "36cc572e-3791-49a1-b375-b7f41d228920";
+        let forwarded = vec!["exec".into(), "Review the rollout. ".repeat(12)];
+        let mut forwarded = with_instructions(Agent::Codex, &forwarded, &base);
+        let mut env = HashMap::new();
+        configure_memory_launch(
+            Some(memory),
+            Agent::Codex,
+            Some(executable),
+            &fixture,
+            session,
+            &mut forwarded,
+            &mut env,
+        )
+        .expect("configure the memory launch");
+        commit_trailer::mark(&mut env, Surface::Cli);
+        let (mut args, _) = agent_launch(
+            Agent::Codex,
+            LaunchOptions {
+                route: Route::Gateway,
+                core_url: "https://gateway.example",
+                api_key: "fixture",
+                session_id: session,
+                team: Some("example-team"),
+                model: Some("gpt-6-luna"),
+                model_catalog: Some(catalog),
+                web_search: false,
+                args: forwarded,
+                env,
+            },
+        );
+        add_codex_batch_memory(bin, &mut args, &base, memory, &fixture).expect("fit memory into the batch command");
+        let joined = format!("{} {}", bin.display(), args.join(" "));
+        assert!(joined.encode_utf16().count() <= CMD_EXE_LIMIT);
+        assert!(batch_command_chars(bin, &args) <= CODEX_BATCH_COMMAND_BUDGET);
+        let override_value = args
+            .iter()
+            .find_map(|arg| arg.strip_prefix("developer_instructions="))
+            .expect("inline instructions");
+        assert!(override_value.contains(r"\n"));
+        assert!(override_value.contains(&newest.expect("a saved note").to_string()));
+        let prompt: String = serde_json::from_str(override_value).expect("a JSON string");
+        let (base_hint, _) = prompt
+            .split_once("\n\n# Nexus Shared memory")
+            .expect("the memory section");
+        let file = base_hint.split('`').nth(1).expect("base instructions file");
+        assert_eq!(
+            std::fs::read_to_string(file).expect("read the base instructions file"),
+            base
+        );
+        std::fs::remove_dir_all(fixture).expect("remove the fixture");
+    }
+
+    #[test]
+    fn codex_non_batch_launch_keeps_full_session_instructions_and_memory_inline() {
+        let fixture = std::env::temp_dir().join(format!("nexus-codex-native-prompt-{}", uuid::Uuid::new_v4()));
+        let env = |name: &str| match name {
+            "HOME" | "XDG_DATA_HOME" | "LOCALAPPDATA" => Some(fixture.display().to_string()),
+            _ => None,
+        };
+        let store = nexus_agent_memory::Store::from_env(&env).expect("open the memory store");
+        store.set_enabled(true).expect("turn shared memory on");
+        let description = "Confirm the planned deployment with the release owner and check the staging results.";
+        for index in 0..100 {
+            store
+                .remember(
+                    nexus_agent_memory::Scope::Personal,
+                    nexus_agent_memory::Source::Person,
+                    &format!("Note {index}. {description}"),
+                )
+                .expect("save a note");
+        }
+        let newest = store
+            .remember(
+                nexus_agent_memory::Scope::Personal,
+                nexus_agent_memory::Source::Person,
+                "Newest note",
+            )
+            .expect("save the newest note");
+        let base = session_instructions(true);
+        let guidance = nexus_agent_memory::tools::launch_guidance(crate::mcp::MEMORY_SERVER, false);
+        let notes = store
+            .instructions(&fixture, Some(&guidance))
+            .expect("startup instructions");
+        assert!(notes.len() > CODEX_BATCH_COMMAND_BUDGET);
+
+        for bin in ["/usr/local/bin/codex", "codex.exe"] {
+            let (instructions, memory) =
+                launch_instructions(Agent::Codex, Path::new(bin), true, &fixture, &env).expect("launch instructions");
+            assert!(memory.is_some());
+            let args = with_instructions(Agent::Codex, &[], &instructions);
+            let value = args[1]
+                .strip_prefix("developer_instructions=")
+                .expect("inline instructions");
+            let prompt: String = serde_json::from_str(value).expect("a JSON string");
+            assert_eq!(prompt.strip_prefix(&format!("{base}\n\n")), Some(notes.as_str()));
+            assert!(!prompt.contains("read the Nexus session instructions in"));
+            assert!(prompt.contains(&newest.id.to_string()));
+        }
+        assert!(!store.root().join("prompts").exists());
+        std::fs::remove_dir_all(fixture).expect("remove the fixture");
     }
 
     #[test]
@@ -2970,7 +3219,8 @@ mod shared_memory_launch_tests {
                 with_instructions(agent, &forward, &session_instructions(false)),
                 original_env.clone(),
             );
-            let (instructions, store) = launch_instructions(agent, false, &cwd, &env).expect("disabled launch");
+            let (instructions, store) =
+                launch_instructions(agent, Path::new(agent.command()), false, &cwd, &env).expect("disabled launch");
             let mut args = with_instructions(agent, &forward, &instructions);
             let mut child_env = original_env.clone();
             configure_memory_launch(store.as_ref(), agent, None, &cwd, "session", &mut args, &mut child_env)

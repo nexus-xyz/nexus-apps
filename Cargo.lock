@@ -5836,6 +5836,7 @@ dependencies = [
  "time",
  "tokio",
  "uuid",
+ "yaml_serde",
 ]
 
 [[package]]

@@ -6,6 +6,8 @@ use crate::{Entry, Repository, Scope, Source, Store, valid_text, write_atomic};
 pub struct NativeEntry {
     pub scope: Scope,
     pub file: String,
+    pub name: Option<String>,
+    pub description: Option<String>,
     pub text: String,
 }
 
@@ -47,17 +49,25 @@ impl Store {
                     continue;
                 }
                 let entry = &mut entries[index];
-                if entry.text != text || entry.source != source {
+                let content_changed =
+                    entry.text != text || entry.name != note.name || entry.description != note.description;
+                if content_changed || entry.source != source {
                     if entry.text != text {
+                        let timestamp = crate::now();
+                        entry.created_at = timestamp.as_secs();
+                        entry.created_at_nanos = Some(timestamp.subsec_nanos());
+                    }
+                    if content_changed {
                         entry.text = text.to_string();
-                        entry.created_at = crate::now();
+                        entry.name = note.name;
+                        entry.description = note.description;
                         imported += 1;
                     }
                     entry.source = source;
                     self.write_entry(entry)?;
                 }
             } else if !text.is_empty() && !entries.iter().any(|entry| entry.text == text) {
-                entries.push(self.add(note.scope, source, text)?);
+                entries.push(self.add(note.scope, source, text, note.name, note.description)?);
                 imported += 1;
             }
         }

@@ -7,7 +7,7 @@ use nexus_agent_memory::{Entry, NativeEntry, Repository, preview};
 
 use crate::agents::claude_project_name;
 
-use super::{lock, marked, read as read_file, without_frontmatter, write as write_file};
+use super::{lock, marked, note_metadata, read as read_file, write as write_file};
 
 const INDEX: &str = "MEMORY.md";
 const EXPORTED_TOPIC: &str = "<!-- nexus-shared-memory:topic -->";
@@ -80,10 +80,11 @@ pub(crate) fn read(home: &Path, cwd: &Path) -> io::Result<Vec<NativeEntry>> {
                 continue;
             }
             let name = file.file_name().to_string_lossy().into_owned();
-            let text = if name == INDEX {
-                marked::without(&text, |key| key.is_empty())
+            let (metadata, text) = if name == INDEX {
+                (Default::default(), marked::without(&text, |key| key.is_empty()))
             } else {
-                without_frontmatter(&text).to_string()
+                let (metadata, body) = note_metadata(&text);
+                (metadata, body.to_owned())
             };
             notes.push(NativeEntry {
                 scope: repo.scope(),
@@ -95,6 +96,8 @@ pub(crate) fn read(home: &Path, cwd: &Path) -> io::Result<Vec<NativeEntry>> {
                     .map(|part| part.as_os_str().to_string_lossy())
                     .collect::<Vec<_>>()
                     .join("/"),
+                name: metadata.name,
+                description: metadata.description,
                 text,
             });
         }

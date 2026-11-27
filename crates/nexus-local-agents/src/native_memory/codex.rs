@@ -4,7 +4,7 @@ use std::{fs, io};
 
 use nexus_agent_memory::{Entry, NativeEntry, Repository, Scope, markdown};
 
-use super::{lock, marked, read as read_file, without_frontmatter, write as write_file};
+use super::{lock, marked, note_metadata, read as read_file, write as write_file};
 
 const INSTRUCTIONS: &str = "AGENTS.md";
 
@@ -16,6 +16,8 @@ pub(crate) fn read(home: &Path, _repo: &Path) -> io::Result<Vec<NativeEntry>> {
         entries.push(NativeEntry {
             scope: Scope::Personal,
             file: INSTRUCTIONS.into(),
+            name: None,
+            description: None,
             text: marked::without(&text, |_| true),
         });
     }
@@ -25,6 +27,8 @@ pub(crate) fn read(home: &Path, _repo: &Path) -> io::Result<Vec<NativeEntry>> {
             entries.push(NativeEntry {
                 scope: Scope::Personal,
                 file: file.into(),
+                name: None,
+                description: None,
                 text,
             });
             break;
@@ -80,12 +84,15 @@ pub(super) fn read_project(cwd: &Path, repository: &Repository) -> io::Result<Ve
             if fs::symlink_metadata(&source)?.is_file()
                 && let Some(text) = read_file(&source)?
             {
+                let (metadata, body) = note_metadata(&text);
                 entries.push((
                     profile.clone(),
                     NativeEntry {
                         scope: repository.scope(),
                         file: file.into(),
-                        text: without_frontmatter(&text).into(),
+                        name: metadata.name,
+                        description: metadata.description,
+                        text: body.into(),
                     },
                 ));
             }
