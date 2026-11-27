@@ -1,0 +1,5 @@
+#!/bin/sh
+# Start Nexus from inside its AppImage. CEF and its resources sit beside the binary, which finds them through its
+# $ORIGIN rpath.
+here="$(dirname "$(readlink -f "$0")")"
+exec "$here/usr/lib/nexus-desktop/nexus-desktop-gpui" "$@"
