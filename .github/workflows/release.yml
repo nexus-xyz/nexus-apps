@@ -1,19 +1,29 @@
-# A release of the desktop app: a `v<x.y.z>-beta.<N>` tag builds the app for Linux, macOS and Windows and the Nexus
-# host for Linux, signs them, and publishes the beta feed that installed betas update from.
+# A release of the desktop app: a tag builds the app for Linux, macOS and Windows and the Nexus host for Linux, signs
+# them, and publishes the channel's feed that installed builds update from.
+#
+#   v<x.y.z>-beta.<N>   the beta: `desktop-oss/beta/`, signed with this repository's updater key (updater-keys.txt).
+#   v<x.y.z>            stable: `desktop/stable/`, the folder Nexus's stable builds, the one-line installers and the AUR
+#                       package read. Signed with the stable updater key that every installed stable build trusts
+#                       (updater-keys-stable.txt). Off until the `release` environment holds that key's secret half
+#                       and the stable publisher's account: until then a stable tag stops before anything is signed.
+#   v0.0.0-test.<N>     a rehearsal: builds, signs with what the environment holds, publishes nothing.
 #
 # Who can release: a tag ruleset limits who pushes `v*` tags, and the `release` environment holds every secret and
 # waits for a reviewer who is not the person who pushed the tag. The `plan`, `build` and `host` jobs read no secret,
 # so a pushed tag builds nothing signed until a second person approves `release`.
 #
 # What a release publishes, in this order:
-#   1. `desktop-oss/beta/<version>/` on the downloads bucket: the packages, the hosts, each file's `.sig`,
-#      `SHA256SUMS`, and that version's own `latest.json`. Written once; a second write is refused.
-#   2. A GitHub prerelease with the same files.
-#   3. `desktop-oss/beta/latest.json`, the feed. It moves last, so an installed beta never sees a version whose
-#      files are not there yet.
+#   1. `<folder>/<version>/` on the downloads bucket: the packages, the hosts, each file's `.sig`, that version's own
+#      `latest.json`, and `SHA256SUMS` last, which marks the folder complete. Each object is written only if it does
+#      not exist yet, so a version is never written twice.
+#   2. A GitHub release with the same files (a prerelease for a beta).
+#   3. `<folder>/latest.json`, the feed. It moves last, only forward, and only over the generation it read, so an
+#      installed build never sees a version whose files are not there yet, nor an older one.
 #
-# A rehearsal: a `v0.0.0-test.<N>` tag runs every step but those three, and keeps the signed files as a workflow
-# artifact for three days. Use it to test the environment, the keys and the signing after a change here.
+# A rehearsal: a `v0.0.0-test.<N>` tag runs every step but those three, and keeps the files as a workflow artifact
+# for three days. With every secret set, the files are signed and notarized as a beta's would be. Without them it still
+# runs: the macOS app is signed ad hoc, and the updater signatures use a throwaway key made in the run. Use it to test
+# the workflow before the secrets exist, and the environment, the keys and the signing after a change here.
 #
 # Cost: three desktop builds with thin LTO and two host builds, with no cache (a release does not trust one).
 # Configuration: apps/desktop/packaging/RELEASE.md lists the environment's secrets and variables.
@@ -25,7 +35,8 @@ on:
 
 permissions: {}
 
-# One run per tag, and a second push of the same tag waits: a release is never cancelled halfway.
+# One run per tag, and a second push of the same tag waits: a release is never cancelled halfway. The `release` job
+# also queues on one group for every publishing run, so two tags never race the feed.
 concurrency:
   group: release-${{ github.ref }}
   cancel-in-progress: false
@@ -42,6 +53,8 @@ jobs:
       contents: read
     outputs:
       version: ${{ steps.plan.outputs.version }}
+      channel: ${{ steps.plan.outputs.channel }}
+      folder: ${{ steps.plan.outputs.folder }}
       publish: ${{ steps.plan.outputs.publish }}
       pubkey: ${{ steps.plan.outputs.pubkey }}
     steps:
@@ -54,14 +67,18 @@ jobs:
         env:
           TAG: ${{ github.ref_name }}
           GH_TOKEN: ${{ github.token }}
+          CLIENT_ID: ${{ vars.NEXUS_DESKTOP_CLIENT_ID }}
         run: |
           stop() { echo "::error::$1"; exit 1; }
           if [[ "$TAG" =~ ^v([0-9]+\.[0-9]+\.[0-9]+-beta\.[0-9]+)$ ]]; then
-            publish=true
+            channel=beta folder=desktop-oss/beta publish=true keyfile=updater-keys.txt
+          elif [[ "$TAG" =~ ^v([0-9]+\.[0-9]+\.[0-9]+)$ ]]; then
+            channel=stable folder=desktop/stable publish=true keyfile=updater-keys-stable.txt
           elif [[ "$TAG" =~ ^v(0\.0\.0-test\.[0-9]+)$ ]]; then
-            publish=false
+            # A rehearsal builds what a beta would, and publishes nothing.
+            channel=beta folder=desktop-oss/beta publish=false keyfile=updater-keys.txt
           else
-            stop "$TAG is not a release tag. A beta is v<x.y.z>-beta.<N>, and a rehearsal is v0.0.0-test.<N>."
+            stop "$TAG is not a release tag. A beta is v<x.y.z>-beta.<N>, stable is v<x.y.z>, and a rehearsal is v0.0.0-test.<N>."
           fi
           version="${BASH_REMATCH[1]}"
 
@@ -69,26 +86,44 @@ jobs:
           git merge-base --is-ancestor "$GITHUB_SHA" origin/main ||
             stop "$TAG is at $GITHUB_SHA, which is not on main."
 
+          # A stable tag is the app's version exactly, as Nexus's stable releases always were.
+          if [[ "$channel" == stable ]]; then
+            app="$(sed -n 's/^version = "\(.*\)"/\1/p' apps/desktop/Cargo.toml | head -1)"
+            [[ "$version" == "$app" ]] ||
+              stop "$TAG does not match apps/desktop/Cargo.toml's version ($app). A stable tag is the app's version."
+          fi
+
           if found="$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" 2>&1)"; then
             stop "A GitHub release for $TAG exists. Tag the next number: a published version never changes."
           elif ! grep -qi 'not found' <<< "$found"; then
             stop "Could not check for a GitHub release of $TAG: $found"
           fi
 
-          # The keys a build trusts for updates. A build with none never updates, so a release needs one.
-          keys="$({ grep -Ev '^[[:space:]]*(#|$)' apps/desktop/packaging/updater-keys.txt || true; } | tr -s '[:space:]' ' ' | sed 's/ $//')"
-          [[ -n "$keys" ]] || stop "apps/desktop/packaging/updater-keys.txt lists no key."
+          # A published build without Nexus's OAuth client would sign in as the shared client of builds from source.
+          if [[ "$publish" == true && -z "$CLIENT_ID" ]]; then
+            stop "The repository variable NEXUS_DESKTOP_CLIENT_ID is not set. A release needs Nexus's OAuth client id."
+          fi
+
+          # The keys a build trusts for updates. A build with none never updates, so a release needs one. A rehearsal
+          # may go without: its build then has no updater, and its files are signed with a throwaway key.
+          keys="$({ grep -Ev '^[[:space:]]*(#|$)' "apps/desktop/packaging/$keyfile" || true; } | tr -s '[:space:]' ' ' | sed 's/^ //; s/ $//')"
+          if [[ -z "$keys" ]]; then
+            [[ "$publish" != true ]] || stop "apps/desktop/packaging/$keyfile lists no key."
+            echo "::warning title=Rehearsal without update keys::apps/desktop/packaging/$keyfile lists no key: this build has no updater."
+          fi
           for key in $keys; do
             { printf '%s' "$key" | base64 --decode 2> /dev/null || true; } | grep -q '^untrusted comment: ' ||
-              stop "A line of updater-keys.txt is not the base64 of a minisign public key file."
+              stop "A line of $keyfile is not the base64 of a minisign public key file."
           done
 
           {
             echo "version=$version"
+            echo "channel=$channel"
+            echo "folder=$folder"
             echo "publish=$publish"
             echo "pubkey=$keys"
           } >> "$GITHUB_OUTPUT"
-          echo "Version $version, publish: $publish, $(wc -w <<< "$keys") update key(s)." >> "$GITHUB_STEP_SUMMARY"
+          echo "Version $version, channel $channel, publish: $publish, $(wc -w <<< "$keys") update key(s)." >> "$GITHUB_STEP_SUMMARY"
 
   # The app, unsigned. Linux and Windows leave here as packages. macOS leaves as binaries: its package is signed
   # while it is built, so `release` makes it.
@@ -210,6 +245,7 @@ jobs:
           retention-days: 3
           compression-level: 0
 
+
   # Signs and publishes. The only job that reads a secret, and it waits for the `release` environment's reviewer.
   # It runs on macOS because Apple's signing tools do. Each step gets only the secrets it names.
   release:
@@ -217,21 +253,32 @@ jobs:
     runs-on: macos-26
     timeout-minutes: 60
     environment: release
+    # Every publishing run, beta or stable, queues on one group: two tags never read and move a feed at once. A
+    # rehearsal publishes nothing, so it waits for no one.
+    concurrency:
+      group: ${{ needs.plan.outputs.publish == 'true' && 'release-feed' || format('release-rehearsal-{0}', github.run_id) }}
+      cancel-in-progress: false
     permissions:
       contents: write # the GitHub release
       id-token: write # the downloads bucket's identity, and provenance
       attestations: write
     env:
       VERSION: ${{ needs.plan.outputs.version }}
+      CHANNEL: ${{ needs.plan.outputs.channel }}
+      FOLDER: ${{ needs.plan.outputs.folder }}
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
         with:
           persist-credentials: false
-      # OUT holds exactly the files a release publishes. KEYCHAIN is this run's own, deleted in the last step.
+      # OUT holds exactly the files a release publishes. KEYCHAIN is this run's own, deleted in the last step. KEYS
+      # holds the updater key, its password and the public keys its signatures must verify with.
       - name: Set the paths
         run: |
-          echo "OUT=$RUNNER_TEMP/out" >> "$GITHUB_ENV"
-          echo "KEYCHAIN=$RUNNER_TEMP/release.keychain-db" >> "$GITHUB_ENV"
+          {
+            echo "OUT=$RUNNER_TEMP/out"
+            echo "KEYCHAIN=$RUNNER_TEMP/release.keychain-db"
+            echo "KEYS=$RUNNER_TEMP/keys"
+          } >> "$GITHUB_ENV"
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           pattern: package-*
@@ -242,26 +289,56 @@ jobs:
           name: unsigned-macos
           path: ${{ runner.temp }}/macos
 
-      # A release without a secret would publish an ad hoc signed app or stop halfway. Stop before the first step.
+      # A release without a secret would publish an ad hoc signed app or stop halfway: stop before the first step. A
+      # rehearsal goes on without the ones that are missing and says what it skipped.
       - name: Check the environment
+        id: secrets
         env:
           HAS_APPLE: ${{ secrets.APPLE_CERTIFICATE != '' && secrets.APPLE_CERTIFICATE_PASSWORD != '' && secrets.APPLE_SIGNING_IDENTITY != '' }}
           HAS_NOTARY: ${{ secrets.APPLE_API_KEY != '' && secrets.APPLE_API_ISSUER != '' && secrets.APPLE_API_KEY_P8 != '' }}
-          HAS_UPDATER: ${{ secrets.UPDATER_PRIVATE_KEY != '' }}
-          HAS_BUCKET: ${{ vars.DOWNLOADS_BUCKET != '' && vars.GCP_WORKLOAD_IDENTITY_PROVIDER != '' && vars.GCP_SERVICE_ACCOUNT != '' }}
+          HAS_BETA_UPDATER: ${{ secrets.UPDATER_PRIVATE_KEY != '' }}
+          HAS_STABLE_UPDATER: ${{ secrets.STABLE_UPDATER_PRIVATE_KEY != '' }}
+          HAS_BUCKET: ${{ vars.DOWNLOADS_BUCKET != '' && vars.GCP_WORKLOAD_IDENTITY_PROVIDER != '' }}
+          BETA_ACCOUNT: ${{ vars.GCP_SERVICE_ACCOUNT }}
+          STABLE_ACCOUNT: ${{ vars.GCP_STABLE_SERVICE_ACCOUNT }}
           PUBLISH: ${{ needs.plan.outputs.publish }}
+          PUBKEY: ${{ needs.plan.outputs.pubkey }}
         run: |
+          if [[ "$CHANNEL" == stable ]]; then
+            updater="$HAS_STABLE_UPDATER" updater_name="the stable updater key (STABLE_UPDATER_PRIVATE_KEY)"
+            account="$STABLE_ACCOUNT" account_name="GCP_STABLE_SERVICE_ACCOUNT"
+          else
+            updater="$HAS_BETA_UPDATER" updater_name="the updater key (UPDATER_PRIVATE_KEY)"
+            account="$BETA_ACCOUNT" account_name="GCP_SERVICE_ACCOUNT"
+          fi
+          # Notarization needs the Developer ID too. An updater key is used only when the build trusts a key.
+          [[ "$HAS_APPLE" == true ]] || HAS_NOTARY=false
+          [[ -n "$PUBKEY" ]] || updater=false
+          bucket=false
+          [[ "$HAS_BUCKET" == true && -n "$account" ]] && bucket=true
           missing=()
           [[ "$HAS_APPLE" == true ]] || missing+=("the Developer ID certificate (APPLE_CERTIFICATE, APPLE_CERTIFICATE_PASSWORD, APPLE_SIGNING_IDENTITY)")
           [[ "$HAS_NOTARY" == true ]] || missing+=("the notarization key (APPLE_API_KEY, APPLE_API_ISSUER, APPLE_API_KEY_P8)")
-          [[ "$HAS_UPDATER" == true ]] || missing+=("the updater key (UPDATER_PRIVATE_KEY)")
-          [[ "$PUBLISH" != true || "$HAS_BUCKET" == true ]] || missing+=("the bucket variables (DOWNLOADS_BUCKET, GCP_WORKLOAD_IDENTITY_PROVIDER, GCP_SERVICE_ACCOUNT)")
-          if (( ${#missing[@]} )); then
-            printf '::error::The release environment lacks %s.\n' "${missing[@]}"
+          [[ "$updater" == true ]] || missing+=("$updater_name")
+          [[ "$bucket" == true ]] || missing+=("the bucket variables (DOWNLOADS_BUCKET, GCP_WORKLOAD_IDENTITY_PROVIDER, $account_name)")
+          if [[ "$PUBLISH" == true ]] && (( ${#missing[@]} )); then
+            printf '::error::The release environment lacks %s. Nothing was signed or published.\n' "${missing[@]}"
             exit 1
           fi
+          for item in "${missing[@]}"; do
+            echo "::notice title=Rehearsal without a secret::The release environment lacks $item. The rehearsal goes on without it."
+            echo "- Without $item." >> "$GITHUB_STEP_SUMMARY"
+          done
+          {
+            echo "apple=$HAS_APPLE"
+            echo "notary=$HAS_NOTARY"
+            echo "updater=$updater"
+            echo "bucket=$bucket"
+            echo "account=$account"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Import the Developer ID certificate
+        if: steps.secrets.outputs.apple == 'true'
         env:
           APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
           APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
@@ -278,64 +355,149 @@ jobs:
           security set-key-partition-list -S apple-tool:,apple: -s -k "$password" "$KEYCHAIN" > /dev/null
           security list-keychains -d user -s "$KEYCHAIN" login.keychain-db
 
+      # Without the Developer ID (a rehearsal only), package.sh signs ad hoc and does not notarize.
       - name: Sign, notarize and package the macOS app
         env:
           NEXUS_DESKTOP_BUILD_VERSION: ${{ needs.plan.outputs.version }}
-          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
-          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
-          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
-          APPLE_API_KEY_P8: ${{ secrets.APPLE_API_KEY_P8 }}
-          APPLE_API_KEY_PATH: ${{ runner.temp }}/notary.p8
+          APPLE_SIGNING_IDENTITY: ${{ steps.secrets.outputs.apple == 'true' && secrets.APPLE_SIGNING_IDENTITY || '' }}
+          APPLE_API_KEY: ${{ steps.secrets.outputs.notary == 'true' && secrets.APPLE_API_KEY || '' }}
+          APPLE_API_ISSUER: ${{ steps.secrets.outputs.notary == 'true' && secrets.APPLE_API_ISSUER || '' }}
+          APPLE_API_KEY_P8: ${{ steps.secrets.outputs.notary == 'true' && secrets.APPLE_API_KEY_P8 || '' }}
           NO_BUILD: "1"
         run: |
           mkdir -p apps/desktop/target
           tar -C apps/desktop/target -xf "$RUNNER_TEMP/macos/macos-unsigned.tar"
-          (umask 077 && printf '%s\n' "$APPLE_API_KEY_P8" > "$APPLE_API_KEY_PATH")
+          if [[ -n "$APPLE_API_KEY_P8" ]]; then
+            export APPLE_API_KEY_PATH="$RUNNER_TEMP/notary.p8"
+            (umask 077 && printf '%s\n' "$APPLE_API_KEY_P8" > "$APPLE_API_KEY_PATH")
+          fi
+          unset APPLE_API_KEY_P8
           apps/desktop/packaging/package.sh
-          rm "$APPLE_API_KEY_PATH"
+          rm -f "$RUNNER_TEMP/notary.p8"
           mv "apps/desktop/target/package/nexus-desktop-$VERSION-macos-arm64.dmg" "$OUT/"
 
-      # The updater's signature: a minisign signature whose trusted comment names the file and the version, so one
-      # signed file cannot pass as another file or another version. `<file>.sig` is its base64, as the app reads it.
-      - name: Sign every file for the updater
+      # minisign at a fixed release, checked by its SHA-256 before it runs next to the keys: not whatever a package
+      # manager serves today. The hash is of minisign-0.12-macos.zip (an arm64 binary), whose own minisign signature
+      # verifies with its author's key RWQf6LRCGA9i53mlYecO4IzT51TGPpvWucNSCh1CBM0QTaLn73Y7GFO3. To move to a new
+      # release, check its signature with that key the same way, then change both values together.
+      - name: Install minisign
+        env:
+          MINISIGN_URL: https://github.com/jedisct1/minisign/releases/download/0.12/minisign-0.12-macos.zip
+          MINISIGN_SHA256: 89000b19535765f9cffc65a65d64a820f433ef6db8020667f7570e06bf6aac63
+        run: |
+          zip="$RUNNER_TEMP/minisign.zip"
+          curl -fsSL --proto '=https' --tlsv1.2 -o "$zip" "$MINISIGN_URL"
+          echo "$MINISIGN_SHA256  $zip" | shasum -a 256 -c -
+          mkdir -p "$RUNNER_TEMP/bin"
+          unzip -q -o -j "$zip" minisign -d "$RUNNER_TEMP/bin"
+          rm "$zip"
+          "$RUNNER_TEMP/bin/minisign" -v
+          echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+
+      # The channel's updater key, written to a file only this run reads. `trusted.txt` lists the public keys this
+      # build carries: every signature must verify with one of them.
+      - name: The beta updater key
+        if: steps.secrets.outputs.updater == 'true' && needs.plan.outputs.channel == 'beta'
         env:
           UPDATER_PRIVATE_KEY: ${{ secrets.UPDATER_PRIVATE_KEY }}
           UPDATER_KEY_PASSWORD: ${{ secrets.UPDATER_KEY_PASSWORD }}
           PUBKEY: ${{ needs.plan.outputs.pubkey }}
         run: |
-          brew install minisign
-          minisign -v
-          key="$RUNNER_TEMP/updater.key"
-          (umask 077 && printf '%s' "$UPDATER_PRIVATE_KEY" | base64 --decode > "$key")
+          (umask 077 && mkdir -p "$KEYS" &&
+            printf '%s' "$UPDATER_PRIVATE_KEY" | base64 --decode > "$KEYS/updater.key" &&
+            printf '%s\n' "$UPDATER_KEY_PASSWORD" > "$KEYS/password")
+          printf '%s\n' "$PUBKEY" > "$KEYS/trusted.txt"
+      # The key every installed stable build trusts: the old release's updater key (its TAURI_SIGNING_PRIVATE_KEY,
+      # which is already the base64 of a minisign key file) and its password.
+      - name: The stable updater key
+        if: steps.secrets.outputs.updater == 'true' && needs.plan.outputs.channel == 'stable'
+        env:
+          STABLE_UPDATER_PRIVATE_KEY: ${{ secrets.STABLE_UPDATER_PRIVATE_KEY }}
+          STABLE_UPDATER_KEY_PASSWORD: ${{ secrets.STABLE_UPDATER_KEY_PASSWORD }}
+          PUBKEY: ${{ needs.plan.outputs.pubkey }}
+        run: |
+          (umask 077 && mkdir -p "$KEYS" &&
+            printf '%s' "$STABLE_UPDATER_PRIVATE_KEY" | base64 --decode > "$KEYS/updater.key" &&
+            printf '%s\n' "$STABLE_UPDATER_KEY_PASSWORD" > "$KEYS/password")
+          printf '%s\n' "$PUBKEY" > "$KEYS/trusted.txt"
+      # A rehearsal without the key still runs the signing and the feed, with a key made here and thrown away.
+      - name: A throwaway updater key (rehearsal)
+        if: steps.secrets.outputs.updater != 'true' && needs.plan.outputs.publish != 'true'
+        run: |
+          (umask 077 && mkdir -p "$KEYS" && : > "$KEYS/password")
+          minisign -G -W -p "$KEYS/throwaway.pub" -s "$KEYS/updater.key"
+          base64 < "$KEYS/throwaway.pub" | tr -d '\n' > "$KEYS/trusted.txt"
+          echo "- Updater signatures use a throwaway key: no installed build would take these files." >> "$GITHUB_STEP_SUMMARY"
+
+      # The updater's signature: a minisign signature whose trusted comment names the file and the version, so one
+      # signed file cannot pass as another file or another version. `<file>.sig` is its base64, as the app reads it.
+      - name: Sign every file for the updater
+        run: |
           n=0
-          for trusted in $PUBKEY; do
+          read -ra keys < "$KEYS/trusted.txt"
+          for trusted in "${keys[@]}"; do
             n=$((n + 1))
-            printf '%s' "$trusted" | base64 --decode > "$RUNNER_TEMP/trusted-$n.pub"
+            printf '%s' "$trusted" | base64 --decode > "$KEYS/trusted-$n.pub"
           done
           for file in "$OUT"/*; do
             name="$(basename "$file")"
             comment="$(printf 'timestamp:%s\tfile:%s\tversion:%s' "$(date +%s)" "$name" "$VERSION")"
             # minisign reads the key's password from its input. A key without one reads nothing.
-            printf '%s\n' "$UPDATER_KEY_PASSWORD" | minisign -S -s "$key" -m "$file" -x "$file.minisig" -t "$comment"
+            minisign -S -s "$KEYS/updater.key" -m "$file" -x "$file.minisig" -t "$comment" < "$KEYS/password"
             # The signature must verify with a key this very build trusts, or no installed app would take the file.
             verified=
-            for trusted in "$RUNNER_TEMP"/trusted-*.pub; do
+            for trusted in "$KEYS"/trusted-*.pub; do
               if minisign -V -q -p "$trusted" -m "$file" -x "$file.minisig"; then verified=1; break; fi
             done
             if [[ -z "$verified" ]]; then
-              echo "::error::$name: its signature does not verify with a key in updater-keys.txt."
+              echo "::error::$name: its signature does not verify with a key this build trusts ($CHANNEL)."
               exit 1
             fi
             base64 < "$file.minisig" | tr -d '\n' > "$file.sig"
             rm "$file.minisig"
           done
-          rm "$key"
+          rm -f "$KEYS/updater.key" "$KEYS/password"
+
+      # Before the first stable tag: a rehearsal proves the stable key's secret half signs for the public key in
+      # updater-keys-stable.txt, and that its password is right. It signs a probe file only.
+      - name: Check the stable updater key (rehearsal)
+        if: needs.plan.outputs.publish != 'true'
+        env:
+          HAS_STABLE_UPDATER: ${{ secrets.STABLE_UPDATER_PRIVATE_KEY != '' }}
+          STABLE_UPDATER_PRIVATE_KEY: ${{ secrets.STABLE_UPDATER_PRIVATE_KEY }}
+          STABLE_UPDATER_KEY_PASSWORD: ${{ secrets.STABLE_UPDATER_KEY_PASSWORD }}
+        run: |
+          if [[ "$HAS_STABLE_UPDATER" != true ]]; then
+            echo "- The stable updater key is not set: the stable channel stays off." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          probe="$RUNNER_TEMP/stable-probe"
+          mkdir -p "$probe"
+          (umask 077 && printf '%s' "$STABLE_UPDATER_PRIVATE_KEY" | base64 --decode > "$probe/key")
+          printf 'Nexus stable updater key probe\n' > "$probe/file"
+          comment="$(printf 'file:file\tversion:%s' "$VERSION")"
+          printf '%s\n' "$STABLE_UPDATER_KEY_PASSWORD" |
+            minisign -S -s "$probe/key" -m "$probe/file" -x "$probe/file.minisig" -t "$comment"
+          rm "$probe/key"
+          n=0 verified=
+          read -ra keys <<< "$(grep -Ev '^[[:space:]]*(#|$)' apps/desktop/packaging/updater-keys-stable.txt | tr -s '[:space:]' ' ')"
+          for key in "${keys[@]}"; do
+            n=$((n + 1))
+            printf '%s' "$key" | base64 --decode > "$probe/trusted-$n.pub"
+            if minisign -V -q -p "$probe/trusted-$n.pub" -m "$probe/file" -x "$probe/file.minisig"; then verified=1; fi
+          done
+          rm -rf "$probe"
+          if [[ -z "$verified" ]]; then
+            echo "::error::STABLE_UPDATER_PRIVATE_KEY does not sign for a key in updater-keys-stable.txt."
+            exit 1
+          fi
+          echo "- The stable updater key signs for updater-keys-stable.txt." >> "$GITHUB_STEP_SUMMARY"
 
       - name: Write latest.json and SHA256SUMS
         env:
-          BASE: https://downloads.nexus.inc/desktop-oss/beta/${{ needs.plan.outputs.version }}
+          BASE: https://downloads.nexus.inc/${{ needs.plan.outputs.folder }}/${{ needs.plan.outputs.version }}
         run: |
-          python3 -I apps/desktop/packaging/feed.py --dir "$OUT" --version "$VERSION" --channel beta \
+          python3 -I apps/desktop/packaging/feed.py --dir "$OUT" --version "$VERSION" --channel "$CHANNEL" \
             --base "$BASE" --commit "$GITHUB_SHA" --date "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
           cat "$OUT/SHA256SUMS" >> "$GITHUB_STEP_SUMMARY"
 
@@ -360,74 +522,152 @@ jobs:
             ${{ runner.temp }}/out/nexus-desktop-*.exe
             ${{ runner.temp }}/out/nexus-host_*.gz
 
+      # The channel's own publisher: GCP_SERVICE_ACCOUNT writes `desktop-oss/` only, GCP_STABLE_SERVICE_ACCOUNT
+      # `desktop/stable/` only. A rehearsal signs in too when the variables exist, and only reads.
       - name: Sign in to the downloads bucket
-        if: needs.plan.outputs.publish == 'true'
+        if: steps.secrets.outputs.bucket == 'true'
         uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3
         with:
           workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
-          service_account: ${{ vars.GCP_SERVICE_ACCOUNT }}
+          service_account: ${{ steps.secrets.outputs.account }}
       - uses: google-github-actions/setup-gcloud@aa5489c8933f4cc7a4f7d45035b3b1440c9c10db # v3.0.1
-        if: needs.plan.outputs.publish == 'true'
+        if: steps.secrets.outputs.bucket == 'true'
+
+      # Every bucket call reads or writes one named object. The publishers' grants are limited to their folder by an
+      # IAM condition on the object's name, which gives no list permission: nothing here lists.
+      - name: Set the bucket helpers
+        if: steps.secrets.outputs.bucket == 'true'
+        env:
+          BUCKET: ${{ vars.DOWNLOADS_BUCKET }}
+        run: |
+          {
+            echo "PREFIX=gs://$BUCKET/$FOLDER"
+            # The beta's files are public and immutable. Stable keeps the old release's headers: the downloads
+            # service serves it, and a cache must never hold an old pointer.
+            if [[ "$CHANNEL" == stable ]]; then
+              echo "FILE_CACHE=private, no-store, max-age=0"
+              echo "FEED_CACHE=private, no-store, max-age=0"
+            else
+              echo "FILE_CACHE=public, max-age=31536000, immutable"
+              echo "FEED_CACHE=public, max-age=60"
+            fi
+          } >> "$GITHUB_ENV"
+          cat > "$RUNNER_TEMP/bucket.sh" << 'SH'
+          # generation <object>: prints the object's generation, or 0 when it does not exist. Any other error stops.
+          generation() {
+            local out
+            if out="$(gcloud storage objects describe "$1" --format='value(generation)' 2>&1)"; then
+              echo "$out"
+            elif grep -qiE 'not found|matched no objects|404' <<< "$out"; then
+              echo 0
+            else
+              echo "::error::Could not read $1: $out" >&2
+              return 1
+            fi
+          }
+          # version_at <object> <generation>: the `version` of that generation of a manifest.
+          version_at() { gcloud storage cat "$1#$2" | jq -r '.version // empty'; }
+          # newer <a> <b>: whether version a is after version b, number by number (one channel's versions only).
+          newer() {
+            python3 -I -c 'import re, sys
+          key = lambda v: tuple(int(n) for n in re.findall(r"\d+", v))
+          sys.exit(0 if key(sys.argv[1]) > key(sys.argv[2]) else 1)' "$1" "$2"
+          }
+          SH
+
+      # A rehearsal proves the identity and the read of its feed, and writes nothing.
+      - name: Read the feed (rehearsal)
+        if: needs.plan.outputs.publish != 'true' && steps.secrets.outputs.bucket == 'true'
+        run: |
+          source "$RUNNER_TEMP/bucket.sh"
+          at="$(generation "$PREFIX/latest.json")"
+          version="none"
+          [[ "$at" == 0 ]] || version="$(version_at "$PREFIX/latest.json" "$at")"
+          echo "- Signed in as the $CHANNEL publisher; $FOLDER/latest.json is at $version. Nothing was written." >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload the version's folder
         if: needs.plan.outputs.publish == 'true'
-        env:
-          DEST: gs://${{ vars.DOWNLOADS_BUCKET }}/desktop-oss/beta/${{ needs.plan.outputs.version }}
-          FEED: gs://${{ vars.DOWNLOADS_BUCKET }}/desktop-oss/beta/latest.json
         run: |
-          # The feed only moves forward: a run for an older tag must not take installed betas back.
-          if current="$(gcloud storage cat "$FEED" 2>&1)"; then
-            current="$(jq -r '.version // empty' <<< "$current")"
-            python3 -I - "$VERSION" "$current" << 'PY'
-          import re, sys
-          def key(version): return tuple(int(n) for n in re.findall(r"\d+", version))
-          new, current = sys.argv[1], sys.argv[2]
-          if key(new) <= key(current):
-              print(f"::error::The feed is at {current}. {new} is not newer. Nothing was uploaded.")
-              sys.exit(1)
-          PY
-          elif ! grep -q 'matched no objects' <<< "$current"; then
-            echo "::error::Could not read $FEED: $current"
+          source "$RUNNER_TEMP/bucket.sh"
+          dest="$PREFIX/$VERSION"
+          # The feed only moves forward: a run for an older tag must not take installed builds back.
+          at="$(generation "$PREFIX/latest.json")"
+          if [[ "$at" != 0 ]]; then
+            current="$(version_at "$PREFIX/latest.json" "$at")"
+            if ! newer "$VERSION" "$current"; then
+              echo "::error::The $CHANNEL feed is at $current. $VERSION is not newer. Nothing was uploaded."
+              exit 1
+            fi
+          fi
+          # A version's folder is written once. SHA256SUMS goes last and marks it complete; every object is written
+          # only if it does not exist (generation 0), so a second run stops at the first file the first one wrote.
+          if [[ "$(generation "$dest/SHA256SUMS")" != 0 ]]; then
+            echo "::error::$dest is already published. Nothing was uploaded. Tag the next number."
             exit 1
           fi
-          # A version's folder is written once. If it holds anything, an earlier run stopped halfway or the version
-          # is published: stop, and let a person clear the folder or tag the next number.
-          if listing="$(gcloud storage ls "$DEST/" 2>&1)"; then
-            echo "::error::$DEST already holds files. Nothing was uploaded."
-            exit 1
-          elif ! grep -q 'matched no objects' <<< "$listing"; then
-            echo "::error::Could not list $DEST: $listing"
-            exit 1
-          fi
-          immutable="public, max-age=31536000, immutable"
-          gcloud storage cp --no-clobber --cache-control="$immutable" --content-type=application/json \
-            "$OUT/latest.json" "$DEST/latest.json"
-          gcloud storage cp --no-clobber --cache-control="$immutable" --content-type="text/plain; charset=utf-8" \
-            "$OUT"/*.sig "$OUT/SHA256SUMS" "$DEST/"
-          gcloud storage cp --no-clobber --cache-control="$immutable" --content-type=application/octet-stream \
-            "$OUT"/nexus-desktop-*.tar.xz "$OUT"/nexus-desktop-*.dmg "$OUT"/nexus-desktop-*.exe \
-            "$OUT"/nexus-host_*.gz "$DEST/"
+          upload() {
+            local type
+            case "$1" in
+              *.json) type=application/json ;;
+              *.sig | */SHA256SUMS) type="text/plain; charset=utf-8" ;;
+              *) type=application/octet-stream ;;
+            esac
+            gcloud storage cp --if-generation-match=0 --cache-control="$FILE_CACHE" --content-type="$type" \
+              "$1" "$dest/$(basename "$1")"
+          }
+          for file in "$OUT"/*; do
+            [[ "$(basename "$file")" == SHA256SUMS ]] || upload "$file"
+          done
+          upload "$OUT/SHA256SUMS"
 
-      - name: Create the GitHub prerelease
+      - name: Create the GitHub release
         if: needs.plan.outputs.publish == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ github.ref_name }}
         run: |
-          gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --verify-tag --prerelease \
-            --title "Nexus $VERSION" --generate-notes "$OUT"/*
+          notes="$RUNNER_TEMP/notes.md"
+          if [[ "$CHANNEL" == beta ]]; then
+            flags=(--prerelease)
+            {
+              echo "A beta of Nexus for desktop. Installed betas update to it from the beta feed."
+              echo
+              echo "**Stable and internal installs do not move to the beta by themselves.** They trust another update key"
+              echo "and refuse a beta version, so to try the beta, install it by hand from this page. From then on it"
+              echo "updates from the beta feed."
+            } > "$notes"
+          else
+            flags=()
+            echo "Nexus $VERSION. Installed stable builds update to it." > "$notes"
+          fi
+          {
+            echo
+            echo "The Windows installer is not signed yet: SmartScreen's \"More info\", then \"Run anyway\"."
+            echo "\`SHA256SUMS\` lists each file's checksum; each \`.sig\` is the file's updater signature."
+          } >> "$notes"
+          gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --verify-tag "${flags[@]}" \
+            --title "Nexus $VERSION" --notes-file "$notes" --generate-notes "$OUT"/*
 
-      - name: Move the beta feed to this version
+      # Over the generation it reads here, so a pointer another run moved meanwhile is never overwritten.
+      - name: Move the feed to this version
         if: needs.plan.outputs.publish == 'true'
-        env:
-          FEED: gs://${{ vars.DOWNLOADS_BUCKET }}/desktop-oss/beta/latest.json
         run: |
-          gcloud storage cp --cache-control="public, max-age=60" --content-type=application/json \
-            "$OUT/latest.json" "$FEED"
-          echo "The beta feed is at $VERSION." >> "$GITHUB_STEP_SUMMARY"
+          source "$RUNNER_TEMP/bucket.sh"
+          pointer="$PREFIX/latest.json"
+          at="$(generation "$pointer")"
+          if [[ "$at" != 0 ]]; then
+            current="$(version_at "$pointer" "$at")"
+            if ! newer "$VERSION" "$current"; then
+              echo "::error::The $CHANNEL feed moved to $current meanwhile. It stays there; $VERSION is published but not the feed."
+              exit 1
+            fi
+          fi
+          gcloud storage cp --if-generation-match="$at" --cache-control="$FEED_CACHE" --content-type=application/json \
+            "$OUT/latest.json" "$pointer"
+          echo "The $CHANNEL feed is at $VERSION." >> "$GITHUB_STEP_SUMMARY"
 
       - name: Remove the keychain and the keys
         if: always()
         run: |
-          security delete-keychain "$KEYCHAIN" || true
-          rm -f "$RUNNER_TEMP/certificate.p12" "$RUNNER_TEMP/notary.p8" "$RUNNER_TEMP/updater.key"
+          security delete-keychain "$KEYCHAIN" 2> /dev/null || true
+          rm -rf "$KEYS" "$RUNNER_TEMP/certificate.p12" "$RUNNER_TEMP/notary.p8" "$RUNNER_TEMP/stable-probe"
