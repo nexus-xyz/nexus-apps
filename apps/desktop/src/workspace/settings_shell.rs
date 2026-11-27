@@ -23,6 +23,7 @@ use gpui_kit::prelude::*;
 use gpui_kit::*;
 
 use super::settings_registry::{Dest, NavItem, Part, Visibility, layout, nav_items};
+use super::settings_results::{NARROW_WIDTH, page_title, settings_gutter};
 use super::settings_search::{Hit, search};
 use super::settings_view::SettingsSection;
 use super::{Place, View, Workspace, glyph};
@@ -32,8 +33,6 @@ use crate::palette::Palette;
 
 /// How long "Saved" stays beside a control.
 const SAVED_FOR: Duration = Duration::from_secs(2);
-/// Below this width the page's margins narrow.
-const NARROW_WIDTH: f32 = 900.;
 
 /// What happened to a change, beside its control.
 #[derive(Debug, Clone, PartialEq)]
@@ -501,7 +500,7 @@ impl Workspace {
         }
     }
 
-    fn open_hit(&mut self, hit: &Hit, window: &mut Window, cx: &mut Context<Self>) {
+    pub(super) fn open_hit(&mut self, hit: &Hit, window: &mut Window, cx: &mut Context<Self>) {
         if self.is_local() && hit.section.is_none() {
             let section = SettingsSection::GatewayLink(hit.dest);
             match hit.anchor {
@@ -536,7 +535,7 @@ impl Workspace {
         self.settings.shell.searching = false;
     }
 
-    fn settings_hits(&self, cx: &App) -> Vec<Hit> {
+    pub(super) fn settings_hits(&self, cx: &App) -> Vec<Hit> {
         search(&self.settings.shell.query.read(cx).value(), &self.settings_visibility())
     }
 
@@ -780,17 +779,7 @@ impl Workspace {
                 h_flex()
                     .h(px(28.))
                     .gap(px(12.))
-                    .child(
-                        div()
-                            .flex_1()
-                            .min_w(px(0.))
-                            .truncate()
-                            .text_size(px(20.))
-                            .line_height(px(28.))
-                            .font_weight(FontWeight::MEDIUM)
-                            .text_color(palette.strong)
-                            .child(title),
-                    )
+                    .child(page_title(title, palette))
                     .when(locked, |row| row.child(ui::requires_sign_in(palette))),
             );
         if !locked && section == SettingsSection::Page(crate::pages::PageId::Policy) {
@@ -944,7 +933,7 @@ impl Workspace {
                         this.settings.shell.jump.set(None);
                         cx.notify();
                     }))
-                    .px(px(if narrow { 24. } else { ui::SETTINGS_GUTTER }))
+                    .px(settings_gutter(narrow))
                     .pb(px(64.))
                     .child(
                         v_flex()
@@ -959,134 +948,6 @@ impl Workspace {
                     ),
             )
             .into_any_element()
-    }
-
-    /// The full search view keeps descriptions readable while the sidebar remains available.
-    fn render_settings_results(&self, palette: Palette, window: &mut Window, cx: &mut Context<Self>) -> Stateful<Div> {
-        let hits = self.settings_hits(cx);
-        let count = hits.len();
-        let selected = self.settings.shell.selected.min(count.saturating_sub(1));
-        let rows: Vec<_> = hits
-            .into_iter()
-            .enumerate()
-            .map(|(ix, hit)| {
-                let crumbs = hit.breadcrumb.join(" › ");
-                let locked = self.is_local() && hit.requires_sign_in();
-                let web = hit.section.is_none() && !locked;
-                let anchor = ScrollAnchor::for_handle(self.settings.shell.results_scroll.clone());
-                if selected == ix && self.settings.shell.results_selected.replace(Some(selected)) != Some(selected) {
-                    let window = window.window_handle();
-                    let reveal = anchor.clone();
-                    let epoch = self.navigation_epoch;
-                    let at = self.history_at;
-                    let query = self.settings.shell.query.read(cx).value().to_string();
-                    let weak = cx.weak_entity();
-                    cx.defer(move |cx| {
-                        let _ = window.update(cx, |_, window, cx| {
-                            let current = weak.upgrade().is_some_and(|view| {
-                                view.read_with(cx, |view, cx| {
-                                    view.navigation_epoch == epoch
-                                        && view.history_at == at
-                                        && view.navigation_allowed()
-                                        && matches!(view.view, View::Settings(_))
-                                        && view.settings.shell.searching
-                                        && view.settings.shell.selected == selected
-                                        && view.settings.shell.query.read(cx).value().as_ref() == query
-                                })
-                            });
-                            if current {
-                                reveal.scroll_to(window, cx);
-                            }
-                        });
-                    });
-                }
-                v_flex()
-                    .id(SharedString::from(format!("settings-result-{ix}")))
-                    .anchor_scroll(Some(anchor))
-                    .w_full()
-                    .min_w(px(0.))
-                    .p(px(14.))
-                    .gap(px(6.))
-                    .rounded(px(12.))
-                    .bg(if selected == ix {
-                        palette.selected
-                    } else {
-                        palette.background
-                    })
-                    .child(
-                        h_flex()
-                            .gap(px(8.))
-                            .child(ui::label(hit.label, palette))
-                            .when(locked, |row| row.child(ui::requires_sign_in(palette))),
-                    )
-                    .child(ui::setting_detail(crumbs, palette))
-                    .child(ui::setting_detail(hit.description, palette))
-                    .child(
-                        h_flex().mt(px(4.)).child(
-                            ui::button(
-                                SharedString::from(format!("settings-result-open-{ix}")),
-                                if web { "Open in browser" } else { "Open setting" },
-                                palette,
-                            )
-                            .on_click(cx.listener(move |this, _, window, cx| {
-                                this.settings.shell.selected = ix;
-                                this.open_hit(&hit, window, cx);
-                            })),
-                        ),
-                    )
-            })
-            .collect();
-        div()
-            .id("settings-results")
-            .track_scroll(&self.settings.shell.results_scroll)
-            .size_full()
-            .overflow_y_scroll()
-            .child(
-                v_flex()
-                    .w_full()
-                    .max_w(px(ui::READ_WIDTH + 96.))
-                    .p(px(24.))
-                    .gap(px(12.))
-                    .child(
-                        h_flex()
-                            .h(px(44.))
-                            .text_size(px(20.))
-                            .line_height(px(28.))
-                            .font_weight(FontWeight::MEDIUM)
-                            .text_color(palette.strong)
-                            .child("Search settings"),
-                    )
-                    .child(ui::lead("Find a setting by name, task or familiar label.", palette))
-                    .child(ui::setting_detail(
-                        format!(
-                            "{count} {} · ↑ ↓ to move · Enter to open",
-                            if count == 1 { "result" } else { "results" }
-                        ),
-                        palette,
-                    ))
-                    .when(count == 0, |column| {
-                        column
-                            .child(ui::empty(
-                                "No matching settings",
-                                "Try another term, or browse This computer.",
-                                palette,
-                            ))
-                            .child(
-                                ui::button("settings-empty-computer", "Browse This computer", palette).on_click(
-                                    cx.listener(|this, _, window, cx| {
-                                        this.settings
-                                            .shell
-                                            .query
-                                            .update(cx, |state, cx| state.set_value("", window, cx));
-                                        this.settings.shell.query_text.clear();
-                                        this.settings.shell.searching = false;
-                                        this.open_dest(Dest::Computer, window, cx);
-                                    }),
-                                ),
-                            )
-                    })
-                    .children(rows),
-            )
     }
 
     /// Computer's banner while the Nexus app owns the shared store: its local settings are read-only here. Take over
