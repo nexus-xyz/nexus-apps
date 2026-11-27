@@ -60,6 +60,9 @@
 //! - `background`: leaves a background shell running past the turn (`task_started`), which ends
 //!   `FAKE_CLAUDE_BACKGROUND_MS` later (default 1000; `task_notification`).
 //! - `recall`: repeats the whole message it was given, after `Heard:`.
+//! - `wakeup`: sets a wake-up ten minutes on (`FAKE_CLAUDE_WAKE_SECONDS` when set; `ScheduleWakeup`, reason "watching
+//!   CI run") and reports it scheduled; with `wakeup-refused`, the call fails, as a denied tool does. It never wakes
+//!   by itself: `autoturn` begins the turn a wake-up would.
 //! - `manycalls`: reports 500 more model calls' usage before the answer's own, as a long turn of many steps does.
 //! - `relay`: the turn runs until told to end, as a lead waiting on the app's tools does. Each time a file `relay`
 //!   appears in `$FAKE_CLAUDE_DIR`, it is taken, and its text comes back as a `wait_sessions` call's result (an error
@@ -941,6 +944,23 @@ fn main() {
                             "summary": "sleep finished", "session_id": session}),
                         );
                     });
+                }
+                if text.contains("wakeup") {
+                    let call = format!("toolu_wake_{count}");
+                    let refused = text.contains("wakeup-refused");
+                    let delay: f64 = std::env::var("FAKE_CLAUDE_WAKE_SECONDS")
+                        .ok()
+                        .and_then(|seconds| seconds.parse().ok())
+                        .unwrap_or(600.);
+                    out(
+                        json!({"type": "assistant", "parent_tool_use_id": null, "message": {"id": format!("wake-{count}"), "content": [{"type": "tool_use",
+                        "id": call, "name": "ScheduleWakeup", "input": {"delaySeconds": delay, "reason": "watching CI run", "prompt": "check CI"}}]}}),
+                    );
+                    let result = if refused { "denied" } else { "Wake-up scheduled." };
+                    out(
+                        json!({"type": "user", "parent_tool_use_id": null, "message": {"role": "user", "content": [{"type": "tool_result",
+                        "tool_use_id": call, "content": result, "is_error": refused}]}}),
+                    );
                 }
                 // Title tests provide the model's metadata response, without making a model call. A gate lets a
                 // manual rename finish before that response, so the race is deterministic.

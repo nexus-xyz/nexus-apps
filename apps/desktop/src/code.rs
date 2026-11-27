@@ -209,6 +209,8 @@ pub struct CodeSession {
     pub background_total: usize,
     /// The linked sessions its agent waits on.
     pub waits_on: Vec<String>,
+    /// A wake-up its running agent set for itself (`ThreadSummary::wake`): it goes on by itself then.
+    pub wake: Option<nexus_workbench::event::Wake>,
     pub source: Option<String>,
     pub has_worktree: bool,
     pub side_chat: bool,
@@ -264,6 +266,7 @@ impl CodeSession {
             background_work: thread.background.clone(),
             background_total: thread.background_total as usize,
             waits_on: thread.waits_on.clone(),
+            wake: thread.wake.clone(),
             title: if thread.title.trim().is_empty() {
                 "New session".into()
             } else {
@@ -380,6 +383,10 @@ pub enum Status {
     Background,
     /// [`Status::Background`], and a reply the person has not read.
     BackgroundUnread,
+    /// The turn ended, nothing runs, and its agent set a wake-up (`nexus_workbench::attention::Mark::Scheduled`).
+    Scheduled,
+    /// [`Status::Scheduled`], and a reply the person has not read.
+    ScheduledUnread,
 }
 
 impl Status {

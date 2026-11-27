@@ -229,11 +229,15 @@ impl Workspace {
             ),
             None => super::code_title::code_meter::agent_name(session.agent).to_string(),
         };
-        let state: Option<AnyElement> = match mark {
-            Status::Idle => None,
-            Status::Failed => Some(div().text_color(palette.destructive).child("Failed").into_any_element()),
+        let state: Option<AnyElement> = match (mark, &session.wake) {
+            (Status::Idle, _) => None,
+            (Status::Failed, _) => Some(div().text_color(palette.destructive).child("Failed").into_any_element()),
+            (Status::Scheduled | Status::ScheduledUnread, Some(wake)) => {
+                Some(super::session_peek_wake::state_word(wake, now, palette))
+            }
             _ => session_state_word(mark, session.background_count(), palette),
         };
+        let wake = super::session_peek_wake::section(session.wake.as_ref(), mark, now, palette);
         let background = super::session_peek_background::section(
             session,
             mark,
@@ -289,6 +293,7 @@ impl Workspace {
                         .child(state),
                 )
             })
+            .children(wake)
             .children(background)
             .child(
                 v_flex()

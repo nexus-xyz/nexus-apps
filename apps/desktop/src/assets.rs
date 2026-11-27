@@ -38,6 +38,9 @@ pub const ORBIT_RING: &str = "sidebar/orbit-ring.svg";
 /// The dot that goes round that ring, at the top of the same 16px box, centred on the ring's line: the mark turns it
 /// as a sprite, so it moves between device pixels.
 pub const ORBIT_DOT: &str = "sidebar/orbit-dot.svg";
+/// A scheduled session's clock hands, in the same 16px box as [`ORBIT_RING`]: drawn in that ring, they make its
+/// still clock face (`sidebar_marks::wake_mark`).
+pub const WAKE_HANDS: &str = "sidebar/wake-hands.svg";
 
 /// Where the app mark's layers are, one SVG each, rim first (`mark_layer`): the breathing mark dims each on its own.
 const MARK_LAYER: &str = "brand/mark-layer-";
@@ -241,6 +244,9 @@ impl AssetSource for Assets {
         }
         if path == ORBIT_DOT {
             return Ok(Some(Cow::Borrowed(include_bytes!("../assets/sidebar/orbit-dot.svg"))));
+        }
+        if path == WAKE_HANDS {
+            return Ok(Some(Cow::Borrowed(include_bytes!("../assets/sidebar/wake-hands.svg"))));
         }
         if let Some(index) = path
             .strip_prefix(MARK_LAYER)

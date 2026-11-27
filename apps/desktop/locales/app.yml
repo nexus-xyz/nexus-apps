@@ -188,6 +188,27 @@ _version: 2
 "In background":
   es: "En segundo plano"
   pt-BR: "Em segundo plano"
+"Scheduled":
+  es: "Programada"
+  pt-BR: "Agendada"
+"Also scheduled":
+  es: "También programada"
+  pt-BR: "Também agendada"
+"Wakes at {time} · {left}":
+  es: "Se reanuda a las {time} · {left}"
+  pt-BR: "Retoma às {time} · {left}"
+"Wakes now":
+  es: "Se reanuda ahora"
+  pt-BR: "Retoma agora"
+"in {time}":
+  es: "en {time}"
+  pt-BR: "em {time}"
+"The agent set a wake-up":
+  es: "El agente programó una reanudación"
+  pt-BR: "O agente agendou uma retomada"
+"The agent goes on by itself then.":
+  es: "El agente seguirá solo a esa hora."
+  pt-BR: "O agente continua sozinho nesse horário."
 "Search sessions":
   es: "Buscar sesiones"
   pt-BR: "Buscar sessões"

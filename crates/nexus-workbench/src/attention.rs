@@ -105,6 +105,11 @@ pub enum Mark {
     Background,
     /// [`Mark::Background`] with a dot in its middle: also a reply the person has not read.
     BackgroundUnread,
+    /// The same faint ring with still clock hands in it: the turn ended, nothing runs, and its agent set a wake-up
+    /// (`ThreadSummary::wake`). It never moves: the session waits on time, not on work.
+    Scheduled,
+    /// [`Mark::Scheduled`] with the unread dot as a badge at its top right: also a reply the person has not read.
+    ScheduledUnread,
 }
 
 /// Whether a session's agent left work running past its turn, from its summary: its listed background work, a
@@ -122,6 +127,20 @@ pub fn with_background(mark: Mark, attention: Option<Attention>, background: boo
     match (mark, attention) {
         (Mark::You, Some(Attention::Unread)) => Mark::BackgroundUnread,
         (Mark::Idle | Mark::Failed, _) => Mark::Background,
+        (mark, _) => mark,
+    }
+}
+
+/// The mark once a wake-up its agent set counts, after [`with_background`]: as background work does, it outranks an
+/// unread reply and a failed turn, for a session that goes on by itself never looks stopped. It is quieter than work
+/// that runs, so a session with both shows [`Mark::Background`], and never outranks what the person must answer.
+pub fn with_wake(mark: Mark, attention: Option<Attention>, waking: bool) -> Mark {
+    if !waking {
+        return mark;
+    }
+    match (mark, attention) {
+        (Mark::You, Some(Attention::Unread)) => Mark::ScheduledUnread,
+        (Mark::Idle | Mark::Failed, _) => Mark::Scheduled,
         (mark, _) => mark,
     }
 }
@@ -441,6 +460,24 @@ mod tests {
         assert_eq!(bg(Mark::Running, Some(Working)), Mark::Running);
         assert_eq!(with_background(Mark::Idle, None, false), Mark::Idle);
         assert_eq!(with_background(Mark::You, Some(Unread), false), Mark::You);
+    }
+
+    #[test]
+    fn a_wake_up_outranks_an_unread_reply_and_a_failure_but_not_work_that_runs() {
+        use Attention::*;
+        let wake = |mark, attention| with_wake(mark, attention, true);
+        assert_eq!(wake(Mark::Idle, None), Mark::Scheduled);
+        assert_eq!(wake(Mark::Failed, Some(Error)), Mark::Scheduled);
+        assert_eq!(wake(Mark::You, Some(Unread)), Mark::ScheduledUnread);
+        assert_eq!(wake(Mark::You, Some(Needs)), Mark::You);
+        assert_eq!(wake(Mark::You, Some(Limited)), Mark::You);
+        assert_eq!(wake(Mark::Running, Some(Working)), Mark::Running);
+        assert_eq!(with_wake(Mark::Idle, None, false), Mark::Idle);
+        // After `with_background`, as the app chains them: work that runs keeps the louder mark.
+        let both = |mark, attention| with_wake(with_background(mark, attention, true), attention, true);
+        assert_eq!(both(Mark::Idle, None), Mark::Background);
+        assert_eq!(both(Mark::You, Some(Unread)), Mark::BackgroundUnread);
+        assert_eq!(both(Mark::Failed, Some(Error)), Mark::Background);
     }
 
     #[test]

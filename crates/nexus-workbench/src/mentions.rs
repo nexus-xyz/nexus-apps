@@ -513,6 +513,7 @@ mod tests {
             in_background: false,
             background: vec![],
             background_total: 0,
+            wake: None,
             at_depth_limit: false,
             handoff_from: None,
             limited: None,

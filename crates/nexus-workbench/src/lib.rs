@@ -144,6 +144,7 @@ mod tool_images;
 pub mod tool_rows;
 pub mod turn_files;
 pub mod update_restart;
+pub mod wake;
 pub mod work_folds;
 
 use crate::session_scope::SessionScope;
@@ -449,6 +450,8 @@ pub struct Config {
     pub cross_agent_off: bool,
     /// The deadlines of the agents' MCP server ([`orchestra`]).
     pub orchestra_timing: orchestra::Timing,
+    /// How a wake-up an agent sets for itself is timed ([`wake`]): Claude Code's own limits.
+    pub wake_timing: wake::Timing,
     /// This host offers command PTYs through the session's authenticated app tools.
     pub terminal: bool,
     /// Enables signed pairing invitations and native desktop-to-desktop control.
@@ -487,6 +490,7 @@ impl Default for Config {
             subsessions_first_start: Subsessions::default().first_start,
             cross_agent_off: Subsessions::default().cross_agent_off,
             orchestra_timing: orchestra::Timing::default(),
+            wake_timing: wake::Timing::default(),
             terminal: false,
             remote_pairing_preview: computer::remote_pairing_preview(),
             trigger_port: None,
@@ -840,6 +844,8 @@ struct LiveState {
     resend: Option<resume_recovery::Resend>,
     /// Where this run's Claude Code keeps its transcripts, copied by Nexus at each turn's end ([`claude_transcripts`]).
     transcript: Option<claude_transcripts::Place>,
+    /// The wake-up this run's agent set for itself ([`wake`]): it lives in this process, and ends with it.
+    wake: Option<wake::Pending>,
 }
 
 /// The messages an echo of `texts` stands for, taken off `unread` (`LiveState::unread`): the oldest whose text it
@@ -2966,6 +2972,7 @@ impl Workbench {
                 in_background: false,
                 background: vec![],
                 background_total: 0,
+                wake: None,
                 at_depth_limit: false,
                 handoff_from: None,
                 limited: None,
@@ -3427,6 +3434,7 @@ impl Workbench {
                 in_background: false,
                 background: vec![],
                 background_total: 0,
+                wake: None,
                 at_depth_limit: false,
                 handoff_from: None,
                 limited: None,
@@ -4458,6 +4466,7 @@ impl Workbench {
     /// A lead's first streamed text, usage or turn id starts its spontaneous turn, before its final message arrives.
     fn begin_own_turn(&self, thread_id: &str, live: &Live) -> Result<()> {
         if live.state().turns.is_empty() && self.begin_turn(thread_id, live, false, None, false)? {
+            self.wake_turn_began(live);
             self.own_turn_begun(thread_id);
         }
         Ok(())
@@ -4945,6 +4954,7 @@ impl Workbench {
                 browser: Default::default(),
                 resend: resume_recovery::Resend::keep(agent, resumed || fork.is_some(), sent, seq, person),
                 transcript: None,
+                wake: None,
             }),
         });
         // Registered before the launch, so a message sent while the agent starts waits in the channel. Checked and
@@ -5557,6 +5567,7 @@ impl Workbench {
             Out::Event(event) => {
                 self.observe_native_terminal(thread_id, live, &event)?;
                 self.observe_browser_routing(thread_id, live, &event)?;
+                self.observe_wake(thread_id, live, &event);
                 if let WbEvent::Commands { commands } = &event {
                     if let Some(native) = harness::harness(live.agent).session_features().native_commands
                         && let Some(capabilities) = &mut live.state().capabilities
@@ -6272,6 +6283,8 @@ impl Workbench {
                 state.resend.take(),
             )
         };
+        // Taken once the run is `done`: a wake-up check that comes now finds it ended, and leaves the notice to here.
+        let wake = live.state().wake.take();
         let crashed = stop.is_none() && (!turns.is_empty() || exit_code != 0);
         let explained = live.state().explained;
         // A resume the agent could not open: the conversation starts again from Nexus's log and the message goes to it
@@ -6369,6 +6382,10 @@ impl Workbench {
                         text: BACKGROUND_ENDED.into(),
                     },
                 )?;
+            }
+            // The wake-up lived in the process: the person learns it will not come, and why.
+            if let Some(wake) = wake {
+                self.wake_ended(thread_id, live, wake, stop);
             }
             let status = match (crashed, mid_turn) {
                 _ if resend.is_some() => ThreadStatus::Idle,
@@ -7354,15 +7371,22 @@ impl Workbench {
     /// Stops agents that have had nothing to do for `idle_after`. Call it once a minute. Work the agent left running
     /// in the background keeps it, unless nothing at all was heard from it for [`BACKGROUND_IDLE_FACTOR`] times as long
     /// (a task whose end was never reported must not hold a process forever). So do linked sessions at work, or results
-    /// it has not read. It also offers every running session its children's results again ([`linked::results`]).
+    /// it has not read. A wake-up the agent set keeps it until its grace past its time ([`wake::Timing`]): at most an
+    /// hour and that grace. It also offers every running session its children's results again ([`linked::results`]).
     pub fn reap_idle(&self) {
         let idle_after = self.config().idle_after;
         self.sweep_links();
+        let (now, grace) = (now_ms(), self.config().wake_timing.grace);
         for (id, live) in self.all_live() {
             let (idle, quiet) = {
                 let state = live.state();
                 let quiet = state.last_activity.elapsed();
-                let idle = state.turns.is_empty() && state.pending.is_empty() && quiet >= idle_after;
+                // A wake-up the agent set lives in its process: stopping it would cancel the wake-up.
+                let waking = state
+                    .wake
+                    .as_ref()
+                    .is_some_and(|pending| wake::may_come(pending.wake.at, now, grace));
+                let idle = !waking && state.turns.is_empty() && state.pending.is_empty() && quiet >= idle_after;
                 (
                     idle && (state.background.is_empty() || quiet >= idle_after * BACKGROUND_IDLE_FACTOR),
                     quiet,

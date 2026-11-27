@@ -163,7 +163,8 @@ pub(super) fn still(id: &str, status: Status, palette: Palette) -> Option<AnyEle
         // The ring with its dot: the frame (`sidebar::status_mark`) centres it.
         Status::NeedsYou => BREATH,
         Status::Background | Status::BackgroundUnread => ORBIT,
-        Status::Failed | Status::Idle => return None,
+        // Still marks are drawn where they are (`sidebar::status_mark`).
+        Status::Failed | Status::Idle | Status::Scheduled | Status::ScheduledUnread => return None,
     };
     let id = SharedString::from(id.to_string());
     let place = canvas(
@@ -261,6 +262,43 @@ fn orbit_mark(turn: f32, unread: bool, palette: Palette) -> impl IntoElement {
     .size(px(ORBIT))
     .flex_none()
 }
+
+/// The scheduled mark: the background mark's ring with still clock hands in it, in the info colour. It is the
+/// background mark at rest: the dot that goes round while work runs stands still as hands while the session waits on
+/// time. The ring and the hands are sprites in one 16px box, so the hands sit in the ring's middle at any scale. An
+/// unread reply's dot is a badge at the ring's top right ([`WAKE_BADGE`]): in the middle, as the background mark puts
+/// it, it hid the hands at 1.6x and read as that mark. Nothing moves: the session waits on time, not on work (render
+/// rule 6).
+pub(super) fn wake_mark(unread: bool, palette: Palette) -> impl IntoElement {
+    let info = palette.status_info;
+    let waiting = palette.waiting();
+    canvas(
+        |_, _, _| {},
+        move |bounds: Bounds<Pixels>, _, window, cx| {
+            let scale = window.scale_factor();
+            let center = bounds.center();
+            let sprite = on_pixels(center, ORBIT_SPRITE, scale);
+            let still = TransformationMatrix::unit();
+            for (path, color, what) in [
+                (crate::assets::ORBIT_RING, info.opacity(0.45), "ring"),
+                (crate::assets::WAKE_HANDS, info, "hands"),
+            ] {
+                if let Err(error) = window.paint_svg(sprite, path.into(), None, still, color, cx) {
+                    eprintln!("nexus-desktop-gpui: the scheduled mark's {what} were not drawn: {error:#}");
+                }
+            }
+            if unread {
+                window.paint_quad(disc(on_pixels(center + WAKE_BADGE, UNREAD_DOT, scale), waiting));
+            }
+        },
+    )
+    .size(px(ORBIT))
+    .flex_none()
+}
+
+/// Where the scheduled mark's unread badge sits from the ring's middle: at its top right (45°), just past the ring's
+/// line and inside the row's 16px mark frame.
+const WAKE_BADGE: Point<Pixels> = point(px(4.6), px(-4.6));
 
 /// The waiting mark: the solid dot, and the ring around it at `breath` (0 to 1) of its light. Both are painted around
 /// one centre on whole device pixels ([`on_pixels`]), so the dot sits in the ring's middle at any scale.
@@ -361,7 +399,7 @@ pub(super) fn moving(id: &str, status: Status, palette: Palette) -> AnyElement {
                 )
                 .into_any_element()
         }
-        Status::Failed | Status::Idle => div().into_any_element(),
+        Status::Failed | Status::Idle | Status::Scheduled | Status::ScheduledUnread => div().into_any_element(),
     }
 }
 
@@ -651,6 +689,110 @@ mod tests {
             "the dot stays inside its box"
         );
         assert!(ring.contains("viewBox=\"0 0 16 16\"") && dot.contains("viewBox=\"0 0 16 16\""));
+    }
+
+    /// A scheduled session waits on time, not on work: its mark is drawn in its row, never over the list, and asks
+    /// for no frame after the first (render rule 6).
+    #[gpui_kit::test]
+    fn a_scheduled_mark_is_still_and_drawn_in_its_row(cx: &mut gpui_kit::TestAppContext) {
+        for status in [Status::Scheduled, Status::ScheduledUnread] {
+            let (row, cx) = cx.add_window_view(|_, cx| {
+                let list = ScrollHandle::new();
+                Row {
+                    marks: Marks::new(&list, cx),
+                    list,
+                    status,
+                }
+            });
+            cx.run_until_parked();
+            assert!(row.read_with(cx, |row, _| row.marks.shown().is_empty()), "{status:?}");
+            let redraws = Rc::new(std::cell::Cell::new(0));
+            let count = redraws.clone();
+            cx.update(|window, cx| {
+                cx.observe(&row, move |_, _| count.set(count.get() + 1)).detach();
+                window.draw(cx).clear(cx);
+            });
+            cx.executor().advance_clock(Duration::from_secs(2));
+            cx.run_until_parked();
+            assert_eq!(redraws.get(), 0, "{status:?} asked for frames");
+        }
+    }
+
+    /// The unread badge sits at the clock's top right, never over its hands, and inside the 16px mark frame. In the
+    /// middle, as the background mark puts its dot, it hid the hands at 1.6x.
+    #[gpui_kit::test]
+    fn a_scheduled_marks_unread_badge_leaves_the_hands_clear(cx: &mut gpui_kit::TestAppContext) {
+        let (_probe, cx) = cx.add_window_view(|_, cx| Probe {
+            marks: Marks::new(&ScrollHandle::new(), cx),
+            status: Status::ScheduledUnread,
+        });
+        cx.run_until_parked();
+        cx.update(|window, cx| {
+            window.draw(cx).clear(cx);
+            let scale = window.scale_factor();
+            let width = on_pixels(point(px(0.), px(0.)), UNREAD_DOT, scale)
+                .size
+                .width
+                .scale(scale);
+            let badge = window
+                .painted_quads()
+                .into_iter()
+                .find(|quad| quad.bounds.size.width == width)
+                .expect("the unread badge is drawn");
+            // The probe's 16px frame is at the window's corner: its middle is (8, 8).
+            let middle = 8. * scale;
+            let (x, y) = (badge.bounds.center().x.as_f32(), badge.bounds.center().y.as_f32());
+            assert!(x > middle && y < middle, "top right of the middle: ({x}, {y})");
+            let frame = MARK_FRAME * scale;
+            for edge in [
+                badge.bounds.left(),
+                badge.bounds.top(),
+                badge.bounds.right(),
+                badge.bounds.bottom(),
+            ] {
+                let edge = edge.as_f32();
+                assert!((0. ..=frame).contains(&edge), "inside the frame: {edge}");
+            }
+        });
+    }
+
+    /// The row's mark frame (`sidebar::status_mark`).
+    const MARK_FRAME: f32 = 16.;
+
+    /// The numbers of an SVG path's `d`, in order.
+    fn path_numbers(svg: &str) -> Vec<f32> {
+        let d = &svg[svg.find(" d=\"").expect("a path") + 4..];
+        d[..d.find('"').expect("a closing quote")]
+            .split(|c: char| c.is_ascii_alphabetic() || c == ' ' || c == ',')
+            .filter(|part| !part.is_empty())
+            .map(|part| part.parse().expect("a number"))
+            .collect()
+    }
+
+    /// The hands start at the ring's middle and, with their round caps, end inside the ring's inner edge: they read
+    /// as a clock face, not as marks on the ring. Their line is the ring's, so the two look like one drawing.
+    #[test]
+    fn the_clock_hands_sit_inside_the_ring() {
+        let ring = include_str!("../../assets/sidebar/orbit-ring.svg");
+        let hands = include_str!("../../assets/sidebar/wake-hands.svg");
+        assert!(hands.contains("viewBox=\"0 0 16 16\""));
+        let line = circle_attribute(ring, "stroke-width");
+        let inner = circle_attribute(ring, "r") - line / 2.;
+        assert!(
+            hands.contains(&format!("stroke-width=\"{line}\"")),
+            "the hands' line is the ring's"
+        );
+        // `M x tip V y l dx dy`: the minute hand down from its tip to the middle, then the hour hand out of the middle.
+        let [x, tip, y, dx, dy] = path_numbers(hands)[..] else {
+            panic!("the hands are one path: M, V, l");
+        };
+        let middle = ORBIT_SPRITE / 2.;
+        assert_eq!((x, y), (middle, middle), "the hands meet at the ring's middle");
+        let cap = line / 2.;
+        let (minute, hour) = (middle - tip, (dx * dx + dy * dy).sqrt());
+        assert!(minute + cap < inner, "the minute hand's tip stays inside the ring");
+        assert!(hour + cap < inner, "the hour hand's tip stays inside the ring");
+        assert!(minute > hour, "the minute hand is the longer one");
     }
 
     /// A circle keeps its size to within a device pixel, and its middle stays within half a device pixel of where the
