@@ -1,0 +1,62 @@
+{
+  "skipReview": "AUTOMATIC",
+  "triggerOnUpdates": false,
+  "triggerOnDrafts": false,
+  "statusCheck": false,
+  "statusCommentsEnabled": true,
+  "shouldUpdateDescription": false,
+  "fixWithAI": true,
+  "hideFooter": false,
+  "strictness": 2,
+  "commentTypes": [
+    "logic",
+    "syntax"
+  ],
+  "summarySection": {
+    "included": true,
+    "collapsible": true,
+    "defaultOpen": false
+  },
+  "issuesTableSection": {
+    "included": true,
+    "collapsible": false,
+    "defaultOpen": true
+  },
+  "confidenceScoreSection": {
+    "included": true,
+    "collapsible": true,
+    "defaultOpen": false
+  },
+  "sequenceDiagramSection": {
+    "included": false
+  },
+  "ignorePatterns": "**/CHANGELOG.md\n**/*.generated.*\n**/package-lock.json\n**/pnpm-lock.yaml\n**/Cargo.lock\n**/__snapshots__/**\n",
+  "instructions": "Read AGENTS.md first: its generated block holds the shared engineering rules. Do not repeat what CI already enforces (formatters, linters, tests). Prefer few specific high-confidence comments, and say plainly when you found nothing worth flagging. Keep the summary short enough to read in a few seconds (AGENTS.md R24). A doc that contradicts another doc, or a pointer to a file the PR moved, is a real defect.",
+  "disabledRules": [],
+  "rules": [
+    {
+      "id": "no-speculative-fill",
+      "rule": "Documentation changes must not invent facts. If a doc states a number, guarantee, SLO or architectural claim, it should be traceable to something else in the repository or to a named external source. A plausible figure with no basis is worse than an acknowledged gap (AGENTS.md R4: flag gaps, do not fill them). Watch particularly for latency, throughput and savings figures: a number that is not measured does not ship.",
+      "severity": "medium",
+      "scope": [
+        "**/*.md"
+      ]
+    },
+    {
+      "id": "stale-pointer",
+      "rule": "When a PR moves, renames or deletes a file, directory or document heading, every inbound reference to the old location must be updated in the same PR. Name the referring files you can see. A stale pointer misleads confidently.",
+      "severity": "medium",
+      "scope": [
+        "**"
+      ]
+    },
+    {
+      "id": "sensitive-content",
+      "rule": "This repository is public. Flag any diff that introduces credentials, API keys or tokens; customer data; personal information; or internal material. Internal material includes links to private nexus-xyz repositories, Linear issue links, internal hostnames and Slack channel names, and text copied from internal docs. Check test fixtures, committed .env files, pasted logs and code comments too.",
+      "severity": "high",
+      "scope": [
+        "**"
+      ]
+    }
+  ]
+}
