@@ -398,9 +398,12 @@ _version: 2
 "Received results from subsessions":
   es: "Resultados recibidos de subsesiones"
   pt-BR: "Resultados recebidos de subsessões"
-"Received message from ":
-  es: "Mensaje recibido de "
-  pt-BR: "Mensagem recebida de "
+"Handoff from ":
+  es: "Traspaso de "
+  pt-BR: "Transferência de "
+"Message from ":
+  es: "Mensaje de "
+  pt-BR: "Mensagem de "
 "Copied":
   es: "Copiado"
   pt-BR: "Copiado"
