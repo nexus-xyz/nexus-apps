@@ -439,6 +439,7 @@ fn session() -> CodeSession {
         background_busy: false,
         background_work: vec![],
         background_total: 0,
+        wake: None,
         waits_on: vec![],
         source: None,
         has_worktree: false,

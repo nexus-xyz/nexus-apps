@@ -112,6 +112,8 @@ pub(super) fn status_of(mark: Mark) -> Status {
         Mark::Idle => Status::Idle,
         Mark::Background => Status::Background,
         Mark::BackgroundUnread => Status::BackgroundUnread,
+        Mark::Scheduled => Status::Scheduled,
+        Mark::ScheduledUnread => Status::ScheduledUnread,
     }
 }
 
@@ -119,7 +121,8 @@ impl Workspace {
     /// A Code session row's mark: what it needs from the person first, else how it stands. The open session is read as
     /// it happens, so it is never unread. A pull request that needs the person fills the dot of any other session
     /// (`pr_watch::needs_you`), as the Nexus app's sidebar does. Work its agent left running shows over an unread
-    /// reply or a failed turn (`attention::with_background`), so a session that still works never looks stopped.
+    /// reply or a failed turn (`attention::with_background`), so a session that still works never looks stopped. A
+    /// wake-up its agent set does too, under that work (`attention::with_wake`).
     pub(super) fn session_mark(&self, session: &CodeSession, cx: &App) -> Status {
         let activity = &session.activity;
         let open = matches!(&self.view, View::Code(view) if view.id == session.id);
@@ -130,7 +133,8 @@ impl Workspace {
             attention::attention_of(activity, session.limited, seen_at(&session.id, cx), pull_needs_you)
         };
         let mark = attention::mark_of(Some(activity.status), attention);
-        status_of(attention::with_background(mark, attention, session.background_busy))
+        let mark = attention::with_background(mark, attention, session.background_busy);
+        status_of(attention::with_wake(mark, attention, session.wake.is_some()))
     }
 
     /// The sessions were read again: each one seen for the first time counts as seen, and the open one is seen now.
@@ -173,6 +177,8 @@ mod tests {
         assert_eq!(status_of(Mark::Idle), Status::Idle);
         assert_eq!(status_of(Mark::Background), Status::Background);
         assert_eq!(status_of(Mark::BackgroundUnread), Status::BackgroundUnread);
+        assert_eq!(status_of(Mark::Scheduled), Status::Scheduled);
+        assert_eq!(status_of(Mark::ScheduledUnread), Status::ScheduledUnread);
     }
 
     #[test]

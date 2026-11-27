@@ -1554,6 +1554,24 @@ pub(super) fn status_mark(id: &str, status: Status, palette: Palette) -> AnyElem
                 )
                 .into_any_element()
         }
+        // The background mark's ring with still clock hands, in its place: it does not move, so it is drawn here, not
+        // over the list (`sidebar_marks::wake_mark`).
+        Status::Scheduled | Status::ScheduledUnread => {
+            let at = px((MARK - super::sidebar_marks::ORBIT) / 2.);
+            frame
+                .child(
+                    div()
+                        .absolute()
+                        .top(at)
+                        .left(at)
+                        .size(px(super::sidebar_marks::ORBIT))
+                        .child(super::sidebar_marks::wake_mark(
+                            status == Status::ScheduledUnread,
+                            palette,
+                        )),
+                )
+                .into_any_element()
+        }
         Status::Failed => frame
             .child(glyph(Lucide::X, palette.destructive).size(px(12.)))
             .into_any_element(),
@@ -1612,8 +1630,8 @@ pub(super) fn session_state_word(status: Status, background: usize, palette: Pal
     )
 }
 
-/// What a session's row in the sidebar says in place of its age. Work left in the background says nothing there: the
-/// row keeps its age, its status mark shows the work, and the hover card (`session_peek.rs`) counts and lists it.
+/// What a session's row in the sidebar says in place of its age. Work left in the background, or a wake-up, says
+/// nothing there: the row keeps its age, its status mark shows it, and the hover card (`session_peek.rs`) tells more.
 pub(super) fn row_state_word(status: Status, palette: Palette) -> Option<AnyElement> {
     row_state_text(status)?;
     state_word(status, palette)
@@ -1622,7 +1640,7 @@ pub(super) fn row_state_word(status: Status, palette: Palette) -> Option<AnyElem
 /// The words of [`row_state_word`].
 pub(super) fn row_state_text(status: Status) -> Option<SharedString> {
     match status {
-        Status::Background | Status::BackgroundUnread => None,
+        Status::Background | Status::BackgroundUnread | Status::Scheduled | Status::ScheduledUnread => None,
         status => state_text(status, 0),
     }
 }
@@ -1636,17 +1654,20 @@ pub(super) fn state_text(status: Status, background: usize) -> Option<SharedStri
             .replace("{count}", &background.to_string())
             .into(),
         Status::Background | Status::BackgroundUnread => tr("In background"),
+        Status::Scheduled | Status::ScheduledUnread => tr("Scheduled"),
         Status::Failed | Status::Idle => return None,
     })
 }
 
 /// The strongest state among sessions, for a group that hides them (a folded project): needing the person outranks
-/// working, and working outranks work left in the background. None when none of them works or waits.
+/// working, working outranks work left in the background, and that outranks a wake-up. None when none of them works,
+/// waits or is scheduled.
 pub(super) fn loudest(statuses: impl IntoIterator<Item = Status>) -> Option<Status> {
     let rank = |status: Status| match status {
-        Status::NeedsYou => 3,
-        Status::Running => 2,
-        Status::Background | Status::BackgroundUnread => 1,
+        Status::NeedsYou => 4,
+        Status::Running => 3,
+        Status::Background | Status::BackgroundUnread => 2,
+        Status::Scheduled | Status::ScheduledUnread => 1,
         Status::Failed | Status::Idle => 0,
     };
     statuses
@@ -1656,6 +1677,7 @@ pub(super) fn loudest(statuses: impl IntoIterator<Item = Status>) -> Option<Stat
         // A folded group says only that something runs behind it, not that a reply waits in one of its sessions.
         .map(|status| match status {
             Status::BackgroundUnread => Status::Background,
+            Status::ScheduledUnread => Status::Scheduled,
             status => status,
         })
 }
@@ -1790,6 +1812,10 @@ mod tests {
         assert_eq!(loudest([Idle, BackgroundUnread]), Some(Background));
         assert_eq!(loudest([Background, Running]), Some(Running));
         assert_eq!(loudest([Background, NeedsYou]), Some(NeedsYou));
+        // A wake-up is quieter than work that runs, and louder than rest.
+        assert_eq!(loudest([Idle, ScheduledUnread]), Some(Scheduled));
+        assert_eq!(loudest([Scheduled, Background]), Some(Background));
+        assert_eq!(loudest([Failed, Scheduled]), Some(Scheduled));
     }
 
     #[test]
@@ -1798,6 +1824,9 @@ mod tests {
         // The status mark shows the work and the hover card counts it: the row says nothing about it.
         assert_eq!(row_state_text(Background), None);
         assert_eq!(row_state_text(BackgroundUnread), None);
+        // A wake-up too: the hover card says when.
+        assert_eq!(row_state_text(Scheduled), None);
+        assert_eq!(row_state_text(ScheduledUnread), None);
         assert_eq!(row_state_text(Running).as_deref(), Some("Working"));
         assert_eq!(row_state_text(NeedsYou).as_deref(), Some("Needs you"));
         assert_eq!(row_state_text(Idle), None);

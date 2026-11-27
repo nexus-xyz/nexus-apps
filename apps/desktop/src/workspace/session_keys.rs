@@ -455,6 +455,7 @@ pub(super) mod tests {
             background_busy: false,
             background_work: vec![],
             background_total: 0,
+            wake: None,
             waits_on: vec![],
             has_worktree: false,
             side_chat: false,

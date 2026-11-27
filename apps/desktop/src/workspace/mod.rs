@@ -184,6 +184,7 @@ mod session_order;
 mod session_peek;
 mod session_peek_background;
 mod session_peek_pull;
+mod session_peek_wake;
 mod session_share;
 mod session_snooze_drops;
 mod session_start;

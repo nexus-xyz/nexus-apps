@@ -800,7 +800,7 @@ impl Workbench {
     }
 
     /// `ThreadSummary::waits_on`, `pending_results`, `start_choices`, `crew_paused`, `crew_tripped`, `in_background`,
-    /// `background`, `background_total` and `at_depth_limit`, which are never stored.
+    /// `background`, `background_total`, `wake` and `at_depth_limit`, which are never stored.
     pub(crate) fn fill_live_fields(&self, summary: &mut ThreadSummary) {
         summary.start_choices = self.pending_session_choices(&summary.id);
         if !summary.start_choices.is_empty() {
@@ -813,6 +813,7 @@ impl Workbench {
         summary.in_background = running.agent_holds;
         summary.background_total = u32::try_from(running.total).unwrap_or(u32::MAX);
         summary.background = running.listed;
+        summary.wake = self.wake_of(&summary.id);
         summary.waits_on = self
             .links()
             .slots

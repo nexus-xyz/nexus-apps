@@ -536,6 +536,10 @@ pub struct ThreadSummary {
     /// 0 from an older host: count `background` then.
     #[serde(default, skip_serializing_if = "is_zero")]
     pub background_total: u32,
+    /// A wake-up its running agent set for itself ([`crate::wake`]): it goes on by itself then. Never stored: the
+    /// wake-up lives in the agent's process. An older host omits it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub wake: Option<Wake>,
     /// It is at the deepest level linked sessions go: its agent gets no tools, so its orchestration can't be turned
     /// on. Never stored: the limit is the app's setting.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
@@ -571,7 +575,21 @@ pub struct LiveFields {
     pub in_background: bool,
     pub background: Vec<BackgroundWork>,
     pub background_total: u32,
+    pub wake: Option<Wake>,
     pub at_depth_limit: bool,
+}
+
+/// A wake-up a session's agent set for itself (Claude Code's `ScheduleWakeup`, [`crate::wake`]).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Wake {
+    /// When it is due, epoch milliseconds.
+    pub at: i64,
+    /// When the agent set it, epoch milliseconds.
+    pub set_at: i64,
+    /// Why, in the agent's words: its first line, cut short. Empty when it gave none.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub reason: String,
 }
 
 impl ThreadSummary {
@@ -587,6 +605,7 @@ impl ThreadSummary {
             in_background: self.in_background,
             background: self.background.clone(),
             background_total: self.background_total,
+            wake: self.wake.clone(),
             at_depth_limit: self.at_depth_limit,
         }
     }
@@ -603,6 +622,7 @@ impl ThreadSummary {
         self.in_background = live.in_background;
         self.background = live.background.clone();
         self.background_total = live.background_total;
+        self.wake = live.wake.clone();
         self.at_depth_limit = live.at_depth_limit;
         if !self.start_choices.is_empty() {
             self.status = ThreadStatus::Approval;
