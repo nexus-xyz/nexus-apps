@@ -47,8 +47,8 @@ pub fn verify_signed_file(pubkey: &str, signature: &str, version: &str, file: &s
             .any(|field| field.strip_prefix("file:") == Some(file))
 }
 
-/// The keys `pubkey` lists, or None when it lists none or any of them is invalid: a build with a broken key must
-/// say so, not quietly trust fewer keys.
+/// The keys `pubkey` lists, one per line or separated by spaces (as `updater-keys.txt` lists them), or None when it
+/// lists none or any of them is invalid: a build with a broken key must say so, not quietly trust fewer keys.
 fn keys(pubkey: &str) -> Option<Vec<PublicKey>> {
     let keys = pubkey
         .split_whitespace()

@@ -26,6 +26,9 @@ pub const RETRY_MAX_MS: u64 = 60 * 60_000;
 pub const STUCK_AFTER: u32 = 3;
 /// The public download page. It offers only the stable channel.
 pub const DOWNLOAD_PAGE: &str = "https://nexus.inc/download";
+/// The beta's download page: the open-source repository's releases, where each beta is a prerelease. A beta build sends
+/// its users here, never to [`DOWNLOAD_PAGE`], which would move them off the beta without saying so.
+pub const BETA_DOWNLOAD_PAGE: &str = "https://github.com/nexus-xyz/nexus-apps/releases";
 /// The internal channel's installer (README.md, "Distribution"). It needs a gcloud sign-in with a Nexus account. It is
 /// configuration: Nexus's release builds set `NEXUS_DESKTOP_INTERNAL_INSTALL` (factory-release.yml). A build without it
 /// (a local or open-source build) offers the download page on the internal channel too.
@@ -348,9 +351,14 @@ impl Coordinator {
             .unwrap_or(Channel::Stable);
         let latest_version = self.snapshot.manual.take().and_then(|m| m.latest_version);
         self.snapshot.manual = Some(match channel {
-            // The download page offers stable only. A beta tester who reinstalls from it leaves the beta.
-            Channel::Stable | Channel::Beta => Manual {
+            Channel::Stable => Manual {
                 download_url: Some(DOWNLOAD_PAGE),
+                install_command: None,
+                latest_version,
+            },
+            // The download page offers stable only: a beta tester who reinstalled from it would leave the beta.
+            Channel::Beta => Manual {
+                download_url: Some(BETA_DOWNLOAD_PAGE),
                 install_command: None,
                 latest_version,
             },
