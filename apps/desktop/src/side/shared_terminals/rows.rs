@@ -27,8 +27,18 @@ impl SharedTerminals {
         cx: &mut Context<Self>,
     ) -> AnyElement {
         let id = entry.id.clone();
-        let (line, more) = list::first_line(&entry.command);
-        let label = list::label(&entry.name, &entry.command);
+        // A shell has no command: its row shows its name and its folder, which tells two shells apart.
+        let shell = entry.interactive;
+        let (line, more) = if shell {
+            ("", 0)
+        } else {
+            list::first_line(&entry.command)
+        };
+        let label = if shell {
+            Some(list::shell_name(&entry.name))
+        } else {
+            list::label(&entry.name, &entry.command)
+        };
         let tone = list::tone(entry);
         let changed = state.motion && self.changed.get(&id).is_some_and(|at| at.elapsed() < FRESH);
         let row = h_flex()
@@ -71,21 +81,24 @@ impl SharedTerminals {
                     .text_color(palette.foreground)
                     .child(marked(name, state.words, palette))
             }))
-            .child(
-                div()
-                    .flex_1()
-                    .min_w(px(0.))
-                    .truncate()
-                    .font_family(ui::MONO)
-                    .text_size(px(12.))
-                    // With no name of its own, the command is the row's title.
-                    .text_color(if label.is_some() {
-                        palette.faint
-                    } else {
-                        palette.foreground
-                    })
-                    .child(marked(line.to_string(), state.words, palette)),
-            )
+            .when(shell, |row| row.child(folder_slot(&entry.cwd, state.words, palette)))
+            .when(!shell, |row| {
+                row.child(
+                    div()
+                        .flex_1()
+                        .min_w(px(0.))
+                        .truncate()
+                        .font_family(ui::MONO)
+                        .text_size(px(12.))
+                        // With no name of its own, the command is the row's title.
+                        .text_color(if label.is_some() {
+                            palette.faint
+                        } else {
+                            palette.foreground
+                        })
+                        .child(marked(line.to_string(), state.words, palette)),
+                )
+            })
             .when(more > 0, |row| {
                 row.child(
                     div()
@@ -107,7 +120,11 @@ impl SharedTerminals {
             }))
             .children(self.render_row_actions(entry, state.cursor, palette, cx))
             .tooltip({
-                let command = list::tooltip(&entry.command);
+                let command = if shell {
+                    entry.cwd.clone()
+                } else {
+                    list::tooltip(&entry.command)
+                };
                 move |window, cx| gpui_kit::component::tooltip::Tooltip::new(command.clone()).build(window, cx)
             })
             .on_click(cx.listener({
@@ -271,35 +288,40 @@ impl SharedTerminals {
                 palette,
             )
         }));
-        if let Some((editing, input)) = &self.editing
-            && editing == &id
-        {
-            body = body.child(Textarea::new(input));
+        let hidden = self
+            .wells
+            .is_maximized(&id)
+            .then(|| well::hidden_note(self.pane_list.ids().count().saturating_sub(1), palette))
+            .flatten();
+        if entry.interactive {
+            // A shell's row already shows its folder, and it has no command to show: only the hidden rows' note.
+            body = body.children(hidden);
         } else {
-            body = body.child(super::render::command_text(&id, &entry.command, palette));
-        }
-        // Only the path is selectable, so a copy of the line is a path the person can paste.
-        body = body.child(
-            h_flex()
-                .items_start()
-                .gap(px(4.))
-                .child(ui::note("Folder:", palette))
-                .child(
-                    ui::selectable_note(
-                        SharedString::from(format!("command-folder-{id}")),
-                        entry.cwd.clone(),
-                        palette,
+            if let Some((editing, input)) = &self.editing
+                && editing == &id
+            {
+                body = body.child(Textarea::new(input));
+            } else {
+                body = body.child(super::render::command_text(&id, &entry.command, palette));
+            }
+            // Only the path is selectable, so a copy of the line is a path the person can paste.
+            body = body.child(
+                h_flex()
+                    .items_start()
+                    .gap(px(4.))
+                    .child(ui::note("Folder:", palette))
+                    .child(
+                        ui::selectable_note(
+                            SharedString::from(format!("command-folder-{id}")),
+                            entry.cwd.clone(),
+                            palette,
+                        )
+                        .flex_1()
+                        .min_w(px(0.)),
                     )
-                    .flex_1()
-                    .min_w(px(0.)),
-                )
-                .children(
-                    self.wells
-                        .is_maximized(&id)
-                        .then(|| well::hidden_note(self.pane_list.ids().count().saturating_sub(1), palette))
-                        .flatten(),
-                ),
-        );
+                    .children(hidden),
+            );
+        }
         for note in notes(entry) {
             body = body.child(ui::note(note, palette));
         }
@@ -364,7 +386,8 @@ impl SharedTerminals {
         let id = entry.id.clone();
         let mut controls = h_flex().gap(px(8.)).flex_wrap();
         let editing = self.editing.as_ref().is_some_and(|(editing, _)| editing == &id);
-        if entry.needs_attention() && !editing && !self.busy && !self.read_only {
+        // A shell request has no command to edit: Decline and Run on its row are the whole decision.
+        if entry.needs_attention() && !entry.interactive && !editing && !self.busy && !self.read_only {
             let command = entry.command.clone();
             let edit = id.clone();
             controls = controls.child(
@@ -400,6 +423,28 @@ impl SharedTerminals {
         }
         controls.into_any_element()
     }
+}
+
+/// A shell's folder in a row's command slot: a folder icon, then the path in mono, with home as `~`. A folder icon
+/// marks a shell; a bare mono line is a command. `words` marks a search's matches.
+pub(crate) fn folder_slot(cwd: &str, words: &[String], palette: Palette) -> Div {
+    let home = dirs::home_dir();
+    let path = list::folder(cwd, home.as_deref().and_then(|home| home.to_str()));
+    h_flex()
+        .flex_1()
+        .min_w(px(0.))
+        .gap(px(4.))
+        .child(glyph(Lucide::Folder, palette.faint).size(px(14.)).flex_none())
+        .child(
+            div()
+                .flex_1()
+                .min_w(px(0.))
+                .truncate()
+                .font_family(ui::MONO)
+                .text_size(px(12.))
+                .text_color(palette.faint)
+                .child(marked(path, words, palette)),
+        )
 }
 
 /// A 24px text button at a row's end. `strong` is the main action, filled as the app's primary button; the others
@@ -575,6 +620,12 @@ mod tests {
         assert!(status_word(&done, Tone::Done, palette).is_none());
         let failed = entry(json!({"status":"failed","exitCode":2}));
         assert!(status_word(&failed, list::tone(&failed), palette).is_some());
+    }
+
+    #[test]
+    fn a_shell_entry_reads_its_interactive_flag() {
+        assert!(entry(json!({"interactive":true,"command":"Interactive shell"})).interactive);
+        assert!(!entry(json!({})).interactive, "older hosts send no flag: a command");
     }
 
     #[test]

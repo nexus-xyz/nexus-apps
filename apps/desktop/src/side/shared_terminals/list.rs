@@ -60,6 +60,32 @@ pub(super) fn label(name: &str, command: &str) -> Option<String> {
     (!name.is_empty() && !flat(command).starts_with(&name)).then_some(name)
 }
 
+/// A shell's row title: its name, or "Shell" when it has none.
+pub(super) fn shell_name(name: &str) -> String {
+    let name = name.split_whitespace().collect::<Vec<_>>().join(" ");
+    if name.is_empty() { "Shell".into() } else { name }
+}
+
+/// A folder as a row shows it: the home folder as `~`, and no trailing slash.
+pub(crate) fn folder(path: &str, home: Option<&str>) -> String {
+    let path = match path.trim_end_matches('/') {
+        "" => "/",
+        trimmed => trimmed,
+    };
+    let Some(home) = home
+        .map(|home| home.trim_end_matches('/'))
+        .filter(|home| !home.is_empty())
+    else {
+        return path.to_string();
+    };
+    match path.strip_prefix(home) {
+        Some("") => "~".into(),
+        // Only at a folder boundary: `/home/ana2` is not in `/home/ana`.
+        Some(rest) if rest.starts_with('/') => format!("~{rest}"),
+        _ => path.to_string(),
+    }
+}
+
 /// A command as a hover tooltip shows it: at most 6 lines of at most 120 characters, each cut with "…", and a last
 /// "…" line when more follow. The whole command is in the row's details, where it scrolls.
 pub(super) fn tooltip(command: &str) -> String {
@@ -232,6 +258,23 @@ mod tests {
         assert_eq!(label(&command[..41], command), None);
         assert_eq!(label("Run\n tests", "cargo test").as_deref(), Some("Run tests"));
         assert_eq!(label("  ", "cargo test"), None);
+    }
+
+    #[test]
+    fn a_folder_shows_home_as_a_tilde_only_at_a_folder_boundary() {
+        let home = Some("/home/ana");
+        assert_eq!(folder("/home/ana/code/cortex-sim/", home), "~/code/cortex-sim");
+        assert_eq!(folder("/home/ana", home), "~");
+        assert_eq!(folder("/home/ana2/code", home), "/home/ana2/code");
+        assert_eq!(folder("/srv/repo", home), "/srv/repo");
+        assert_eq!(folder("/", home), "/");
+        assert_eq!(folder("/home/ana/x", None), "/home/ana/x");
+    }
+
+    #[test]
+    fn a_shell_without_a_name_is_called_shell() {
+        assert_eq!(shell_name("Rig\n stream"), "Rig stream");
+        assert_eq!(shell_name("  "), "Shell");
     }
 
     #[test]
