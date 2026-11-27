@@ -335,16 +335,66 @@ impl SharedTerminals {
         for note in notes(entry) {
             body = body.child(ui::note(note, palette));
         }
+        let output_shown = entry.attached()
+            && !matches!(
+                entry.status.as_str(),
+                "awaitingUser" | "declined" | "denied" | "cancelled"
+            )
+            && !entry.private
+            && self.outputs.contains_key(&entry.id);
+        let inputs_open = self.inputs_open.contains(&id);
         if !entry.private
+            && let Some((count, _)) = self.submitted_inputs.get(&entry.id)
+            && list::folds_inputs(output_shown, inputs_open)
+        {
+            // The well already echoes what the agent typed: one line says how much, and Show opens the record.
+            let show = id.clone();
+            body = body.child(
+                h_flex()
+                    .gap(px(4.))
+                    .items_center()
+                    .child(glyph(Lucide::Keyboard, palette.faint).size(px(14.)).flex_none())
+                    .child(ui::note(list::inputs_summary(*count), palette))
+                    .child(
+                        row_button(&id, "inputs-show", "Show", false, true, palette).on_click(cx.listener(
+                            move |this, _, _, cx| {
+                                this.inputs_open.insert(show.clone());
+                                cx.notify();
+                            },
+                        )),
+                    ),
+            );
+        } else if !entry.private
             && let Some((count, inputs)) = self.submitted_inputs.get(&entry.id)
         {
-            body = body.child(ui::note(
-                format!(
-                    "Agent shell input · showing {} of {count} requests. Individual command exits are unconfirmed.",
-                    inputs.len()
-                ),
-                palette,
-            ));
+            // Beside a well, Hide folds the record back to its one line.
+            let hide = output_shown.then(|| {
+                let hide = id.clone();
+                row_button(&id, "inputs-hide", "Hide", false, true, palette).on_click(cx.listener(
+                    move |this, _, _, cx| {
+                        this.inputs_open.remove(&hide);
+                        cx.notify();
+                    },
+                ))
+            });
+            body = body.child(
+                h_flex()
+                    .gap(px(4.))
+                    .items_start()
+                    .child(
+                        ui::note(
+                            format!(
+                                "Agent shell input · showing {} of {count} requests. Individual command exits are \
+                                 unconfirmed.",
+                                inputs.len()
+                            ),
+                            palette,
+                        )
+                        .flex_1()
+                        .min_w(px(0.)),
+                    )
+                    .children(hide),
+            );
             for input in inputs {
                 body = body.child(
                     div()
@@ -359,14 +409,7 @@ impl SharedTerminals {
             }
         }
         body = body.child(self.render_controls(entry, palette, cx));
-        if entry.attached()
-            && !matches!(
-                entry.status.as_str(),
-                "awaitingUser" | "declined" | "denied" | "cancelled"
-            )
-            && !entry.private
-            && let Some(output) = self.outputs.get(&entry.id)
-        {
+        if output_shown && let Some(output) = self.outputs.get(&entry.id) {
             // The shell's own insets clear the well's edge: the well adds none.
             let shell = output.view.read(cx);
             let look = well::Look {

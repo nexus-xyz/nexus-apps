@@ -249,6 +249,8 @@ pub struct SharedTerminals {
     /// Whether each open row cuts its command's first line, as its last paint measured it (`rows::cut_probe`).
     /// The details repeat the command only when the row does not show it whole.
     cut: Rc<std::cell::RefCell<HashMap<String, bool>>>,
+    /// Open rows whose record of the agent's typed inputs the person opened with Show; folded to one line otherwise.
+    inputs_open: HashSet<String>,
 }
 impl SharedTerminals {
     pub(crate) fn has_modal(&self) -> bool {
@@ -362,6 +364,7 @@ impl SharedTerminals {
             watched: HashMap::new(),
             wells: Default::default(),
             cut: Rc::default(),
+            inputs_open: HashSet::new(),
         };
         view.start_poll(cx);
         view
