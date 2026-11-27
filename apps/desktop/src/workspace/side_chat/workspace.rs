@@ -21,6 +21,8 @@ impl Workspace {
     }
     pub(in crate::workspace) fn sync_side_chat(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.adopt_side_chats(window, cx);
+        // Opening it reads it: its entry stops saying "Finished, unread" now, not at the sessions' next read.
+        self.note_side_chat_seen(cx);
         let current = match &self.view {
             View::Code(view) if self.side.open && self.side.side_chat_visible => {
                 self.side.side_chat_for.get(&view.id).map(String::as_str)

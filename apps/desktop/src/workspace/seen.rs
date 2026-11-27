@@ -134,6 +134,7 @@ impl Workspace {
     }
 
     /// The sessions were read again: each one seen for the first time counts as seen, and the open one is seen now.
+    /// Side chats count as sessions here, so a side chat the person has on screen is seen too.
     pub(super) fn note_seen(&self, cx: &mut App) {
         init(cx);
         let open = match &self.view {
@@ -142,20 +143,58 @@ impl Workspace {
                 .map(|session| (session.id.clone(), session.updated_at)),
             _ => None,
         };
+        let side = self.shown_side_chat();
         let sessions = self
             .projects
             .iter()
             .flat_map(|project| project.sessions.iter())
             .chain(self.archived_code.iter())
-            .map(|session| (session.id.as_str(), session.updated_at));
+            .flat_map(|session| {
+                std::iter::once((session.id.as_str(), session.updated_at)).chain(
+                    session
+                        .side_chats
+                        .iter()
+                        .map(|side| (side.id.as_str(), side.activity.updated_at)),
+                )
+            });
         let marked = cx.update_global::<SeenMarks, _>(|marks, _| {
             let first = marks.seen.baseline(sessions);
             let open = open.is_some_and(|(id, at)| marks.seen.mark(&id, at));
-            first || open
+            let side = side.is_some_and(|(id, at)| marks.seen.mark(&id, at));
+            first || open || side
         });
         if marked {
             changed(cx);
         }
+    }
+
+    /// The side chat on screen was seen now: called as it opens, between the sessions' reads.
+    pub(super) fn note_side_chat_seen(&self, cx: &mut App) {
+        let Some((id, at)) = self.shown_side_chat() else {
+            return;
+        };
+        init(cx);
+        if cx.update_global::<SeenMarks, _>(|marks, _| marks.seen.mark(&id, at)) {
+            changed(cx);
+        }
+    }
+
+    /// When the person last saw side chat `id`; None when never, or before the marks are read.
+    pub(super) fn side_chat_seen_at(id: &str, cx: &App) -> Option<i64> {
+        seen_at(id, cx)
+    }
+
+    /// The side chat on screen, and the `updated_at` the last read gave it.
+    fn shown_side_chat(&self) -> Option<(String, i64)> {
+        let View::Code(view) = &self.view else {
+            return None;
+        };
+        if !(self.side.open && self.side.side_chat_visible) {
+            return None;
+        }
+        let id = self.side.side_chat_for.get(&view.id)?;
+        let side = self.session_by_id(&view.id)?.side_chat_activity(id)?;
+        Some((side.id.clone(), side.activity.updated_at))
     }
 }
 
