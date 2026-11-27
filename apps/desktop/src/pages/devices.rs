@@ -772,13 +772,15 @@ impl DevicesPage {
         read_devices(value)
     }
 
-    /// In gateway mode the page registers this computer itself when Gateway does not list it, so it does not depend on
-    /// the sign-in's registration. It tries once; a refusal shows under This device with Try again.
+    /// In gateway mode the page registers this computer itself when Gateway does not list it, or lists it pending from
+    /// approvals (Gateway trusts the same key now), so it does not depend on the sign-in's registration. It tries once;
+    /// a refusal shows under This device with Try again.
     fn register_if_gateway(&mut self, cx: &mut Context<Self>) {
         if self.trust != DeviceTrust::Gateway || self.auto_registered || self.busy {
             return;
         }
-        if !matches!((&self.key, &self.devices), (Load::Ready(_), Load::Ready(_))) || self.me().is_some() {
+        let listed = self.me().is_some_and(|me| me.state != "pending");
+        if !matches!((&self.key, &self.devices), (Load::Ready(_), Load::Ready(_))) || listed {
             return;
         }
         if !crate::managed::local_cache(crate::managed::policy()) {
