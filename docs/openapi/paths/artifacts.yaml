@@ -1,0 +1,3031 @@
+# Path items. The root openapi.yaml references each one.
+/v1/artifacts:
+  get:
+    tags:
+      - Artifacts and pages
+    operationId: listArtifacts
+    summary: >-
+      Artifacts shared with you and by you, newest first; shared_with_me includes what other organizations shared with
+      your verified email. Nexus UI's server may call it for a person with no organization.
+    parameters:
+      - name: order
+        in: query
+        schema:
+          type: string
+          enum:
+            - recent
+            - name
+            - kind
+            - created
+        description: The order for this list. Keep the same filter and order when sending its cursor.
+      - name: scope
+        in: query
+        schema:
+          type: string
+          enum:
+            - all
+            - shared_with_me
+            - shared_by_me
+          default: all
+      - name: status
+        in: query
+        schema:
+          type: string
+          enum:
+            - active
+            - revoked
+            - all
+          default: active
+        description: >-
+          active, revoked or all (default: all you may read: every active artifact shared with or by you, and your own
+          revoked ones, marked revoked; nobody else sees a revoked artifact)
+      - name: session
+        in: query
+        schema:
+          type: string
+        description: Only the versions shared from this session of yours
+      - name: q
+        in: query
+        schema:
+          type: string
+        description: Words in the title
+      - name: limit
+        in: query
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 100
+          default: 30
+      - name: cursor
+        in: query
+        schema:
+          type: string
+        description: nextCursor of the previous page
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/ArtifactPage
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: artifacts.read
+/v1/artifacts/external:
+  get:
+    tags:
+      - Artifacts and pages
+    operationId: listExternalArtifacts
+    summary: >-
+      Everything the organization shared outside it, newest first, with open counts, readers, requests and reports
+      (owners and admins).
+    parameters:
+      - name: audience
+        in: query
+        schema:
+          type: string
+          enum:
+            - external
+            - public
+      - name: author
+        in: query
+        schema:
+          type: string
+        description: An author's email or user id
+      - name: team
+        in: query
+        schema:
+          type: string
+        description: "A team (slug or id) and the teams under it: the team of the session it was shared from"
+      - name: status
+        in: query
+        schema:
+          type: string
+          enum:
+            - active
+            - revoked
+            - all
+          default: active
+      - name: q
+        in: query
+        schema:
+          type: string
+        description: Words in the title
+      - name: limit
+        in: query
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 100
+      - name: cursor
+        in: query
+        schema:
+          type: string
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/ExternalArtifactPage
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: artifacts.manage_external
+/v1/artifacts/revoke:
+  post:
+    tags:
+      - Artifacts and pages
+    operationId: revokeArtifacts
+    summary: >-
+      Revoke several of the organization's artifacts at once (at most 100; owners and admins). Each is audited as
+      artifact.revoked.
+    parameters:
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKeyRequired
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required:
+              - ids
+            properties:
+              ids:
+                type: array
+                items:
+                  type: string
+                maxItems: 100
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - revoked
+                - skipped
+              properties:
+                revoked:
+                  type: array
+                  items:
+                    type: object
+                    required:
+                      - id
+                      - version
+                    properties:
+                      id:
+                        type: string
+                      version:
+                        type: integer
+                skipped:
+                  type: array
+                  items:
+                    type: object
+                    required:
+                      - id
+                      - reason
+                    properties:
+                      id:
+                        type: string
+                      reason:
+                        type: string
+                        enum:
+                          - not_found
+                          - already_revoked
+      "428":
+        $ref: ../components/common.yaml#/responses/PreconditionRequired
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: artifacts.manage_external
+    x-idempotency: required
+/v1/artifacts/sessions:
+  post:
+    tags:
+      - Artifacts and pages
+    operationId: shareAgentSession
+    summary: >-
+      Share a coding-agent session (a Code session in Nexus for desktop, or a nexus claude session) as an artifact, from
+      a snapshot your app builds: with the same audiences as a chat, as the organization's settings allow. Sharing the
+      same session again makes a new version. Readers cannot continue it. Thinking stays out unless included. Common key
+      and token formats are hidden, and home folders become ~; images are not checked. Audited as artifact.shared.
+    parameters:
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKeyRequired
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas.yaml#/ShareAgentSessionRequest
+    responses:
+      "200":
+        description: Updated in place (update)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Artifact
+      "201":
+        description: Shared
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Artifact
+      "413":
+        description: The timeline is over 4 MB, or the images over their limits (session_too_large, image_too_large)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "428":
+        $ref: ../components/common.yaml#/responses/PreconditionRequired
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: artifacts.share
+    x-idempotency: required
+/v1/artifacts/sessions/{id}:
+  delete:
+    tags:
+      - Artifacts and pages
+    operationId: unshareAgentSession
+    summary: >-
+      Stop sharing one of your coding sessions: every active version of its artifact is revoked at once, as a chat's
+      unshare. Your own session with nothing active left changes nothing. A key you never shared under is 404
+      artifact_not_found. Each version is audited as artifact.revoked.
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[A-Za-z0-9_-]+$
+        description: "The session's key (`cds_…`): the `sessionId` its share answered"
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKey
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - sessionId
+                - visibility
+                - revoked
+              properties:
+                sessionId:
+                  type: string
+                visibility:
+                  type: string
+                  enum:
+                    - private
+                revoked:
+                  type: array
+                  description: The versions revoked now, oldest first; empty when nothing was shared.
+                  items:
+                    type: object
+                    required:
+                      - id
+                      - version
+                    properties:
+                      id:
+                        type: string
+                      version:
+                        type: integer
+      "404":
+        description: You shared no coding session under this key (artifact_not_found)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: artifacts.share
+    x-idempotency: optional
+/v1/artifacts/{id}:
+  delete:
+    tags:
+      - Artifacts and pages
+    operationId: revokeArtifact
+    summary: >-
+      Revoke an artifact at once: its author, or an owner or admin of its organization. Nexus UI's cached page goes with
+      it (the signed hook). Audited as artifact.revoked.
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[A-Za-z0-9_-]+$
+        description: The artifact's id (`art_…`)
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKey
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - revoked
+                - id
+                - version
+              properties:
+                revoked:
+                  type: boolean
+                id:
+                  type: string
+                version:
+                  type: integer
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: artifacts.share
+    x-idempotency: optional
+  get:
+    tags:
+      - Artifacts and pages
+    operationId: getArtifact
+    summary: >-
+      An artifact shared with you (or by you), with its messages: as members see it, or (outside the organization) the
+      external variant. Outside its audience: 404; a signed-in person with a verified email outside an external
+      artifact's audience: 403 artifact_access_required (they may ask). A named outsider's open is counted.
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[A-Za-z0-9_-]+$
+        description: The artifact's id (`art_…`)
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/ArtifactDetail
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: artifacts.read
+/v1/artifacts/{id}.md:
+  get:
+    tags:
+      - Artifacts and pages
+    operationId: exportArtifact
+    summary: >-
+      An artifact as Markdown: YAML front matter, a link back to it, the conversation, sources as links, the cost per
+      answer and in total.
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[A-Za-z0-9_-]+$
+        description: The artifact's id (`art_…`)
+    responses:
+      "200":
+        description: Markdown with YAML front matter
+        content:
+          text/markdown:
+            schema:
+              type: string
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: artifacts.read
+/v1/artifacts/{id}/access:
+  get:
+    tags:
+      - Artifacts and pages
+    operationId: getArtifactAccess
+    summary: "Who has an artifact shared outside, who asked for access, opens and reports: its author, owners and admins."
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[A-Za-z0-9_-]+$
+        description: The artifact's id (`art_…`)
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/ArtifactAccess
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: artifacts.share
+  post:
+    tags:
+      - Artifacts and pages
+    operationId: changeArtifactAccess
+    summary: >-
+      Grant (approve a request, or add someone), deny a request, or remove someone's access to an artifact shared with
+      named people outside: its author, owners and admins. Audited as artifact.access_changed (counts and domains).
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[A-Za-z0-9_-]+$
+        description: The artifact's id (`art_…`)
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKeyRequired
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              grant:
+                type: array
+                items:
+                  type: string
+              deny:
+                type: array
+                items:
+                  type: string
+              remove:
+                type: array
+                items:
+                  type: string
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/ArtifactAccess
+      "428":
+        $ref: ../components/common.yaml#/responses/PreconditionRequired
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: artifacts.share
+    x-idempotency: required
+/v1/artifacts/{id}/access-requests:
+  post:
+    tags:
+      - Artifacts and pages
+    operationId: requestArtifactAccess
+    summary: >-
+      Ask an artifact's author for access (someone outside its audience, signed in with a verified email). Nexus UI's
+      server may call it for a person with no organization. Audited as artifact.access_requested (the domain).
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[A-Za-z0-9_-]+$
+        description: The artifact's id (`art_…`)
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKeyRequired
+    requestBody:
+      required: false
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
+                maxLength: 500
+    responses:
+      "200":
+        description: Already answered
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - status
+                - requested
+              properties:
+                status:
+                  type: string
+                  enum:
+                    - granted
+                    - requested
+                    - denied
+                requested:
+                  type: boolean
+      "202":
+        description: Requested
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - status
+                - requested
+              properties:
+                status:
+                  type: string
+                  enum:
+                    - requested
+                requested:
+                  type: boolean
+      "428":
+        $ref: ../components/common.yaml#/responses/PreconditionRequired
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: artifacts.read
+    x-idempotency: required
+/v1/artifacts/{id}/attachments/{attachmentId}:
+  get:
+    tags:
+      - Artifacts and pages
+    operationId: getArtifactAttachment
+    summary: >-
+      An image attached to one of an artifact's questions, with its bytes as base64 (`data:<mediaType>;base64,<data>`
+      shows it), to everyone who may read the artifact (getArtifact's rules: its audience inside the organization, named
+      people outside it by verified email; its author always). The snapshot keeps its own copy, so it outlives the
+      session. Not one of its images: 404 artifact_attachment_not_found. Reading it is not counted as an open.
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[A-Za-z0-9_-]+$
+        description: The artifact's id (`art_…`)
+      - name: attachmentId
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[A-Za-z0-9_-]+$
+        description: The image's id (`cha_…`), from the message's `attachments`
+    responses:
+      "200":
+        description: The image
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/ArtifactAttachment
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: artifacts.read
+/v1/artifacts/{id}/continue:
+  post:
+    tags:
+      - Artifacts and pages
+    operationId: continueArtifact
+    summary: >-
+      Continue an artifact (its id, or a public link's token) in a new private session of your own, in one of your
+      organizations and at its expense (when its author allows, and from outside when artifacts.external.continue is
+      on). Shared inside one of your organizations: in that organization (another `org`: 403 stays_in_organization).
+      From outside the sharer's organization: in `org` when given (one of yours, else 404 not_a_member), else in the
+      sharer's organization when you belong to it, else in your personal organization, made then if you have none.
+      Someone Nexus does not know yet: 409 organization_required. Audited as artifact.continued in the organization the
+      copy is made in.
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[A-Za-z0-9_-]+$
+        description: The artifact's id (`art_…`)
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKeyRequired
+    requestBody:
+      required: false
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              title:
+                type: string
+                maxLength: 120
+              team:
+                type: string
+              org:
+                type: string
+                description: >-
+                  Where the copy goes: one of your organizations (a slug, an id, or `personal`). Default: see the
+                  summary.
+    responses:
+      "201":
+        description: Created
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/ContinuedChatSession
+      "428":
+        $ref: ../components/common.yaml#/responses/PreconditionRequired
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: artifacts.read
+    x-idempotency: required
+/v1/artifacts/{id}/events:
+  get:
+    tags:
+      - Artifacts and pages
+    operationId: streamArtifactEvents
+    summary: >-
+      A shared page's live events, as server-sent events, by the share's id: for readers without the page's own stream
+      (the /a/ viewer, the phone app). Anyone who may frame the share reads it, and it counts no open. A query event
+      (PageQueryEvent) says one of the page's queries has a new result (Nexus Data).
+    description: >-
+      Each event is `event: <type>` and one line of JSON `data`, as on `streamPageEvents`: `version`
+      (`PageVersionEvent`) and `preview` (`PagePreviewEvent`), never the draft's `doc` or `awareness`. The first is the
+      page's latest version, then its preview when it has one. Reload the share's live frame at each one. The frame URL
+      lasts five minutes, so mint a new one when it is about to expire. The share is checked again every 15 s with a `:
+      keep-alive` comment, and before an event when the last check is a second old: the stream ends once the share is
+      revoked or expires, or the Gateway copy is draining. Do not reconnect after a stream that ends at once.
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[A-Za-z0-9_-]+$
+        description: The artifact's id (`art_…`)
+    responses:
+      "200":
+        description: The event stream
+        content:
+          text/event-stream:
+            schema:
+              $ref: ../components/schemas.yaml#/PageVersionEvent
+      "404":
+        description: >-
+          A shared chat id, missing share, or inaccessible share (`artifact_not_found`). Revoked shares may return
+          `artifact_revoked`.
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "409":
+        description: "A pinned share: it shows one version, so it has nothing to follow (`page_share_pinned`)"
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      "503":
+        description: Too many live readers on this Gateway copy (`page_events_full`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: artifacts.read
+/v1/artifacts/{id}/frame:
+  get:
+    tags:
+      - Artifacts and pages
+    operationId: frameArtifact
+    summary: >-
+      A shared page's frame URL on the sandbox origin, valid five minutes, to anyone who may read the artifact. An
+      unpinned page share's frame shows the page's live state, unsaved edits included; a pinned share's frame shows its
+      version. Frame it with sandbox="allow-scripts" only. 404 artifact_not_found for a shared chat id; 404
+      artifact_revoked once revoked; 403 pages_off; 503 pages_viewer_unconfigured.
+    parameters:
+      - name: siteVersion
+        in: query
+        required: false
+        description: Request signed routes for this exact authorized saved Site version.
+        schema:
+          type: integer
+          minimum: 1
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[A-Za-z0-9_-]+$
+        description: The artifact's id (`art_…`)
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/PageFrame
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: artifacts.read
+/v1/artifacts/{id}/remix:
+  post:
+    tags:
+      - Artifacts and pages
+    operationId: remixArtifact
+    summary: >-
+      Remix a shared page (its artifact's id, or a public link's token): copy the version it shows into a new page of
+      your own, in the organization you call with, and open a new chat on the copy, so the chat's next write_page writes
+      its version 2. The original page and its shares do not change. Needs your organization's pages on (403 pages_off).
+      A page shared in one of your organizations is remixed there (403 stays_in_organization). From outside the sharer's
+      organization, its artifacts.external.continue must be on (403 external_remix_off). A shared chat id returns 404
+      artifact_not_found. A shared chat's public token returns 400 not_a_page. Audited as page.created (via remix) and
+      chat.session_created.
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[A-Za-z0-9_-]+$
+        description: The artifact's id (`art_…`), or a public link's token
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKeyRequired
+    responses:
+      "201":
+        description: Created
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/PageRemixed
+      "428":
+        $ref: ../components/common.yaml#/responses/PreconditionRequired
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: artifacts.read
+    x-idempotency: required
+/v1/design-systems:
+  get:
+    tags:
+      - Artifacts and pages
+    operationId: listDesignSystems
+    summary: >-
+      The organization's design systems for Nexus Design: the built-in @nexus/brand (brand v5.0) first, then its own by
+      name, and the default new designs use.
+    responses:
+      "200":
+        description: The design systems
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/DesignSystemList
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: chat.use
+  post:
+    tags:
+      - Artifacts and pages
+    operationId: saveDesignSystem
+    summary: >-
+      Create the named design system, or replace its tokens, notes, components and source (what `nexus design-system
+      sync` sends). Tokens come from `css` and from `files`: CSS custom properties (`:root`, `@theme`, `[data-theme]`,
+      `.dark`, `.light`), a Tailwind config's literal theme, and `tokens.json`. Only custom properties are stored. 400
+      design_system_empty when none are found, 400 design_system_limit past 50 per organization. Audited as
+      design_system.saved, with counts and never the tokens.
+    parameters:
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKeyRequired
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas.yaml#/SaveDesignSystemRequest
+    responses:
+      "200":
+        description: Replaced
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/DesignSystemSaved
+      "201":
+        description: Created
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/DesignSystemSaved
+      "428":
+        $ref: ../components/common.yaml#/responses/PreconditionRequired
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: org.settings
+    x-idempotency: required
+/v1/design-systems/{id}:
+  get:
+    tags:
+      - Artifacts and pages
+    operationId: getDesignSystem
+    summary: >-
+      A design system: its tokens as CSS and as a map of variables, its notes and its components. 404
+      design_system_not_found.
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[A-Za-z0-9_-]+$
+        description: The design system's id (`ds_…`; the built-in is `ds_nexus_brand`), or its name when it has no `/`
+    responses:
+      "200":
+        description: The design system
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/DesignSystemDetail
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: chat.use
+  delete:
+    tags:
+      - Artifacts and pages
+    operationId: deleteDesignSystem
+    summary: >-
+      Delete a design system. When it was the default, the built-in is the default again; pages that link it are served
+      without its tokens. 400 design_system_built_in for @nexus/brand. Audited as design_system.deleted.
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[A-Za-z0-9_-]+$
+        description: The design system's id (`ds_…`; the built-in is `ds_nexus_brand`), or its name when it has no `/`
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKey
+    responses:
+      "200":
+        description: Deleted
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/DesignSystemDeleted
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: org.settings
+    x-idempotency: optional
+/v1/design-systems/{id}/default:
+  post:
+    tags:
+      - Artifacts and pages
+    operationId: setDefaultDesignSystem
+    summary: >-
+      Make a design system the organization's default for new designs (the built-in too). Audited as
+      design_system.default_set, with the default before and after.
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[A-Za-z0-9_-]+$
+        description: The design system's id (`ds_…`; the built-in is `ds_nexus_brand`), or its name when it has no `/`
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKeyRequired
+    responses:
+      "200":
+        description: The new default
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/DesignSystem
+      "428":
+        $ref: ../components/common.yaml#/responses/PreconditionRequired
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: org.settings
+    x-idempotency: required
+/v1/page-frames/{pageId}/{version}:
+  get:
+    tags:
+      - Artifacts and pages
+    operationId: getPageFrameContent
+    summary: >-
+      The bytes a signed frame URL names (a version, or `live`: the page's preview, else its latest version), for the
+      sandbox host (which checks the same signature and serves them with the page's CSP). No credential but the
+      signature: 403 page_frame_invalid when it is wrong or expired. Plain text here: Gateway's origin never runs a
+      page.
+    security: []
+    parameters:
+      - name: sitePath
+        in: query
+        required: false
+        description: The canonical path covered by a saved Site route signature.
+        schema:
+          type: string
+          maxLength: 128
+      - name: pageId
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[A-Za-z0-9_-]+$
+        description: The page's id (`pag_…`)
+      - name: version
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^(?:[1-9][0-9]{0,18}|live)$
+        description: The version number, or `live`
+      - name: exp
+        in: query
+        required: true
+        schema:
+          type: integer
+        description: When the URL stops opening (unix seconds)
+      - name: sig
+        in: query
+        required: true
+        schema:
+          type: string
+          pattern: ^[0-9a-f]{64}$
+        description: HMAC-SHA256 of the page, version and exp, hex
+    responses:
+      "200":
+        description: >-
+          The source, `text/plain`; `x-nexus-page-format` (html, md, jsx or sheet) and `x-nexus-page-version` name it;
+          `x-nexus-design-system` names the design system it links, when it links one
+        content:
+          text/plain:
+            schema:
+              type: string
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: public
+/v1/page-frames/{pageId}/{version}/design-system:
+  get:
+    tags:
+      - Artifacts and pages
+    operationId: getPageFrameDesignSystem
+    summary: >-
+      The CSS custom properties of the design system a framed page links, for the sandbox host to inject before the
+      page's own styles, under the same signature as the page's bytes. The page's frame answer names the link in
+      `x-nexus-design-system`. 204 when the page links none, or one its organization does not have.
+    security: []
+    parameters:
+      - name: sitePath
+        in: query
+        required: false
+        description: The canonical path covered by a saved Site route signature.
+        schema:
+          type: string
+          maxLength: 128
+      - name: pageId
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[A-Za-z0-9_-]+$
+        description: The page's id (`pag_…`)
+      - name: version
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^(?:[1-9][0-9]{0,18}|live)$
+        description: The version number, or `live`
+      - name: exp
+        in: query
+        required: true
+        schema:
+          type: integer
+        description: When the URL stops opening (unix seconds)
+      - name: sig
+        in: query
+        required: true
+        schema:
+          type: string
+          pattern: ^[0-9a-f]{64}$
+        description: HMAC-SHA256 of the page, version and exp, hex
+    responses:
+      "200":
+        description: "`text/css`: only `selector { --name: value; }` blocks"
+        content:
+          text/css:
+            schema:
+              type: string
+      "204":
+        description: The page links no design system
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: public
+/v1/pages:
+  get:
+    tags:
+      - Artifacts and pages
+    operationId: listPages
+    summary: Your pages in this organization, most recently written first.
+    parameters:
+      - name: q
+        in: query
+        schema:
+          type: string
+          maxLength: 200
+        description: A case-insensitive match in the title.
+      - name: order
+        in: query
+        schema:
+          type: string
+          enum:
+            - recent
+            - name
+            - kind
+            - created
+        description: The order for this list. Keep the same filter and order when sending its cursor.
+      - name: limit
+        in: query
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 100
+        description: At most this many (default 30)
+      - name: docText
+        in: query
+        schema:
+          type: boolean
+        description: Match saved Markdown in owned Docs as well as titles when q is set.
+      - name: cursor
+        in: query
+        schema:
+          type: string
+        description: "`nextCursor` from the previous page"
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/PageList
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: chat.use
+  post:
+    tags:
+      - Artifacts and pages
+    operationId: createPage
+    summary: "Create a page from finished HTML, Markdown or a React component: version 1. Audited as page.created."
+    parameters:
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKeyRequired
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas.yaml#/CreatePageRequest
+    responses:
+      "201":
+        description: Created
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/PageWritten
+      "428":
+        $ref: ../components/common.yaml#/responses/PreconditionRequired
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: chat.use
+    x-idempotency: required
+/v1/pages/{id}:
+  delete:
+    tags:
+      - Artifacts and pages
+    operationId: deletePage
+    summary: Delete one of your pages, every version and its content, for good. Audited as page.deleted.
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[A-Za-z0-9_-]+$
+        description: The page's id (`pag_…`)
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKey
+    responses:
+      "200":
+        description: Deleted
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/PageDeleted
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: chat.use
+    x-idempotency: optional
+  get:
+    tags:
+      - Artifacts and pages
+    operationId: getPage
+    summary: >-
+      One of your pages and its versions, newest first. Each version lists its title and size, not its content: read the
+      content with getPageSource.
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[A-Za-z0-9_-]+$
+        description: The page's id (`pag_…`)
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/PageDetail
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: chat.use
+/v1/pages/{id}/boards/ask:
+  post:
+    tags:
+      - Artifacts and pages
+    operationId: askNexusOnPageBoard
+    summary: >-
+      Ask Nexus about one board of a design (the page's owner only, else 403 page_owner_only): regenerate it, make 3
+      variants of it under it (each data-status="proposed" with data-variant-of and a one-line data-note), or keep a
+      variant in place of its original. Opens a new chat of yours that holds the page's latest version and answers the
+      instruction to send there as its first message, so that turn writes the next version and the one before stays in
+      the versions. 400 when ask or board is malformed (read after the page's access check); 404 page_board_not_found
+      when the latest version has no board with that data-id. That turn is an ordinary chat turn, billed to you. Audited
+      as chat.session_created.
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[A-Za-z0-9_-]+$
+        description: The page's id (`pag_…`)
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKeyRequired
+    responses:
+      "201":
+        description: Created
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/PageBoardAsked
+      "428":
+        $ref: ../components/common.yaml#/responses/PreconditionRequired
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: chat.use
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas.yaml#/AskNexusOnPageBoardRequest
+    x-idempotency: required
+/v1/pages/{id}/check:
+  post:
+    tags:
+      - Artifacts and pages
+    operationId: checkPage
+    summary: >-
+      Check a design: load a version of an html or jsx page you may open in the page checker, with the CSS of the design
+      system it links (else the organization's default), and list the colours, font sizes and spacing that are not on
+      its tokens, and text below WCAG AA contrast. It never changes the page. Each finding names its board, its layer
+      and a selector, and its box from the board's corner. 400 page_check_unsupported for Markdown, 503
+      page_check_not_configured without a page checker, 502 page_check_failed when it does not answer.
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[A-Za-z0-9_-]+$
+        description: The page's id (`pag_…`)
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKey
+    requestBody:
+      required: false
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas.yaml#/CheckPageRequest
+    responses:
+      "200":
+        description: What Check found
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/PageCheck
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: chat.use
+    x-nexus-read-only: true
+    x-idempotency: optional
+    description: "Exempt: this POST only reads. It changes no state."
+/v1/pages/{id}/comments:
+  get:
+    tags:
+      - Artifacts and pages
+    operationId: listPageComments
+    summary: >-
+      The comments on a page, oldest first, with whether you own it. Whoever may open the page: its owner, or anyone who
+      may open one of its active shares (a comment is a read: the shares have no comment role). A public link alone is
+      not enough. Anyone else: 404 page_not_found. A reader of a pinned share sees the threads on the versions it shows.
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[A-Za-z0-9_-]+$
+        description: The page's id (`pag_…`)
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/PageComments
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: artifacts.read
+  post:
+    tags:
+      - Artifacts and pages
+    operationId: createPageComment
+    summary: >-
+      Comment on a page: a new thread on a passage (quote, with the text before and after it, on a version) or on a
+      point of a design's board (pin), or a reply (threadId). Whoever may open the page: its owner, or anyone who may
+      open one of its active shares (a comment is a read: the shares have no comment role). A public link alone is not
+      enough. Anyone else: 404 page_not_found. 403 pages_off when the organization turned pages off; 400
+      page_comment_limit at 1000 comments.
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[A-Za-z0-9_-]+$
+        description: The page's id (`pag_…`)
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKeyRequired
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas.yaml#/CreatePageCommentRequest
+    responses:
+      "201":
+        description: Created
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/PageComment
+      "428":
+        $ref: ../components/common.yaml#/responses/PreconditionRequired
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: artifacts.read
+    x-idempotency: required
+/v1/pages/{id}/comments/ask:
+  post:
+    tags:
+      - Artifacts and pages
+    operationId: askNexusOnPageComments
+    summary: >-
+      Ask Nexus to make the changes several threads ask for, in one chat (the page's owner only, else 403
+      page_owner_only): the threads threadIds names (a reply names its thread), else every open thread, oldest first.
+      Opens a new chat of yours that holds the page's latest version, posts a reply in each thread that names the chat,
+      and answers one instruction with every comment and its passage or pin. 400 page_comment_none_open when there is
+      none, page_comment_ask_limit above 50 threads, page_comment_ask_too_long when the instruction would pass a chat
+      message's 32000 characters; 404 page_comment_not_found for an id not on the page. That turn is an ordinary chat
+      turn, billed to you. Audited as chat.session_created.
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[A-Za-z0-9_-]+$
+        description: The page's id (`pag_…`)
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKeyRequired
+    responses:
+      "201":
+        description: Created
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/PageCommentsAsked
+      "428":
+        $ref: ../components/common.yaml#/responses/PreconditionRequired
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: chat.use
+    requestBody:
+      required: false
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas.yaml#/AskNexusOnPageCommentsRequest
+    x-idempotency: required
+/v1/pages/{id}/comments/{commentId}:
+  patch:
+    tags:
+      - Artifacts and pages
+    operationId: resolvePageComment
+    summary: >-
+      Resolve a thread, or open it again: its first comment, by its author or the page's owner (else 403
+      page_comment_forbidden).
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[A-Za-z0-9_-]+$
+        description: The page's id (`pag_…`)
+      - name: commentId
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[A-Za-z0-9_-]+$
+        description: The comment's id (`pcm_…`)
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKey
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas.yaml#/ResolvePageCommentRequest
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/PageComment
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: artifacts.read
+    x-idempotency: optional
+  delete:
+    tags:
+      - Artifacts and pages
+    operationId: deletePageComment
+    summary: >-
+      Delete a comment, by its author or the page's owner (else 403 page_comment_forbidden). A thread's replies go with
+      it. Deleting the page deletes all its comments.
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[A-Za-z0-9_-]+$
+        description: The page's id (`pag_…`)
+      - name: commentId
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[A-Za-z0-9_-]+$
+        description: The comment's id (`pcm_…`)
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKey
+    responses:
+      "200":
+        description: Deleted
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/PageCommentDeleted
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: artifacts.read
+    x-idempotency: optional
+/v1/pages/{id}/comments/{commentId}/ask:
+  post:
+    tags:
+      - Artifacts and pages
+    operationId: askNexusOnPageComment
+    summary: >-
+      Ask Nexus to make the change a thread asks for (the page's owner only, else 403 page_owner_only): opens a new chat
+      of yours that holds the page's latest version, posts a reply in the thread that names the chat, and answers the
+      instruction to send there as your first message. That turn is an ordinary chat turn, billed to you, and its
+      write_page writes the page's next version. Audited as chat.session_created.
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[A-Za-z0-9_-]+$
+        description: The page's id (`pag_…`)
+      - name: commentId
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[A-Za-z0-9_-]+$
+        description: The comment's id (`pcm_…`)
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKeyRequired
+    responses:
+      "201":
+        description: Created
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/PageCommentAsked
+      "428":
+        $ref: ../components/common.yaml#/responses/PreconditionRequired
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: chat.use
+    x-idempotency: required
+/v1/pages/{id}/doc:
+  get:
+    tags:
+      - Artifacts and pages
+    operationId: getPageDoc
+    summary: >-
+      The page's shared draft: the Yjs updates its editors posted, oldest first, for an editor that joins late. Its
+      owner and the editors of an edit share.
+    description: >-
+      Gateway stores the updates as opaque bytes and never parses them. Apply `updates` on top of the draft's seed, the
+      source of version `seed`, to get the draft. Empty when nobody has edited since the draft last started over. A
+      snapshot posted with `upTo` set to `last` replaces every update here.
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[A-Za-z0-9_-]+$
+        description: The page's id (`pag_…`)
+    responses:
+      "200":
+        description: The draft
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/PageDoc
+      "403":
+        description: A reader who may only view the page (`page_read_only`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "404":
+        description: Not a page you may edit (`page_not_found`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: chat.use
+  post:
+    tags:
+      - Artifacts and pages
+    operationId: postPageDoc
+    summary: >-
+      Post to the page's shared draft: a Yjs update, a compacted snapshot, an editor's awareness (cursor and name), or
+      their presence.
+    description: >-
+      An update is stored and relayed to the page's live readers as a `doc` event. A snapshot (`snapshot: true`)
+      replaces the updates up to `upTo` when set, and is not relayed; an editor also posts a change too large for one
+      update this way. An awareness update is relayed as an `awareness` event, and a `presence` object as a `presence`
+      event; neither is stored, and each names its poster as Gateway knows them (`from`). A viewer of the page's latest
+      version may post presence; only an editor posts awareness, updates and snapshots. An update is at most 256 KiB, a
+      snapshot 20 MiB, an awareness update or a presence object 4 KiB. At most 1200 updates, snapshots and awareness
+      posts a minute per person, and 1800 presence posts. Send it without an `Idempotency-Key`: a repeated update
+      changes nothing.
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[A-Za-z0-9_-]+$
+        description: The page's id (`pag_…`)
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKeyRequired
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas.yaml#/PostPageDocRequest
+    responses:
+      "200":
+        description: Stored (its id) or relayed
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/PageDocPosted
+      "400":
+        description: A malformed body, or a `seed` that is not one of the page's versions
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "403":
+        description: A reader who may only view the page posted an update or a snapshot (`page_read_only`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "404":
+        description: Not a page you may edit, or for presence, open at its latest version (`page_not_found`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "409":
+        description: "The draft started over from a newer version (`page_doc_stale`, `details.seed`): read it again"
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "413":
+        description: Over its size limit (`page_doc_too_large`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "428":
+        $ref: ../components/common.yaml#/responses/PreconditionRequired
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: chat.use
+    x-idempotency: required
+/v1/pages/{id}/events:
+  get:
+    tags:
+      - Artifacts and pages
+    operationId: streamPageEvents
+    summary: >-
+      A page's live events, as server-sent events: a version event when a version is written, a preview event when an
+      editor posts unsaved text, and its shared draft's updates, to whoever may open the page. A query event
+      (PageQueryEvent) says one of the page's queries has a new result (Nexus Data).
+    description: >-
+      Each event is `event: <type>` and one line of JSON `data`: `version` (`PageVersionEvent`), `preview`
+      (`PagePreviewEvent`), the shared draft's `doc` (`PageDocEvent`), and `awareness` (`PageAwarenessEvent`) and
+      `presence` (`PagePresenceEvent`, page presence). Only its owner and editors get `doc` and `awareness`; other
+      readers get `version`, `preview` and `presence`. The first is the page's latest version when the stream opens,
+      then its preview when it has one. A `: keep-alive` comment goes out every 15 s, and the caller's access is checked
+      again then: the stream ends when it is lost (or an editor may now only view the page), or when the Gateway copy is
+      draining. A reader that falls behind is dropped. Reconnect, or poll `getPageVersion`.
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[A-Za-z0-9_-]+$
+        description: The page's id (`pag_…`)
+    responses:
+      "200":
+        description: The event stream
+        content:
+          text/event-stream:
+            schema:
+              $ref: ../components/schemas.yaml#/PageVersionEvent
+      "404":
+        description: Not a page you may open, or a pinned share (`page_not_found`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      "503":
+        description: "Too many live readers on this Gateway copy (`page_events_full`): poll instead"
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: chat.use
+/v1/pages/{id}/export:
+  get:
+    tags:
+      - Artifacts and pages
+    operationId: exportPage
+    summary: >-
+      A page version as a file: PNG (one board, at 1x or 2x), SVG (one board, as shapes and text: its box shadows and
+      filters are dropped, and it names its fonts without embedding them), PDF (one page per board, at its size), PPTX
+      (one slide per board), standalone HTML (the page with the canvas, its scripts and fonts inlined) or zip (the PNGs,
+      the HTML and the source). A Nexus Design page's boards are its top-level data-artboard elements. A Nexus Slides
+      deck's boards are its top-level section[data-slide] elements, each at its own size, and its PPTX carries each
+      slide's data-notes as speaker notes by default. Hidden slides are excluded. Any other html or jsx page is one
+      board. Markdown exports as a printable PDF. It renders in the page checker's Chrome; without one, 503
+      export_not_configured. A board that did not render is named in x-nexus-export-failed (percent-encoded JSON, [{
+      board, error }]) and the others still export. To whoever may open the version: its owner, or a reader of one of
+      its active shares; anyone else gets 404 page_not_found. A person only.
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[A-Za-z0-9_-]+$
+        description: The page's id (`pag_…`)
+      - name: format
+        in: query
+        required: true
+        schema:
+          type: string
+          enum:
+            - png
+            - svg
+            - pdf
+            - pptx
+            - html
+            - zip
+        description: The file's format
+      - name: board
+        in: query
+        required: false
+        schema:
+          type: string
+          maxLength: 200
+        description: >-
+          One board or slide, by its data-id, its name or its number from 1. Required for a PNG or SVG of a design or a
+          deck with several (400 board_required); one that matches none is 404 board_not_found.
+      - name: scale
+        in: query
+        required: false
+        schema:
+          type: string
+          enum:
+            - "1"
+            - "2"
+        description: "The pixel ratio the boards render at. Default: 2 for pdf and pptx, 1 otherwise."
+      - name: notes
+        in: query
+        required: false
+        schema:
+          type: boolean
+        description: Include speaker notes in deck exports. Defaults to true in PowerPoint and false in PDF.
+      - name: version
+        in: query
+        required: false
+        schema:
+          type: string
+          pattern: ^(?:[1-9][0-9]*|latest)$
+        description: "The version to export: one the caller may open. Default: the newest they may open."
+    responses:
+      "200":
+        description: The file, as an attachment; x-nexus-export-failed names the boards that did not render
+        content:
+          image/png:
+            schema:
+              type: string
+              format: binary
+          application/pdf:
+            schema:
+              type: string
+              format: binary
+          application/vnd.openxmlformats-officedocument.presentationml.presentation:
+            schema:
+              type: string
+              format: binary
+          text/html:
+            schema:
+              type: string
+          application/zip:
+            schema:
+              type: string
+              format: binary
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: artifacts.read
+/v1/pages/{id}/files:
+  get:
+    tags:
+      - Artifacts and pages
+    operationId: listPageFiles
+    summary: >-
+      A page version's data files, by name, without their bytes: read-only copies of the files its source names,
+      attached in the chat that wrote it. To whoever may open the page: its owner, or a reader of one of its active
+      shares; anyone else gets 404 page_not_found. A person only: a public link's reader with no Nexus identity is
+      refused.
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[A-Za-z0-9_-]+$
+        description: The page's id (`pag_…`)
+      - name: version
+        in: query
+        required: false
+        schema:
+          type: string
+          pattern: ^(?:[1-9][0-9]*|latest)$
+        description: >-
+          The version whose files to read: one the caller may open. Default: the newest they may open (a pinned share's
+          version). Another is 404 page_not_found.
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/PageFiles
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: artifacts.read
+/v1/pages/{id}/files/{name}:
+  get:
+    tags:
+      - Artifacts and pages
+    operationId: getPageFile
+    summary: >-
+      One of a page version's data files with its bytes, for the page's window.fs.readFile. 404 page_file_not_found when
+      it has none by that name. To whoever may open the page: its owner, or a reader of one of its active shares; anyone
+      else gets 404 page_not_found. A person only: a public link's reader with no Nexus identity is refused.
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[A-Za-z0-9_-]+$
+        description: The page's id (`pag_…`)
+      - name: name
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[^/]+$
+        description: The file's name
+      - name: version
+        in: query
+        required: false
+        schema:
+          type: string
+          pattern: ^(?:[1-9][0-9]*|latest)$
+        description: >-
+          The version whose files to read: one the caller may open. Default: the newest they may open (a pinned share's
+          version). Another is 404 page_not_found.
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/PageFile
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: artifacts.read
+/v1/pages/{id}/preview:
+  put:
+    tags:
+      - Artifacts and pages
+    operationId: putPagePreview
+    summary: Post the shared draft's text as the page's live preview, so every reader sees an edit before it is saved.
+    description: >-
+      An editor posts the whole text it holds, built on the page's latest version (`baseVersion`). It replaces the
+      page's one preview, is checked as a version is, and is announced to the page's live readers as a `preview` event.
+      Every reader of a share that follows the latest version, people outside the organization and public links too,
+      then sees it in the page's live frame (`frameArtifact`, `framePublicArtifact`, `framePageVersion` with `live`).
+      Writing a version deletes the preview. It is not a version: it has no history and is not audited. Draft posts and
+      previews share the limit of 1200 a minute per person. Send it without an `Idempotency-Key`: a repeated post
+      changes nothing.
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[A-Za-z0-9_-]+$
+        description: The page's id (`pag_…`)
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKey
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas.yaml#/PutPagePreviewRequest
+    responses:
+      "200":
+        description: Stored and announced
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/PagePreviewEvent
+      "400":
+        description: >-
+          A malformed body, content a page may not hold (`page_content_blocked`), a `sheet` that breaks its schema
+          (`page_sheet_invalid`, with the first problem at `error.nexus.path`), or a board that does not parse
+          (`page_board_invalid`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "403":
+        description: A reader who may only view the page (`page_read_only`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "404":
+        description: Not a page you may edit (`page_not_found`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "409":
+        description: >-
+          A version was written since `baseVersion` (`page_preview_stale`, `details.latestVersion`): post the draft
+          built on it
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "413":
+        description: Over a page's 16 MiB (`page_too_large`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: chat.use
+    x-idempotency: optional
+/v1/pages/{id}/queries:
+  get:
+    tags:
+      - Artifacts and pages
+    operationId: listPageQueries
+    summary: >-
+      A page's queries (Nexus Data), by name. Its owner reads every field, pending ones included. A reader who is not
+      the owner reads only the approved ones' names, parameters and refresh intervals, never a statement or a
+      connection. To whoever may open the page: its owner, or a reader of one of its active shares; anyone else gets 404
+      page_not_found. 403 page_queries_off while the organization's artifacts.pages.queries is off (the default). A
+      person only.
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[A-Za-z0-9_-]+$
+        description: The page's id (`pag_…`)
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/PageQueryList
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: artifacts.read
+/v1/pages/{id}/queries/{name}:
+  put:
+    tags:
+      - Artifacts and pages
+    operationId: savePageQuery
+    summary: >-
+      Save and approve one of your page's queries (Nexus Data): a new one, or a change to one, a pending one included.
+      One SELECT or WITH statement on a connection of postgres or snowflake that you may use, as a call of yours would
+      pick it (403 connection_required, connector_disabled or not_granted otherwise). 503 page_query_unconfigured when
+      this Gateway does not offer the connector. Parameters are declared with a type and bound as $1, $2… when it runs,
+      never spliced into the text; a Snowflake query declares none. 400 page_query_statement_invalid for anything but
+      one SELECT or WITH of at most 100,000 bytes, page_query_connector_unsupported, page_query_params_invalid,
+      page_query_refresh_invalid, page_query_limit past 20 per page. Only the page's owner: 403 page_query_owner_only
+      for a reader, 404 page_not_found for anyone else; 403 page_queries_off while artifacts.pages.queries is off.
+      Audited as page_query.saved, with the statement's SHA-256, never its text. 201 when new, 200 when changed.
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[A-Za-z0-9_-]+$
+        description: The page's id (`pag_…`)
+      - name: name
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[a-z][a-z0-9_]{0,62}$
+        description: "The query's name: what the page's code passes to `window.nexus.query`"
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKey
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas.yaml#/SavePageQueryRequest
+    responses:
+      "200":
+        description: Changed
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/PageQuerySaved
+      "201":
+        description: Created
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/PageQuerySaved
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: chat.use
+    x-idempotency: optional
+  delete:
+    tags:
+      - Artifacts and pages
+    operationId: deletePageQuery
+    summary: >-
+      Remove one of your page's queries, approved or pending. The page's code gets 404 page_query_not_found for it from
+      then on. Only the page's owner: 403 page_query_owner_only for a reader, 404 page_not_found for anyone else; 403
+      page_queries_off while artifacts.pages.queries is off. Audited as page_query.deleted.
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[A-Za-z0-9_-]+$
+        description: The page's id (`pag_…`)
+      - name: name
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[a-z][a-z0-9_]{0,62}$
+        description: "The query's name: what the page's code passes to `window.nexus.query`"
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKey
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/PageQueryDeleted
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: chat.use
+    x-idempotency: optional
+/v1/pages/{id}/queries/{name}/run:
+  post:
+    tags:
+      - Artifacts and pages
+    operationId: runPageQuery
+    summary: >-
+      A page query's result (Nexus Data): the snapshot every reader of the page shares for these parameter values. A run
+      inside the query's refresh interval answers it; past it, Gateway reads it again as the query's approver, one
+      refresh at a time, and announces the new result on the page's events (`query`). The body names parameter values,
+      and `refresh` for the owner's Refresh now: 400 page_query_run_invalid for any other field,
+      page_query_params_invalid for an undeclared name, a missing value or a value of another type. 409
+      page_query_pending until the owner approves it, 404 page_query_not_found once removed. When the approver left the
+      organization or their access to the connection ended, every snapshot of the query is deleted and the run is
+      refused with the connector call's code (connection_required, connector_disabled, not_granted) or 409
+      page_query_approver_gone. 503 page_query_unconfigured when this Gateway does not offer the connector. A refresh
+      that fails answers the last rows with `error`, or 502 page_query_failed with none; its message never quotes the
+      database. 429 past 240 runs a minute per person or 2,400 per page. To whoever may open the page: its owner, or a
+      reader of one of its active shares; anyone else gets 404 page_not_found. 403 page_queries_off while
+      artifacts.pages.queries is off. A person only.
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[A-Za-z0-9_-]+$
+        description: The page's id (`pag_…`)
+      - name: name
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[a-z][a-z0-9_]{0,62}$
+        description: "The query's name: what the page's code passes to `window.nexus.query`"
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKeyRequired
+    requestBody:
+      required: false
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas.yaml#/RunPageQueryRequest
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/PageQueryResult
+      "428":
+        $ref: ../components/common.yaml#/responses/PreconditionRequired
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: artifacts.read
+    x-idempotency: required
+/v1/pages/{id}/restore:
+  post:
+    tags:
+      - Artifacts and pages
+    operationId: restorePage
+    summary: "Restore an old version: the next version gets its title and content. Audited as page.restored."
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[A-Za-z0-9_-]+$
+        description: The page's id (`pag_…`)
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKeyRequired
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas.yaml#/RestorePageRequest
+    responses:
+      "201":
+        description: Restored
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/PageWritten
+      "428":
+        $ref: ../components/common.yaml#/responses/PreconditionRequired
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: chat.use
+    x-idempotency: required
+/v1/pages/{id}/share:
+  post:
+    tags:
+      - Artifacts and pages
+    operationId: sharePage
+    summary: >-
+      Share one of your pages as an artifact, with the same audiences as a chat: the organization, chosen teams or
+      people, or outside it (named people by email, or anyone with the link) as its settings allow. Pin a version, or
+      follow the latest. Sharing again makes a new version of the artifact. Audited as artifact.shared.
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[A-Za-z0-9_-]+$
+        description: The page's id (`pag_…`)
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKeyRequired
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas.yaml#/SharePageRequest
+    responses:
+      "201":
+        description: Shared
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Artifact
+      "428":
+        $ref: ../components/common.yaml#/responses/PreconditionRequired
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: artifacts.share
+    x-idempotency: required
+/v1/pages/{id}/storage/{scope}:
+  get:
+    tags:
+      - Artifacts and pages
+    operationId: listPageStorage
+    summary: >-
+      A page's storage: the keys of one scope, in order. To whoever may open the page: its owner, or a reader of one of
+      its active shares; anyone else gets 404 page_not_found. A person only: a public link's reader with no Nexus
+      identity is refused.
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[A-Za-z0-9_-]+$
+        description: The page's id (`pag_…`)
+      - name: scope
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^(?:personal|shared)$
+        description: >-
+          `personal`: the caller's own copy, which no other reader sees. `shared`: one copy for everyone who may open
+          the page
+      - name: prefix
+        in: query
+        schema:
+          type: string
+          maxLength: 200
+        description: Only the keys that start with it
+      - name: limit
+        in: query
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 1000
+        description: At most this many (default 1000)
+      - name: cursor
+        in: query
+        schema:
+          type: string
+        description: "`nextCursor` from the previous list"
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/PageStorageKeys
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: artifacts.read
+/v1/pages/{id}/storage/{scope}/{key}:
+  get:
+    tags:
+      - Artifacts and pages
+    operationId: getPageStorageValue
+    summary: >-
+      One value of a page's storage. 404 page_storage_key_not_found when the key has none. To whoever may open the page:
+      its owner, or a reader of one of its active shares; anyone else gets 404 page_not_found. A person only: a public
+      link's reader with no Nexus identity is refused.
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[A-Za-z0-9_-]+$
+        description: The page's id (`pag_…`)
+      - name: scope
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^(?:personal|shared)$
+        description: >-
+          `personal`: the caller's own copy, which no other reader sees. `shared`: one copy for everyone who may open
+          the page
+      - name: key
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[^/]+$
+        description: >-
+          1 to 200 characters, with no whitespace, control character, slash, backslash or quote, and not . or .. (400
+          page_storage_key_invalid)
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/PageStorageValue
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: artifacts.read
+  put:
+    tags:
+      - Artifacts and pages
+    operationId: setPageStorageValue
+    summary: >-
+      Write one value of a page's storage, replacing the key's. Text only: 400 page_storage_value_invalid for anything
+      else; 413 page_storage_value_too_large over 5 MiB; 413 page_storage_full when the caller would reach over 20 MiB
+      of keys and values on the page: the shared scope and their own personal one. Other readers' personal values do not
+      count. Not audited. To whoever may open the page: its owner, or a reader of one of its active shares; anyone else
+      gets 404 page_not_found. A person only: a public link's reader with no Nexus identity is refused.
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[A-Za-z0-9_-]+$
+        description: The page's id (`pag_…`)
+      - name: scope
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^(?:personal|shared)$
+        description: >-
+          `personal`: the caller's own copy, which no other reader sees. `shared`: one copy for everyone who may open
+          the page
+      - name: key
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[^/]+$
+        description: >-
+          1 to 200 characters, with no whitespace, control character, slash, backslash or quote, and not . or .. (400
+          page_storage_key_invalid)
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKey
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas.yaml#/SetPageStorageValueRequest
+    responses:
+      "200":
+        description: Written
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/PageStorageWritten
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: artifacts.read
+    x-idempotency: optional
+  delete:
+    tags:
+      - Artifacts and pages
+    operationId: deletePageStorageValue
+    summary: >-
+      Delete one value of a page's storage. A missing key is no error (`deleted: false`). Deleting the page deletes all
+      of its storage. To whoever may open the page: its owner, or a reader of one of its active shares; anyone else gets
+      404 page_not_found. A person only: a public link's reader with no Nexus identity is refused.
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[A-Za-z0-9_-]+$
+        description: The page's id (`pag_…`)
+      - name: scope
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^(?:personal|shared)$
+        description: >-
+          `personal`: the caller's own copy, which no other reader sees. `shared`: one copy for everyone who may open
+          the page
+      - name: key
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[^/]+$
+        description: >-
+          1 to 200 characters, with no whitespace, control character, slash, backslash or quote, and not . or .. (400
+          page_storage_key_invalid)
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKey
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/PageStorageDeleted
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: artifacts.read
+    x-idempotency: optional
+/v1/pages/{id}/versions:
+  post:
+    tags:
+      - Artifacts and pages
+    operationId: writePageVersion
+    summary: >-
+      Write the next version of one of your pages, or of a page shared with you with edit access (a viewer gets 403
+      page_read_only). With `baseVersion`, refused with 409 `page_version_conflict` when that is no longer the latest.
+      Audited as page.version_written.
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[A-Za-z0-9_-]+$
+        description: The page's id (`pag_…`)
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKeyRequired
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas.yaml#/WritePageVersionRequest
+    responses:
+      "201":
+        description: Written
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/PageWritten
+      "428":
+        $ref: ../components/common.yaml#/responses/PreconditionRequired
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: chat.use
+    x-idempotency: required
+/v1/pages/{id}/versions/{version}:
+  get:
+    tags:
+      - Artifacts and pages
+    operationId: getPageVersion
+    summary: One version of one of your pages, or of a page shared with you with edit access.
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[A-Za-z0-9_-]+$
+        description: The page's id (`pag_…`)
+      - name: version
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^(?:[1-9][0-9]{0,18}|latest)$
+        description: A version number, or `latest`
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/PageVersion
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: chat.use
+/v1/pages/{id}/versions/{version}/frame:
+  get:
+    tags:
+      - Artifacts and pages
+    operationId: framePageVersion
+    summary: >-
+      Your own preview of a version, or of the page's live state (`live`: its unsaved preview, else its latest version):
+      a signed URL on the sandbox origin, valid five minutes. 503 pages_viewer_unconfigured when this Gateway has no
+      sandbox origin.
+    parameters:
+      - name: siteVersion
+        in: query
+        required: false
+        description: Request signed routes for this exact authorized saved Site version.
+        schema:
+          type: integer
+          minimum: 1
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[A-Za-z0-9_-]+$
+        description: The page's id (`pag_…`)
+      - name: version
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^(?:[1-9][0-9]{0,18}|latest|live)$
+        description: A version number, `latest`, or `live`
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/PageFrame
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: chat.use
+/v1/pages/{id}/versions/{version}/poster:
+  get:
+    tags:
+      - Artifacts and pages
+    operationId: getPagePoster
+    summary: >-
+      A small WebP picture of a page version (640 by 400), for the Artifacts library's cards. Only html, jsx and md
+      pages have one; any other format is 404 poster_unavailable. The page checker renders it on the first request, and
+      Gateway stores it; later requests serve the stored bytes. Without a checker, 503 poster_not_configured; a busy
+      checker is 503 poster_busy; a checker that cannot render the page is 404 poster_unavailable; any other failure is
+      502 poster_failed. To whoever may open the version: its owner, or a reader of one of its active shares; anyone
+      else gets 404 page_not_found. A person only.
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[A-Za-z0-9_-]+$
+        description: The page's id (`pag_…`)
+      - name: version
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^(?:[1-9][0-9]{0,18}|latest)$
+        description: "A version number, or `latest`: the newest version the caller may open"
+    responses:
+      "200":
+        description: "The poster (image/webp, 640 by 400). Like every credentialed answer, it is cache-control: no-store."
+        content:
+          image/webp:
+            schema:
+              type: string
+              format: binary
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: artifacts.read
+/v1/pages/{id}/versions/{version}/source:
+  get:
+    tags:
+      - Artifacts and pages
+    operationId: getPageSource
+    summary: >-
+      A version's source as written, as plain text: the HTML, Markdown or JSX to edit and write back with
+      writePageVersion. Use version `latest` for the newest. It is never rendered on the API's origin.
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[A-Za-z0-9_-]+$
+        description: The page's id (`pag_…`)
+      - name: version
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^(?:[1-9][0-9]{0,18}|latest)$
+        description: A version number, or `latest`
+    responses:
+      "200":
+        description: The source, `text/plain`; the `x-nexus-page-version` header names the version
+        content:
+          text/plain:
+            schema:
+              type: string
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: chat.use
+/v1/public/artifacts/{token}:
+  get:
+    tags:
+      - Artifacts and pages
+    operationId: getPublicArtifact
+    summary: >-
+      A public artifact through its link, as anyone holding it reads it (the external variant). No credential; never
+      indexed (X-Robots-Tag). Revoked, expired or unknown: 404.
+    security: []
+    parameters:
+      - name: token
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[A-Za-z0-9_-]{32,64}$
+        description: A public link's token (the last part of `/a/<token>`)
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/ArtifactDetail
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: public
+/v1/public/artifacts/{token}/attachments/{attachmentId}:
+  get:
+    tags:
+      - Artifacts and pages
+    operationId: getPublicArtifactAttachment
+    summary: >-
+      An image of a public artifact through its link, with its bytes as base64. No credential; never indexed
+      (X-Robots-Tag). Revoked, expired or unknown link: 404 artifact_not_found; not one of its images: 404
+      artifact_attachment_not_found.
+    security: []
+    parameters:
+      - name: token
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[A-Za-z0-9_-]{32,64}$
+        description: A public link's token (the last part of `/a/<token>`)
+      - name: attachmentId
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[A-Za-z0-9_-]+$
+        description: The image's id (`cha_…`), from the message's `attachments`
+    responses:
+      "200":
+        description: The image
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/ArtifactAttachment
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: public
+/v1/public/artifacts/{token}/events:
+  get:
+    tags:
+      - Artifacts and pages
+    operationId: streamPublicArtifactEvents
+    summary: >-
+      A public page link's live events, as server-sent events. No credential. Each stream open counts against the
+      address's public reads, and an address holds at most 32 open on each Gateway copy. A query event (PageQueryEvent)
+      says one of the page's queries has a new result (Nexus Data).
+    security: []
+    description: >-
+      Each event is `event: <type>` and one line of JSON `data`, as on `streamPageEvents`: `version`
+      (`PageVersionEvent`) and `preview` (`PagePreviewEvent`), never the draft's `doc` or `awareness`. The first is the
+      page's latest version, then its preview when it has one. Reload the share's live frame at each one. The frame URL
+      lasts five minutes, so mint a new one when it is about to expire. The share is checked again every 15 s with a `:
+      keep-alive` comment, and before an event when the last check is a second old: the stream ends once the share is
+      revoked or expires, or the Gateway copy is draining. Do not reconnect after a stream that ends at once. A link
+      that is revoked, expired or unknown, or whose organization turned pages or public page links off, is a 404.
+    parameters:
+      - name: token
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[A-Za-z0-9_-]{32,64}$
+        description: A public link's token (the last part of `/a/<token>`)
+    responses:
+      "200":
+        description: The event stream
+        content:
+          text/event-stream:
+            schema:
+              $ref: ../components/schemas.yaml#/PageVersionEvent
+      "404":
+        description: No link opens here (`artifact_not_found`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "409":
+        description: "A pinned link: it shows one version, so it has nothing to follow (`page_share_pinned`)"
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "429":
+        description: Over the address's public reads a minute, or 32 streams open from it (`page_events_per_address`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "503":
+        description: Too many live readers on this Gateway copy (`page_events_full`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: public
+/v1/public/artifacts/{token}/frame:
+  get:
+    tags:
+      - Artifacts and pages
+    operationId: framePublicArtifact
+    summary: >-
+      A public page link's frame URL, valid five minutes. An unpinned link's frame shows the page's live state, unsaved
+      edits included; a pinned link's frame shows its version. No credential; rate limited per address. Revoked,
+      expired, unknown, or its organization turned pages or public page links off: 404.
+    security: []
+    parameters:
+      - name: siteVersion
+        in: query
+        required: false
+        description: Request signed routes for this exact authorized saved Site version.
+        schema:
+          type: integer
+          minimum: 1
+      - name: token
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[A-Za-z0-9_-]{32,64}$
+        description: A public link's token (the last part of `/a/<token>`)
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/PageFrame
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: public
+/v1/public/artifacts/{token}/report:
+  post:
+    tags:
+      - Artifacts and pages
+    operationId: reportPublicArtifact
+    summary: >-
+      Report a public artifact ("Report" on its page) for Trust and Safety: recorded and audited in its organization as
+      artifact.reported, and members with artifacts.manage_external get a requests.artifact_reported notification. No
+      credential; limited per address.
+    security: []
+    parameters:
+      - name: token
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[A-Za-z0-9_-]{32,64}$
+        description: A public link's token (the last part of `/a/<token>`)
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKey
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required:
+              - reason
+            properties:
+              reason:
+                type: string
+                enum:
+                  - spam
+                  - phishing
+                  - malware
+                  - illegal
+                  - other
+              details:
+                type: string
+                maxLength: 1000
+    responses:
+      "202":
+        description: Reported
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - reported
+                - id
+              properties:
+                reported:
+                  type: boolean
+                id:
+                  type: string
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: public
+    x-idempotency: optional
+    description: "Exempt: a public route. It takes no credential, so the Gateway has no caller to tie a key to."

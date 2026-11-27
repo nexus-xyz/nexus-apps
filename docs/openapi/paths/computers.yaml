@@ -1,0 +1,374 @@
+# Path items. The root openapi.yaml references each one.
+/v1/computers:
+  get:
+    operationId: listComputers
+    tags:
+      - Computers
+    summary: List your scoped computers
+    description: >-
+      Owner-only; auditors cannot control other people. Signed presence binds the exact organization/person/Gateway and
+      an immutable runner device. Presence lasts at most 45 seconds; commands at most 60 seconds. Request IDs are
+      immutable and identical retries reconcile existing state. queued -> claimed -> replied is one-way, never
+      automatically requeued. A claimed request reads as expired 2 minutes after its expiry, and a late reply still
+      lands. Replies bind the original request hash and exact sender. Ciphertext remains opaque and is bounded; retained
+      requests/results are pruned after 24 hours. Local opt-in and fresh native policy remain required.
+    x-nexus-permission: sessions.control
+    responses:
+      "200":
+        description: Current signed state.
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/ComputerList
+      "400":
+        description: Malformed scope, identifier or ciphertext.
+      "403":
+        description: Not an owner, current member or valid signer.
+      "404":
+        description: No such owned computer, request or device.
+      "409":
+        description: >-
+          Stale generation, disabled/offline computer, expired admission, immutable body conflict, unavailable content
+          policy or full bounded mailbox.
+/v1/computers/stream:
+  get:
+    operationId: streamComputerEvents
+    tags:
+      - Computers
+    summary: Your computer requests' and Code commands' new states, live, as server-sent events.
+    description: >-
+      Each event is `event: <type>` and one line of JSON `data`. `request` (`ComputerRequestChanged`) says one of your
+      computer requests is now queued, claimed or replied: read it with `getComputerRequest`. `command`
+      (`CodeCommandChanged`) says one of your Code commands is now queued, claimed, completed or rejected: read it with
+      `getCodeCommand`, or read your computer's inbox with `listRunnerCodeCommands`. No event carries ciphertext. An
+      event sent while Gateway's listener was down is lost, so keep a slow poll, and read your pending receipts again
+      when the stream opens. A `: keep-alive` comment goes out every 15 s, and your token and membership are checked
+      again then: the stream ends when either is lost, when you fall behind, or when the Gateway copy is draining.
+      Reconnect then. Owner-only: only your own requests and commands, and only with `sessions.control`.
+    x-nexus-permission: sessions.control
+    responses:
+      "200":
+        description: The event stream
+        content:
+          text/event-stream:
+            schema:
+              oneOf:
+                - $ref: ../components/schemas.yaml#/ComputerRequestChanged
+                - $ref: ../components/schemas.yaml#/CodeCommandChanged
+      "403":
+        description: Not a person, not a current member, or without `sessions.control`
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "429":
+        description: More than 8 live streams of yours on this Gateway copy (`control_events_per_person`), or the rate limit
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "503":
+        description: "Too many live streams on this Gateway copy (`control_events_full`): read your receipts instead"
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+/v1/computers/{computerId}/presence:
+  put:
+    operationId: publishComputerPresence
+    tags:
+      - Computers
+    summary: Publish signed computer presence without a session
+    description: >-
+      Owner-only; auditors cannot control other people. Signed presence binds the exact organization/person/Gateway and
+      an immutable runner device. Presence lasts at most 45 seconds; commands at most 60 seconds. Request IDs are
+      immutable and identical retries reconcile existing state. queued -> claimed -> replied is one-way, never
+      automatically requeued. A claimed request reads as expired 2 minutes after its expiry, and a late reply still
+      lands. Replies bind the original request hash and exact sender. Ciphertext remains opaque and is bounded; retained
+      requests/results are pruned after 24 hours. Local opt-in and fresh native policy remain required.
+    x-nexus-permission: sessions.control
+    parameters:
+      - name: computerId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKey
+    responses:
+      "200":
+        description: Current signed state.
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/ComputerPresence
+      "400":
+        description: Malformed scope, identifier or ciphertext.
+      "403":
+        description: Not an owner, current member or valid signer.
+      "404":
+        description: No such owned computer, request or device.
+      "409":
+        description: >-
+          Stale generation, disabled/offline computer, expired admission, immutable body conflict, unavailable content
+          policy or full bounded mailbox.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas.yaml#/ComputerPresence
+    x-idempotency: optional
+/v1/computers/{computerId}/requests:
+  post:
+    operationId: submitComputerRequest
+    tags:
+      - Computers
+    summary: Submit an encrypted request to your computer
+    description: >-
+      Owner-only; auditors cannot control other people. Signed presence binds the exact organization/person/Gateway and
+      an immutable runner device. Presence lasts at most 45 seconds; commands at most 60 seconds. Request IDs are
+      immutable and identical retries reconcile existing state. queued -> claimed -> replied is one-way, never
+      automatically requeued. A claimed request reads as expired 2 minutes after its expiry, and a late reply still
+      lands. Replies bind the original request hash and exact sender. Ciphertext remains opaque and is bounded; retained
+      requests/results are pruned after 24 hours. Local opt-in and fresh native policy remain required.
+    x-nexus-permission: sessions.control
+    parameters:
+      - name: computerId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKeyRequired
+    responses:
+      "200":
+        description: Current signed state.
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/ComputerRequest
+      "400":
+        description: Malformed scope, identifier or ciphertext.
+      "403":
+        description: Not an owner, current member or valid signer.
+      "404":
+        description: No such owned computer, request or device.
+      "409":
+        description: >-
+          Stale generation, disabled/offline computer, expired admission, immutable body conflict, unavailable content
+          policy or full bounded mailbox.
+      "428":
+        $ref: ../components/common.yaml#/responses/PreconditionRequired
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas.yaml#/ComputerRequestEnvelope
+    x-idempotency: required
+/v1/computers/{computerId}/requests/inbox:
+  get:
+    operationId: listComputerRequests
+    tags:
+      - Computers
+    summary: Read at most 20 queued encrypted computer requests
+    description: >-
+      Owner-only; auditors cannot control other people. Signed presence binds the exact organization/person/Gateway and
+      an immutable runner device. Presence lasts at most 45 seconds; commands at most 60 seconds. Request IDs are
+      immutable and identical retries reconcile existing state. queued -> claimed -> replied is one-way, never
+      automatically requeued. A claimed request reads as expired 2 minutes after its expiry, and a late reply still
+      lands. Replies bind the original request hash and exact sender. Ciphertext remains opaque and is bounded; retained
+      requests/results are pruned after 24 hours. Local opt-in and fresh native policy remain required.
+    x-nexus-permission: sessions.control
+    parameters:
+      - name: computerId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$
+    responses:
+      "200":
+        description: Current signed state.
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/ComputerInbox
+      "400":
+        description: Malformed scope, identifier or ciphertext.
+      "403":
+        description: Not an owner, current member or valid signer.
+      "404":
+        description: No such owned computer, request or device.
+      "409":
+        description: >-
+          Stale generation, disabled/offline computer, expired admission, immutable body conflict, unavailable content
+          policy or full bounded mailbox.
+/v1/computers/{computerId}/requests/{id}:
+  get:
+    operationId: getComputerRequest
+    tags:
+      - Computers
+    summary: Reconcile an encrypted computer request after expiry
+    description: >-
+      Owner-only; auditors cannot control other people. Signed presence binds the exact organization/person/Gateway and
+      an immutable runner device. Presence lasts at most 45 seconds; commands at most 60 seconds. Request IDs are
+      immutable and identical retries reconcile existing state. queued -> claimed -> replied is one-way, never
+      automatically requeued. A claimed request reads as expired 2 minutes after its expiry, and a late reply still
+      lands. Replies bind the original request hash and exact sender. Ciphertext remains opaque and is bounded; retained
+      requests/results are pruned after 24 hours. Local opt-in and fresh native policy remain required.
+    x-nexus-permission: sessions.control
+    parameters:
+      - name: computerId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$
+    responses:
+      "200":
+        description: Current signed state.
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/ComputerRequest
+      "400":
+        description: Malformed scope, identifier or ciphertext.
+      "403":
+        description: Not an owner, current member or valid signer.
+      "404":
+        description: No such owned computer, request or device.
+      "409":
+        description: >-
+          Stale generation, disabled/offline computer, expired admission, immutable body conflict, unavailable content
+          policy or full bounded mailbox.
+/v1/computers/{computerId}/requests/{id}/claim:
+  post:
+    operationId: claimComputerRequest
+    tags:
+      - Computers
+    summary: Claim a computer request once
+    description: >-
+      Owner-only; auditors cannot control other people. Signed presence binds the exact organization/person/Gateway and
+      an immutable runner device. Presence lasts at most 45 seconds; commands at most 60 seconds. Request IDs are
+      immutable and identical retries reconcile existing state. queued -> claimed -> replied is one-way, never
+      automatically requeued. A claimed request reads as expired 2 minutes after its expiry, and a late reply still
+      lands. Replies bind the original request hash and exact sender. Ciphertext remains opaque and is bounded; retained
+      requests/results are pruned after 24 hours. Local opt-in and fresh native policy remain required.
+    x-nexus-permission: sessions.control
+    parameters:
+      - name: computerId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKeyRequired
+    responses:
+      "200":
+        description: Current signed state.
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/ComputerRequestClaimed
+      "400":
+        description: Malformed scope, identifier or ciphertext.
+      "403":
+        description: Not an owner, current member or valid signer.
+      "404":
+        description: No such owned computer, request or device.
+      "409":
+        description: >-
+          Stale generation, disabled/offline computer, expired admission, immutable body conflict, unavailable content
+          policy or full bounded mailbox.
+      "428":
+        $ref: ../components/common.yaml#/responses/PreconditionRequired
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas.yaml#/ComputerRequestClaim
+    x-idempotency: required
+/v1/computers/{computerId}/requests/{id}/reply:
+  post:
+    operationId: replyComputerRequest
+    tags:
+      - Computers
+    summary: Store a signed encrypted reply for the exact sender
+    description: >-
+      Owner-only; auditors cannot control other people. Signed presence binds the exact organization/person/Gateway and
+      an immutable runner device. Presence lasts at most 45 seconds; commands at most 60 seconds. Request IDs are
+      immutable and identical retries reconcile existing state. queued -> claimed -> replied is one-way, never
+      automatically requeued. A claimed request reads as expired 2 minutes after its expiry, and a late reply still
+      lands. Replies bind the original request hash and exact sender. Ciphertext remains opaque and is bounded; retained
+      requests/results are pruned after 24 hours. Local opt-in and fresh native policy remain required.
+    x-nexus-permission: sessions.control
+    parameters:
+      - name: computerId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKeyRequired
+    responses:
+      "200":
+        description: Current signed state.
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/ComputerRequest
+      "400":
+        description: Malformed scope, identifier or ciphertext.
+      "403":
+        description: Not an owner, current member or valid signer.
+      "404":
+        description: No such owned computer, request or device.
+      "409":
+        description: >-
+          Stale generation, disabled/offline computer, expired admission, immutable body conflict, unavailable content
+          policy or full bounded mailbox.
+      "428":
+        $ref: ../components/common.yaml#/responses/PreconditionRequired
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas.yaml#/ComputerReplyEnvelope
+    x-idempotency: required

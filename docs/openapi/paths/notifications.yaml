@@ -1,0 +1,595 @@
+# Path items. The root openapi.yaml references each one.
+/v1/notifications:
+  get:
+    tags:
+      - Notifications and presence
+    operationId: listNotifications
+    summary: "Your inbox in this organization: items not yet done, newest first, 50 a page."
+    description: >-
+      Each item renders from its kind's fixed text and its ids. An item the kind's audience rule no longer gives you
+      (you left, or lost `budgets.manage`) is not listed. Items are kept 90 days.
+    parameters:
+      - name: cursor
+        in: query
+        schema:
+          type: string
+        description: A `nextCursor` this list returned
+      - name: unread
+        in: query
+        schema:
+          type: boolean
+          default: false
+        description: Only items not yet read
+      - name: group
+        in: query
+        schema:
+          type: string
+          enum:
+            - my_sessions
+            - usage_and_billing
+            - requests_and_approvals
+            - automations_and_integrations
+            - account_and_security
+        description: Only this group's kinds
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/NotificationPage
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: notifications.use
+/v1/notifications/ask-owner:
+  post:
+    tags:
+      - Notifications and presence
+    operationId: askOwners
+    summary: >-
+      Ask the organization's owners about a billing block: a reached usage limit, used-up credits or free start, a
+      failed charge, an unpaid invoice, or the plan.
+    description: >-
+      Each owner gets a `billing.owner_asked` inbox item that names you and the block, and an email unless they turned
+      email off for Usage and billing. You ask about one block once per UTC day: a repeat answers `already_asked` and
+      tells nobody. Owners change billing themselves, so an owner's question is a 400.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas.yaml#/AskOwners
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/AskOwnersResponse
+      "400":
+        $ref: ../components/common.yaml#/responses/BadRequest
+      "428":
+        $ref: ../components/common.yaml#/responses/PreconditionRequired
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: notifications.use
+    parameters:
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKeyRequired
+    x-idempotency: required
+/v1/notifications/devices:
+  post:
+    tags:
+      - Notifications and presence
+    operationId: registerNotificationDevice
+    summary: Register this device for push, or refresh it. Registering the same token again answers the same device.
+    description: The token is sealed with the organization's data key at once and never answered back. A token is 1 to 4096 bytes.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas.yaml#/RegisterNotificationDevice
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/NotificationDevice
+      "400":
+        $ref: ../components/common.yaml#/responses/BadRequest
+      "409":
+        description: You hold 20 live devices in this organization (`device_limit`). Remove one first.
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "428":
+        $ref: ../components/common.yaml#/responses/PreconditionRequired
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: notifications.use
+    parameters:
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKeyRequired
+    x-idempotency: required
+  get:
+    tags:
+      - Notifications and presence
+    operationId: listNotificationDevices
+    summary: Your devices that take push in this organization. No answer holds a token.
+    description: "Only live devices: a revoked one is not listed."
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/NotificationDevices
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: notifications.use
+/v1/notifications/devices/{id}:
+  delete:
+    tags:
+      - Notifications and presence
+    operationId: revokeNotificationDevice
+    summary: "Stop push to one of your devices. Not yours, revoked already or unknown: 404."
+    description: >-
+      The reason is `lost` unless `reason=signed_out`: send that when the person signs out on the device. Leaving the
+      organization revokes every device with `left`.
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[A-Za-z0-9_-]+$
+        description: The device's id (`ndv_…`)
+      - name: reason
+        in: query
+        required: false
+        schema:
+          type: string
+          enum:
+            - lost
+            - signed_out
+        description: "Why the device stops: `lost` when omitted"
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKey
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/NotificationDevice
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: notifications.use
+    x-idempotency: optional
+/v1/notifications/devices/{id}/collect:
+  post:
+    tags:
+      - Notifications and presence
+    operationId: collectNotificationDeliveries
+    summary: "Collect a desktop device's notifications, once each. Not yours, revoked or unknown: 404."
+    description: >-
+      The Gateway cannot reach a desktop app, so the app collects its own push deliveries. The answer holds at most 50,
+      oldest first. Each is handed over once: a second call does not answer it again, and the inbox keeps every item. A
+      delivery older than a day, one whose recipient lost access to it, and one whose group has push turned off are not
+      answered. A device that is not a desktop answers 409 `not_collected`.
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[A-Za-z0-9_-]+$
+        description: The device's id (`ndv_…`)
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKeyRequired
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/CollectedNotifications
+      "428":
+        $ref: ../components/common.yaml#/responses/PreconditionRequired
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: notifications.use
+    x-idempotency: required
+/v1/notifications/kinds:
+  get:
+    tags:
+      - Notifications and presence
+    operationId: listNotificationKinds
+    summary: "The notification catalogue: each kind's name, group, fixed text, whether it is required, and its default channels."
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/NotificationKinds
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: notifications.use
+/v1/notifications/push-key:
+  get:
+    tags:
+      - Notifications and presence
+    operationId: getNotificationPushKey
+    summary: The public key a browser subscribes to Web Push with.
+    description: >-
+      Pass it as `applicationServerKey` to `pushManager.subscribe`, then register the subscription's JSON as a `web`
+      device. A 503 `not_configured` means this Gateway has no Web Push keys, so push sends nothing.
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/NotificationPushKey
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      "503":
+        description: Web Push is not configured on this Gateway (`not_configured`).
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: notifications.use
+/v1/notifications/settings:
+  get:
+    tags:
+      - Notifications and presence
+    operationId: getNotificationSettings
+    summary: "Your notification settings in this organization: one row per group and channel."
+    description: >-
+      The inbox is always on. A group's email follows your setting, or its default when you have not chosen. A required
+      kind (a hard stop, a failed payment, a security change) still emails you when its group's email is off.
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/NotificationSettings
+        headers:
+          ETag:
+            $ref: ../components/common.yaml#/headers/ETag
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: notifications.use
+  put:
+    tags:
+      - Notifications and presence
+    operationId: setNotificationSettings
+    summary: Change one or more of your notification settings. Answers with every setting.
+    description: >-
+      The inbox has no setting: a change to it is a 400. A required kind still emails you when you turn its group's
+      email off.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas.yaml#/SetNotificationSettings
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/NotificationSettings
+        headers:
+          ETag:
+            $ref: ../components/common.yaml#/headers/ETag
+      "412":
+        $ref: ../components/common.yaml#/responses/VersionMismatch
+      "428":
+        $ref: ../components/common.yaml#/responses/PreconditionRequired
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: notifications.use
+    parameters:
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKey
+      - $ref: ../components/common.yaml#/parameters/IfMatch
+    x-idempotency: optional
+    x-if-match: required
+/v1/notifications/{id}/done:
+  post:
+    tags:
+      - Notifications and presence
+    operationId: doneNotification
+    summary: >-
+      Mark your item done (and read): it leaves the list. Not yours, or the audience rule no longer gives it to you:
+      404.
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[A-Za-z0-9_-]+$
+        description: The item's id (`ntf_…`)
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKeyRequired
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/NotificationItem
+      "428":
+        $ref: ../components/common.yaml#/responses/PreconditionRequired
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: notifications.use
+    x-idempotency: required
+/v1/notifications/{id}/read:
+  post:
+    tags:
+      - Notifications and presence
+    operationId: readNotification
+    summary: "Mark your item read. Not yours, or the audience rule no longer gives it to you: 404."
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[A-Za-z0-9_-]+$
+        description: The item's id (`ntf_…`)
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKeyRequired
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/NotificationItem
+      "428":
+        $ref: ../components/common.yaml#/responses/PreconditionRequired
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: notifications.use
+    x-idempotency: required
+/v1/presence:
+  get:
+    tags:
+      - Notifications and presence
+    operationId: listPresence
+    summary: >-
+      Every member of the organization and whether they are online (seen in the last two minutes), online ones first
+      (every role: `members.read`; a signed-in member only). `lastSeenAt` is set only while a member is online; a member
+      who turned off showing reads offline to everyone else. You are always online to yourself. `showOnline` is your own
+      setting. Each online member's `activity` says what they are doing, as you may see it.
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/PresenceList
+            example:
+              members:
+                - userId: usr_3Kd9TqW2bNxe
+                  name: Ana Souza
+                  email: ana@acme.com
+                  role: owner
+                  online: true
+                  lastSeenAt: "2026-11-06T14:00:00.000Z"
+                  activity:
+                    kind: page
+                    pageId: pg_8Hq2Lm4Rt
+                    title: Pricing v2
+                - userId: usr_7Lm2RxV9cQta
+                  name: Bruno Lima
+                  email: bruno@acme.com
+                  role: member
+                  online: false
+                  lastSeenAt: null
+                  activity: null
+              onlineWindowSeconds: 120
+              showOnline: true
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: members.read
+  post:
+    tags:
+      - Notifications and presence
+    operationId: presenceHeartbeat
+    summary: >-
+      Your heartbeat while Nexus UI is open and visible, about every 30 seconds (every role: `members.read`; a signed-in
+      member only, 403 `role_required` otherwise). You count as online for two minutes after it. Gateway stores at most
+      one every 20 seconds, and none while you turned off showing when you are online. It may carry what you are doing
+      (`activity`): `chatting`, a `page` by id, or `idle`. A change of activity is stored at once. Answers your setting.
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/PresenceSettings
+            example:
+              showOnline: true
+      "400":
+        description: Not a known activity (`invalid_activity`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: members.read
+    requestBody:
+      required: false
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas.yaml#/PresenceHeartbeat
+          example:
+            activity:
+              kind: page
+              pageId: pg_8Hq2Lm4Rt
+    parameters:
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKey
+    x-idempotency: optional
+    description: "Exempt: a heartbeat. A repeat only renews the same state."
+/v1/presence/settings:
+  get:
+    tags:
+      - Notifications and presence
+    operationId: getPresenceSettings
+    summary: >-
+      Whether you show when you are online (every role: `members.read`; a signed-in member only). On unless you turned
+      it off.
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/PresenceSettings
+            example:
+              showOnline: true
+        headers:
+          ETag:
+            $ref: ../components/common.yaml#/headers/ETag
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: members.read
+  put:
+    tags:
+      - Notifications and presence
+    operationId: setPresenceSettings
+    summary: >-
+      Choose whether you show when you are online (every role: `members.read`; a signed-in member only). Off, Gateway
+      forgets your last heartbeat and stores none, so you read offline to everyone else at once; you still see yourself
+      online.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas.yaml#/PresenceSettings
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/PresenceSettings
+            example:
+              showOnline: false
+        headers:
+          ETag:
+            $ref: ../components/common.yaml#/headers/ETag
+      "400":
+        description: "Not `{ \"showOnline\": bool }` (`invalid_setting`)"
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "412":
+        $ref: ../components/common.yaml#/responses/VersionMismatch
+      "428":
+        $ref: ../components/common.yaml#/responses/PreconditionRequired
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: members.read
+    parameters:
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKey
+      - $ref: ../components/common.yaml#/parameters/IfMatch
+    x-idempotency: optional
+    x-if-match: required

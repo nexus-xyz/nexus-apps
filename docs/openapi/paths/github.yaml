@@ -1,0 +1,164 @@
+# Path items. The root openapi.yaml references each one.
+/v1/github/app:
+  get:
+    tags:
+      - GitHub
+    operationId: githubApp
+    summary: Whether the Nexus GitHub App is configured; for owners and admins, its install link for this organization.
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                configured:
+                  type: boolean
+                slug:
+                  type: string
+                installUrl:
+                  type: string
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: org.read
+/v1/github/installations:
+  post:
+    tags:
+      - GitHub
+    operationId: linkInstallation
+    summary: >-
+      Link a GitHub App installation to this organization (owners and admins), with the `state` of its install link;
+      starts Wiki runs for its repositories. When Gateway has the App's OAuth client (`GITHUB_APP_CLIENT_ID`,
+      `GITHUB_APP_CLIENT_SECRET`), the setup redirect's `code` is required and the GitHub user it names must administer
+      every repository of the installation (an owner does, and so does the user account itself): 403 `invalid_code` for
+      a code GitHub refuses, 403 `installer_not_authorized` otherwise. `installerChecked` says whether that check ran.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              installationId:
+                type: string
+              state:
+                type: string
+              code:
+                type: string
+                description: >-
+                  The setup redirect's one-time `code`, when the App asks for user authorization on install. Used once
+                  to check the installer, never stored.
+            required:
+              - installationId
+              - state
+    responses:
+      "201":
+        description: Created
+        content:
+          application/json:
+            schema:
+              allOf:
+                - $ref: ../components/schemas.yaml#/Repositories
+                - type: object
+                  properties:
+                    installerChecked:
+                      type: boolean
+                      description: >-
+                        Whether the installer's GitHub identity was checked: false while Gateway has no OAuth client for
+                        the App.
+      "400":
+        description: No `installationId`, no `state` (`missing_state`), or a `state` Nexus did not sign (`invalid_state`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "403":
+        description: >-
+          No owner or admin (`role_required`), another org's `state` (`invalid_state`), or an installer GitHub refuses
+          (`invalid_code`, `installer_not_authorized`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "409":
+        description: >-
+          This org's install link expired (`invalid_state`), or another org already linked the installation
+          (`installation_taken`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "428":
+        $ref: ../components/common.yaml#/responses/PreconditionRequired
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: repositories.manage
+    parameters:
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKeyRequired
+    x-idempotency: required
+/v1/github/installations/{id}:
+  delete:
+    tags:
+      - GitHub
+    operationId: unlinkInstallation
+    summary: Unlink an installation and its repositories (owners and admins).
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^\d+$
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKey
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              type: object
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: repositories.manage
+    x-idempotency: optional
+/v1/github/repositories:
+  get:
+    tags:
+      - GitHub
+    operationId: listRepositories
+    summary: Installations and linked repositories, with each one's last Nexus Wiki run.
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Repositories
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: org.read

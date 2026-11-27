@@ -1,0 +1,1360 @@
+# Path items. The root openapi.yaml references each one.
+/v1/chat/sessions:
+  get:
+    tags:
+      - Chat
+    operationId: listChatSessions
+    summary: >-
+      Your own chat sessions, most recently active first, a page at a time. Private: nobody else's are listed, for
+      owners and admins too.
+    parameters:
+      - name: limit
+        in: query
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 100
+          default: 30
+      - name: cursor
+        in: query
+        schema:
+          type: string
+        description: nextCursor of the previous page
+      - name: q
+        in: query
+        schema:
+          type: string
+        description: Words in the title or the messages
+      - name: archived
+        in: query
+        schema:
+          type: string
+          enum:
+            - exclude
+            - include
+            - only
+          default: exclude
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - sessions
+              properties:
+                sessions:
+                  type: array
+                  items:
+                    $ref: ../components/schemas.yaml#/ChatSession
+                nextCursor:
+                  type: string
+            example:
+              sessions:
+                - id: chs_Q2h4dE9pUmV0
+                  title: Why did the deploy fail?
+                  mode: chat
+                  model: nexus/auto
+                  lastModel: claude-sonnet-4-6
+                  team: platform
+                  archived: false
+                  webSearch: false
+                  messageCount: 4
+                  costUsd: 0.0123
+                  createdAt: "2026-10-30T14:02:11.000Z"
+                  updatedAt: "2026-10-30T14:05:40.000Z"
+                  visibility: private
+                  author:
+                    email: ana@example.com
+                    name: Ana Lima
+      "400":
+        description: >-
+          A query parameter is not valid: `limit` is not 1 to the page maximum, `cursor` is not one this API returned,
+          or `archived` is not exclude, include or only.
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+            example:
+              error:
+                message: cursor is not one this API returned
+                type: invalid_request_error
+                code: invalid_request
+      "401":
+        description: No credential (`missing_credential`), or a credential Gateway does not accept (`invalid_credential`).
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+            example:
+              error:
+                message: the credential is not valid
+                type: authentication_error
+                code: invalid_credential
+      "403":
+        description: >-
+          The key does not hold `chat.use` (`role_required`: a service account, a sandbox, or an agent not granted it),
+          or the caller is not a person, such as a module key (`person_required`).
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+            example:
+              error:
+                message: chat sessions belong to a person; sign in as one
+                type: permission_error
+                code: person_required
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: chat.use
+  post:
+    tags:
+      - Chat
+    operationId: createChatSession
+    summary: >-
+      Start a chat session. It is yours alone; its spend goes to you, the team (named, else your default) and the
+      product chat. Audited as chat.session_created (never the title).
+    requestBody:
+      required: false
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              title:
+                type: string
+                maxLength: 120
+                description: "Default: the first question"
+              mode:
+                $ref: ../components/schemas.yaml#/ChatMode
+              model:
+                type: string
+                description: nexus/auto (default), nexus/default or a catalog id; whether you may use it is decided on each message
+              team:
+                type: string
+                description: A team slug you are in
+              webSearch:
+                type: boolean
+                default: false
+                description: >-
+                  Whether the model may search the web in this chat. It takes effect only while the organization's
+                  webSearch.engine is on
+    parameters:
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKeyRequired
+    responses:
+      "201":
+        description: Created
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/ChatSession
+            example:
+              id: chs_Q2h4dE9pUmV0
+              mode: chat
+              model: nexus/auto
+              team: platform
+              archived: false
+              webSearch: false
+              createdAt: "2026-10-30T14:02:11.000Z"
+              title: New chat
+              messageCount: 0
+              costUsd: 0
+              updatedAt: "2026-10-30T14:02:11.000Z"
+      "400":
+        description: >-
+          The body is not valid: `title` over 120 characters, `mode` not chat or ask, a `model` that is not a string,
+          `webSearch` not a boolean, `team` not a slug, or a bad `Idempotency-Key`.
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+            example:
+              error:
+                message: mode must be chat or ask
+                type: invalid_request_error
+                code: invalid_request
+      "401":
+        description: No credential (`missing_credential`), or a credential Gateway does not accept (`invalid_credential`).
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+            example:
+              error:
+                message: the credential is not valid
+                type: authentication_error
+                code: invalid_credential
+      "403":
+        description: >-
+          The key does not hold `chat.use` (`role_required`: a service account, a sandbox, or an agent not granted it),
+          the caller is not a person (`person_required`), or the team named is not the caller's (`not_in_team`).
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+            example:
+              error:
+                message: you are not in team platform; spend can only go to a team you belong to
+                type: permission_error
+                code: not_in_team
+      "404":
+        description: The team named does not exist in this organization (`unknown_team`).
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+            example:
+              error:
+                message: no team platfrom in this organization; see `nexus team list`
+                type: not_found
+                code: unknown_team
+      "409":
+        description: >-
+          The `Idempotency-Key`'s first request still runs (`idempotency_in_progress`) or was interrupted
+          (`idempotency_interrupted`). The request does not run again.
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+            example:
+              error:
+                message: a request with this Idempotency-Key is still running
+                type: invalid_request_error
+                code: idempotency_in_progress
+      "422":
+        description: The `Idempotency-Key` was used for a different request (`idempotency_key_reused`).
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+            example:
+              error:
+                message: this Idempotency-Key was used for a different request
+                type: invalid_request_error
+                code: idempotency_key_reused
+      "428":
+        $ref: ../components/common.yaml#/responses/PreconditionRequired
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: chat.use
+    x-idempotency: required
+/v1/chat/sessions/{id}:
+  delete:
+    tags:
+      - Chat
+    operationId: deleteChatSession
+    summary: Delete a session and its messages. Audited as chat.session_deleted (never the content).
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[A-Za-z0-9_-]+$
+        description: The session's id (`chs_…`)
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKey
+      - $ref: ../components/common.yaml#/parameters/IfMatch
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                deleted:
+                  type: boolean
+                id:
+                  type: string
+                messages:
+                  type: integer
+            example:
+              deleted: true
+              id: chs_Q2h4dE9pUmV0
+              messages: 2
+        headers:
+          ETag:
+            $ref: ../components/common.yaml#/headers/ETag
+      "404":
+        description: "No such session among yours (`chat_session_not_found`): someone else's session answers the same."
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+            example:
+              error:
+                message: no chat session chs_Q2h4dE9pUmV0
+                type: not_found
+                code: chat_session_not_found
+      "412":
+        $ref: ../components/common.yaml#/responses/VersionMismatch
+      "428":
+        $ref: ../components/common.yaml#/responses/PreconditionRequired
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: chat.use
+    x-idempotency: optional
+    x-if-match: required
+  get:
+    tags:
+      - Chat
+    operationId: getChatSession
+    summary: One of your sessions with its messages, oldest first. Anyone else's session is 404.
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[A-Za-z0-9_-]+$
+        description: The session's id (`chs_…`)
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/ChatSessionDetail
+            example:
+              id: chs_Q2h4dE9pUmV0
+              title: How do we deploy the gateway?
+              mode: chat
+              model: nexus/auto
+              lastModel: anthropic/claude-sonnet-5.5
+              team: platform
+              archived: false
+              webSearch: false
+              messageCount: 2
+              costUsd: 0.004215
+              createdAt: "2026-10-30T14:02:11.000Z"
+              updatedAt: "2026-10-30T14:02:47.000Z"
+              visibility: private
+              messages:
+                - id: chm_Vb7dK2pQx9Lm
+                  sessionId: chs_Q2h4dE9pUmV0
+                  role: user
+                  content: How do we deploy the gateway?
+                  status: complete
+                  mode: chat
+                  createdAt: "2026-10-30T14:02:40.000Z"
+                - id: chm_Hn4sR8tYw2Jc
+                  sessionId: chs_Q2h4dE9pUmV0
+                  role: assistant
+                  content: Tag a release with `factory-v*`; the release workflow builds the image and promotes it.
+                  status: complete
+                  mode: chat
+                  requestedModel: nexus/auto
+                  model: anthropic/claude-sonnet-5.5
+                  costUsd: 0.004215
+                  usage:
+                    promptTokens: 1120
+                    completionTokens: 57
+                  createdAt: "2026-10-30T14:02:47.000Z"
+        headers:
+          ETag:
+            $ref: ../components/common.yaml#/headers/ETag
+      "404":
+        description: "No such session among yours (`chat_session_not_found`): someone else's session answers the same."
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+            example:
+              error:
+                message: no chat session chs_Q2h4dE9pUmV0
+                type: not_found
+                code: chat_session_not_found
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: chat.use
+  patch:
+    tags:
+      - Chat
+    operationId: updateChatSession
+    summary: Rename, archive or restore a session, or change the model, mode, web search switch or team its next messages use.
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[A-Za-z0-9_-]+$
+        description: The session's id (`chs_…`)
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKey
+      - $ref: ../components/common.yaml#/parameters/IfMatch
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              title:
+                type: string
+                maxLength: 120
+              archived:
+                type: boolean
+              model:
+                type: string
+              mode:
+                $ref: ../components/schemas.yaml#/ChatMode
+              team:
+                type:
+                  - string
+                  - "null"
+              webSearch:
+                type: boolean
+                description: >-
+                  Whether the model may search the web in this chat. It takes effect only while the organization's
+                  webSearch.engine is on
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/ChatSession
+            example:
+              id: chs_Q2h4dE9pUmV0
+              title: Gateway deploys
+              mode: chat
+              model: nexus/auto
+              lastModel: anthropic/claude-sonnet-5.5
+              team: platform
+              archived: false
+              webSearch: false
+              messageCount: 2
+              costUsd: 0.004215
+              createdAt: "2026-10-30T14:02:11.000Z"
+              updatedAt: "2026-10-30T15:10:00.000Z"
+              visibility: private
+        headers:
+          ETag:
+            $ref: ../components/common.yaml#/headers/ETag
+      "404":
+        description: "No such session among yours (`chat_session_not_found`): someone else's session answers the same."
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+            example:
+              error:
+                message: no chat session chs_Q2h4dE9pUmV0
+                type: not_found
+                code: chat_session_not_found
+      "412":
+        $ref: ../components/common.yaml#/responses/VersionMismatch
+      "428":
+        $ref: ../components/common.yaml#/responses/PreconditionRequired
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: chat.use
+    x-idempotency: optional
+    x-if-match: required
+/v1/chat/sessions/{id}/attachments/{attachmentId}:
+  get:
+    tags:
+      - Chat
+    operationId: getChatAttachment
+    summary: >-
+      An image attached to a question in one of your sessions, with its bytes as base64
+      (`data:<mediaType>;base64,<data>` shows it). Someone else's session, or an image not in it, is a 404
+      (chat_session_not_found, chat_attachment_not_found).
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[A-Za-z0-9_-]+$
+        description: The session's id (`chs_…`)
+      - name: attachmentId
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[A-Za-z0-9_-]+$
+        description: The image's id (`cha_…`), from the message's `attachments`
+    responses:
+      "200":
+        description: The image
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/ChatAttachment
+            example:
+              id: cha_P6wd1Nf3Zr8T
+              sessionId: chs_Q2h4dE9pUmV0
+              messageId: chm_Vb7dK2pQx9Lm
+              mediaType: image/png
+              bytes: 68
+              width: 1
+              height: 1
+              name: pixel.png
+              data: iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=
+              createdAt: "2026-10-30T14:02:40.000Z"
+      "404":
+        description: No such session among yours (`chat_session_not_found`), or no such image in it (`chat_attachment_not_found`).
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+            example:
+              error:
+                message: no attachment cha_P6wd1Nf3Zr8T in chat session chs_Q2h4dE9pUmV0
+                type: not_found
+                code: chat_attachment_not_found
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: chat.use
+/v1/chat/sessions/{id}/export.md:
+  get:
+    tags:
+      - Chat
+    operationId: exportChatSession
+    summary: >-
+      One of your sessions as Markdown: YAML front matter, the conversation, sources as links, the cost per answer and
+      in total.
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[A-Za-z0-9_-]+$
+        description: The session's id (`chs_…`)
+    responses:
+      "200":
+        description: Markdown with YAML front matter
+        content:
+          text/markdown:
+            schema:
+              type: string
+            example: |
+              ---
+              title: "How do we deploy the gateway?"
+              session: "https://nexus.inc/app/acme/sessions/chs_Q2h4dE9pUmV0"
+              organization: "Acme"
+              author: "Ada <ada@acme.test>"
+              created: "2026-10-30T14:02:11.000Z"
+              models:
+               - "anthropic/claude-sonnet-5.5"
+              mode: "chat"
+              visibility: "private"
+              cost_usd: 0.004215
+              ---
+
+              # How do we deploy the gateway?
+
+              > Exported from Nexus: [open the session](https://nexus.inc/app/acme/sessions/chs_Q2h4dE9pUmV0)
+
+              ## You
+
+              How do we deploy the gateway?
+
+              ## Nexus · anthropic/claude-sonnet-5.5
+
+              Tag a release with `factory-v*`; the release workflow builds the image and promotes it.
+
+              *Cost: $0.004215 · 1120 prompt + 57 completion tokens*
+
+              ---
+
+              **Total cost:** $0.004215 for 1 answer.
+      "404":
+        description: "No such session among yours (`chat_session_not_found`): someone else's session answers the same."
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+            example:
+              error:
+                message: no chat session chs_Q2h4dE9pUmV0
+                type: not_found
+                code: chat_session_not_found
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: chat.use
+/v1/chat/sessions/{id}/messages:
+  post:
+    tags:
+      - Chat
+    operationId: sendChatMessage
+    summary: >-
+      Send a message; the answer streams as server-sent events (OpenAI chat.completion.chunk; `stream: false` answers
+      with JSON). The call takes the same path as /v1/chat/completions: the model policy decision (nexus/auto by
+      default), the ledger's reserve and settle, attribution to you, your team and chat. Ask your code ranks your
+      organization's Nexus Wiki sections (BM25) and cites them. A refusal is stored in the session and answered before
+      any stream: 403 model_not_allowed (naming the level and rule), 402 budget_exceeded or payment_past_due;
+      error.nexus names the session and the stored message. With an Idempotency-Key a message runs at most once; a
+      finished stream is not replayed (409 idempotency_stream_replay). With `images` a question carries up to 8 images,
+      PNG, JPEG, GIF or WebP by their bytes, at most 5 MB each and 20 MB in all; `content` may then be empty. They go to
+      the model with the question (and with the next ones while they are among the last two questions that had any) and
+      are stored beside it: the message lists them in `attachments`, and getChatAttachment returns their bytes. 400
+      invalid_image, 413 image_too_large, 400 model_no_image_input for a model that does not read images.
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[A-Za-z0-9_-]+$
+        description: The session's id (`chs_…`)
+      - name: x-nexus-team
+        in: header
+        required: false
+        description: "The team (slug) this message's spend goes to; you must be in it. Default: the session's team."
+        schema:
+          type: string
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKeyRequired
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required:
+              - content
+            properties:
+              content:
+                type: string
+                maxLength: 32000
+                description: The question; may be empty when `images` or `files` has at least one
+              images:
+                type: array
+                maxItems: 8
+                description: Images that go with the question.
+                items:
+                  $ref: ../components/schemas.yaml#/ChatImageInput
+              files:
+                type: array
+                maxItems: 8
+                description: >-
+                  Data files that go with the question: the model reads a text file's text, and a page written in this
+                  chat keeps a copy. With the images, at most 20 MB.
+                items:
+                  $ref: ../components/schemas.yaml#/ChatFileInput
+              model:
+                type: string
+                description: For this message and the next ones
+              mode:
+                $ref: ../components/schemas.yaml#/ChatMode
+              team:
+                type: string
+              stream:
+                type: boolean
+                default: true
+    responses:
+      "200":
+        description: "The answer: an event stream, or with stream false the stored question and answer"
+        content:
+          text/event-stream:
+            schema:
+              $ref: ../components/schemas.yaml#/ChatStreamChunk
+          application/json:
+            schema:
+              type: object
+              properties:
+                session:
+                  $ref: ../components/schemas.yaml#/ChatSession
+                messages:
+                  type: array
+                  items:
+                    $ref: ../components/schemas.yaml#/ChatSessionMessage
+                  minItems: 2
+                  maxItems: 2
+                citations:
+                  type: array
+                  items:
+                    $ref: ../components/schemas.yaml#/ChatCitation
+            example:
+              session:
+                id: chs_Q2h4dE9pUmV0
+                title: How do we deploy the gateway?
+                mode: chat
+                model: nexus/auto
+                lastModel: anthropic/claude-sonnet-5.5
+                team: platform
+                archived: false
+                webSearch: false
+                messageCount: 2
+                costUsd: 0.004215
+                createdAt: "2026-10-30T14:02:11.000Z"
+                updatedAt: "2026-10-30T14:02:47.000Z"
+                visibility: private
+              messages:
+                - id: chm_Vb7dK2pQx9Lm
+                  sessionId: chs_Q2h4dE9pUmV0
+                  role: user
+                  content: How do we deploy the gateway?
+                  status: complete
+                  mode: chat
+                  createdAt: "2026-10-30T14:02:40.000Z"
+                - id: chm_Hn4sR8tYw2Jc
+                  sessionId: chs_Q2h4dE9pUmV0
+                  role: assistant
+                  content: Tag a release with `factory-v*`; the release workflow builds the image and promotes it.
+                  status: complete
+                  mode: chat
+                  requestedModel: nexus/auto
+                  model: anthropic/claude-sonnet-5.5
+                  costUsd: 0.004215
+                  usage:
+                    promptTokens: 1120
+                    completionTokens: 57
+                  createdAt: "2026-10-30T14:02:47.000Z"
+              citations: []
+      "402":
+        description: >-
+          The call's maximum cost is more than the budget left (`budget_exceeded`), or the organization has an unpaid
+          Nexus invoice past its grace (`payment_past_due`). The refusal is stored in the session. A `budget_exceeded`
+          refusal carries `notified: true` in its details once Gateway has told the refused person and the
+          organization's owners and admins. The details are a BudgetRefusal: each money figure with its exact decimal
+          twin.
+        content:
+          application/json:
+            schema:
+              allOf:
+                - $ref: ../components/schemas.yaml#/Error
+                - properties:
+                    error:
+                      properties:
+                        nexus:
+                          $ref: ../components/schemas.yaml#/BudgetRefusal
+      "404":
+        description: "No such session among yours (`chat_session_not_found`): someone else's session answers the same."
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+            example:
+              error:
+                message: no chat session chs_Q2h4dE9pUmV0
+                type: not_found
+                code: chat_session_not_found
+      "428":
+        $ref: ../components/common.yaml#/responses/PreconditionRequired
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: chat.use
+    x-idempotency: required
+/v1/chat/sessions/{id}/rewind:
+  post:
+    tags:
+      - Chat
+    operationId: rewindChatSession
+    summary: Rewind before one active user message. Original messages remain saved. Running replies return 409.
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[A-Za-z0-9_-]+$
+        description: The session's id (`chs_…`)
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKeyRequired
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/ChatSessionDetail
+            example:
+              id: chs_Q2h4dE9pUmV0
+              title: How do we deploy the gateway?
+              mode: chat
+              model: nexus/auto
+              lastModel: anthropic/claude-sonnet-5.5
+              team: platform
+              archived: false
+              webSearch: false
+              messageCount: 0
+              costUsd: 0.004215
+              createdAt: "2026-10-30T14:02:11.000Z"
+              updatedAt: "2026-10-30T14:02:47.000Z"
+              visibility: private
+              messages:
+                - id: chm_Vb7dK2pQx9Lm
+                  sessionId: chs_Q2h4dE9pUmV0
+                  role: user
+                  content: How do we deploy the gateway?
+                  status: complete
+                  mode: chat
+                  createdAt: "2026-10-30T14:02:40.000Z"
+                  rewound: true
+                - id: chm_Hn4sR8tYw2Jc
+                  sessionId: chs_Q2h4dE9pUmV0
+                  role: assistant
+                  content: Tag a release with `factory-v*`; the release workflow builds the image and promotes it.
+                  status: complete
+                  mode: chat
+                  requestedModel: nexus/auto
+                  model: anthropic/claude-sonnet-5.5
+                  costUsd: 0.004215
+                  usage:
+                    promptTokens: 1120
+                    completionTokens: 57
+                  createdAt: "2026-10-30T14:02:47.000Z"
+                  rewound: true
+      "404":
+        description: "No such session among yours (`chat_session_not_found`): someone else's session answers the same."
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+            example:
+              error:
+                message: no chat session chs_Q2h4dE9pUmV0
+                type: not_found
+                code: chat_session_not_found
+      "409":
+        description: >-
+          An answer is still running (`chat_session_busy`), or the message is no longer part of the conversation
+          (`chat_message_inactive`).
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+            example:
+              error:
+                message: Stop the answer or wait for it to finish before rewinding.
+                type: invalid_request_error
+                code: chat_session_busy
+      "428":
+        $ref: ../components/common.yaml#/responses/PreconditionRequired
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: chat.use
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required:
+              - messageId
+            properties:
+              messageId:
+                type: string
+                minLength: 1
+    x-idempotency: required
+/v1/chat/sessions/{id}/share:
+  delete:
+    tags:
+      - Chat
+    operationId: unshareChatSession
+    summary: >-
+      Make one of your sessions private again ("Only you"): every active version of its artifact is revoked at once, and
+      Nexus UI's cached pages go with them. Nothing shared is a no-op. Audited as artifact.revoked per version.
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[A-Za-z0-9_-]+$
+        description: The session's id (`chs_…`)
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKey
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - sessionId
+                - visibility
+                - revoked
+              properties:
+                sessionId:
+                  type: string
+                visibility:
+                  type: string
+                  enum:
+                    - private
+                revoked:
+                  type: array
+                  description: The versions revoked now, oldest first; empty when nothing was shared.
+                  items:
+                    type: object
+                    required:
+                      - id
+                      - version
+                    properties:
+                      id:
+                        type: string
+                      version:
+                        type: integer
+            example:
+              sessionId: chs_Q2h4dE9pUmV0
+              visibility: private
+              revoked:
+                - id: art_M3kq8ZtR1wYe
+                  version: 1
+      "404":
+        description: "No such session among yours (`chat_session_not_found`): someone else's session answers the same."
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+            example:
+              error:
+                message: no chat session chs_Q2h4dE9pUmV0
+                type: not_found
+                code: chat_session_not_found
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: artifacts.share
+    x-idempotency: optional
+  post:
+    tags:
+      - Chat
+    operationId: shareChatSession
+    summary: >-
+      Share one of your sessions as an artifact: a snapshot for the organization, chosen teams or chosen people, or
+      outside it (named people by email, or anyone with the link) as its settings allow. Sharing again makes a new
+      version. Audited as artifact.shared.
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[A-Za-z0-9_-]+$
+        description: The session's id (`chs_…`)
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKeyRequired
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas.yaml#/ShareChatSessionRequest
+    responses:
+      "201":
+        description: Shared
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Artifact
+            example:
+              id: art_M3kq8ZtR1wYe
+              version: 1
+              sessionId: chs_Q2h4dE9pUmV0
+              title: How do we deploy the gateway?
+              mode: chat
+              model: anthropic/claude-sonnet-5.5
+              models:
+                - anthropic/claude-sonnet-5.5
+              author:
+                email: ada@acme.test
+                name: Ada
+              audience:
+                kind: teams
+                teams:
+                  - platform
+                people: []
+              allowContinue: false
+              status: active
+              mine: true
+              latest: true
+              messageCount: 2
+              costUsd: 0.004215
+              url: https://nexus.inc/app/acme/artifacts/art_M3kq8ZtR1wYe
+              path: /app/acme/artifacts/art_M3kq8ZtR1wYe
+              markdownUrl: https://api.nexus.inc/v1/artifacts/art_M3kq8ZtR1wYe.md
+              createdAt: "2026-10-30T14:05:02.000Z"
+              sessionCreatedAt: "2026-10-30T14:02:11.000Z"
+      "404":
+        description: "No such session among yours (`chat_session_not_found`): someone else's session answers the same."
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+            example:
+              error:
+                message: no chat session chs_Q2h4dE9pUmV0
+                type: not_found
+                code: chat_session_not_found
+      "428":
+        $ref: ../components/common.yaml#/responses/PreconditionRequired
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: artifacts.share
+    x-idempotency: required
+/v1/chat/sessions/{id}/suggest:
+  post:
+    tags:
+      - Chat
+    operationId: suggestChatMessage
+    summary: >-
+      Suggest the message the person is most likely to send next. The call reads the session's cached prompt; nothing is
+      stored.
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[A-Za-z0-9_-]+$
+        description: The session's id (`chs_…`)
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKeyRequired
+    x-nexus-permission: chat.use
+    responses:
+      "200":
+        description: >-
+          OK. `suggestion` is null when the model offers none. It is also null, and no model is called, when the
+          session's last message is not a complete answer or the organization turned `chatSuggestions` off.
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/ChatSuggestion
+            example:
+              suggestion: Run the tests on staging
+              model: anthropic/claude-sonnet-5.5
+              costUsd: 0.001013
+      "404":
+        description: "No such session among yours (`chat_session_not_found`): someone else's session answers the same."
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+            example:
+              error:
+                message: no chat session chs_Q2h4dE9pUmV0
+                type: not_found
+                code: chat_session_not_found
+      "428":
+        $ref: ../components/common.yaml#/responses/PreconditionRequired
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-idempotency: required
+/v1/chat/voice-token:
+  post:
+    tags:
+      - Chat
+    operationId: createVoiceToken
+    summary: >-
+      A short-lived token for dictation: the app's microphone button streams audio to AssemblyAI's speech to text with
+      it, and Nexus's own key stays on the Gateway.
+    description: >-
+      Open the WebSocket in `url` (the token is already in it) within `expiresInSeconds`, then send the microphone's
+      audio as binary frames: 16 kHz, 16-bit little-endian mono PCM, about 50 ms each (1,600 bytes). AssemblyAI answers
+      with JSON messages: `Begin`, then a `Turn` for each stretch of speech (`transcript`, `end_of_turn`,
+      `turn_is_formatted`), then `Termination`. Send `{"type":"Terminate"}` to end a session. One session runs at most
+      `maxSessionSeconds`; a longer dictation asks for a new token. The token opens one session.
+
+
+      Errors: 503 `voice_not_configured` when the Gateway has no AssemblyAI key (the endpoint still mounts); 502
+      `voice_upstream_failed` when AssemblyAI refused or did not answer.
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/VoiceToken
+      "428":
+        $ref: ../components/common.yaml#/responses/PreconditionRequired
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: chat.use
+    parameters:
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKeyRequired
+    x-idempotency: required
+/v1/chat/web:
+  post:
+    tags:
+      - Chat
+    operationId: askWeb
+    summary: >-
+      Web search alone: a text question answered with your organization's web search, as sendChatMessage answers in a
+      chat with webSearch on. Without `session` it starts a chat session of yours with webSearch on; with one it
+      continues it. The turn offers the web_search tool and no other: no page, skill or connector tool. The
+      organization's webSearch.* settings apply, maxPerTurn included. While search is off it is a 403 web_search_off,
+      and while webSearch.requireZdr or a domain rule is set a 403 web_search_unenforced; both name the setting in
+      error.nexus.setting, and no session is made. It needs `chat.web`, not `chat.use`, so an agent link that holds it
+      reaches no other chat route. An agent link holds `chat.web` only when its sign-in asked for it, and it searches as
+      its person, on its person's budget. An agent link continues only a session it started; any other session is a 404
+      chat_session_not_found, as someone else's is. Text only: no images and no team. When no model the policy allows
+      can search, the answer comes without a search and `sources` is absent.
+    parameters:
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKeyRequired
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required:
+              - content
+            properties:
+              content:
+                type: string
+                minLength: 1
+                maxLength: 32000
+                description: The question
+              session:
+                type: string
+                pattern: ^[A-Za-z0-9_-]+$
+                description: >-
+                  The web session to continue (`chs_…`): a chat session with webSearch on. An agent link continues only
+                  a session it started. Omit it to start one.
+              model:
+                type: string
+                description: For this question and the next ones in the session
+              stream:
+                type: boolean
+                default: true
+    responses:
+      "200":
+        description: "The answer: an event stream, or with stream false the stored question and answer, with the answer's sources"
+        content:
+          text/event-stream:
+            schema:
+              $ref: ../components/schemas.yaml#/ChatStreamChunk
+          application/json:
+            schema:
+              type: object
+              required:
+                - session
+                - messages
+              properties:
+                session:
+                  $ref: ../components/schemas.yaml#/ChatSession
+                messages:
+                  type: array
+                  items:
+                    $ref: ../components/schemas.yaml#/ChatSessionMessage
+                  minItems: 2
+                  maxItems: 2
+                citations:
+                  type: array
+                  items:
+                    $ref: ../components/schemas.yaml#/ChatCitation
+                sources:
+                  type: array
+                  items:
+                    $ref: ../components/schemas.yaml#/ChatWebSource
+                  description: The web pages the answer read, as on the answer's own `sources`
+      "402":
+        description: >-
+          The call's maximum cost is more than the budget left (`budget_exceeded`), or the organization has an unpaid
+          Nexus invoice past its grace (`payment_past_due`). The refusal is stored in the session. A `budget_exceeded`
+          refusal carries `notified: true` in its details once Gateway has told the refused person and the
+          organization's owners and admins.
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "428":
+        $ref: ../components/common.yaml#/responses/PreconditionRequired
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: chat.web
+    x-idempotency: required
+/v1/guest/chat:
+  get:
+    tags:
+      - Chat
+    operationId: getGuestChat
+    summary: >-
+      Guest chat for a signed-out visitor: whether this guest may send a round now, its rounds, and the model that
+      answers.
+    description: >-
+      No key: a signed-out visitor calls it. `enabled` is true when this guest id has rounds and output tokens left and
+      its client address has not used today's rounds. A spent guest organization budget or an empty spend bucket shows
+      only on the next round (429 `guest_chat_paused`). `rounds_limit` is a server setting (5 by default). `model` is
+      the display name of the model every guest round runs on.
+
+
+      Errors: 400 `guest_request_invalid` when `X-Nexus-Guest` is missing or not a UUID; 429 `rate_limited` past 30
+      guest requests a minute from one address; 503 `guest_chat_not_configured` when the Gateway has no guest
+      organization or no Turnstile secret. The endpoint still mounts.
+    security: []
+    parameters:
+      - name: X-Nexus-Guest
+        in: header
+        required: true
+        description: "The browser's guest id: a random UUID it keeps (in localStorage). Its rounds count under it."
+        schema:
+          type: string
+          format: uuid
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/GuestChatStatus
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: public
+/v1/guest/chat/messages:
+  post:
+    tags:
+      - Chat
+    operationId: sendGuestChatMessage
+    summary: >-
+      One guest chat round: the answer streams as server-sent events, as sendChatMessage streams it, on the guest model,
+      billed to the guest organization. Nothing of the chat is stored.
+    description: >-
+      No key: a signed-out visitor calls it. The body is the whole conversation the browser holds, its last message the
+      guest's (`user`): at most 20 messages and 32,000 characters in all, none empty. `turnstile` is a Cloudflare
+      Turnstile token, checked at Cloudflare before anything counts. The model is always the guest model (a server
+      setting, `deepseek/deepseek-v4-flash-0731` by default); a request names none. A round is one accepted request: it
+      counts once the model call starts, against a server setting per guest id (5) and a server setting per client
+      address and UTC day (30). A guest id also gets a server setting output tokens in all (38,000): a round's
+      `max_tokens` is 2,048 or what the guest has left, and the round's settled output tokens count. All guests share
+      one spend bucket of a server setting (10), which refills that much per 24 hours: a round is admitted when the
+      bucket holds the most the call can cost, and the bucket keeps what the call settled at. The stream is
+      sendChatMessage's (`ChatStreamChunk`): a first chunk with the role and `nexus.mode` and `nexus.requested`, a chunk
+      per piece of text, a last chunk with `finish_reason` and `usage`, or an `{error}` event, then `data: [DONE]`. It
+      carries no `nexus.session`, `nexus.question` or `nexus.message`.
+
+
+      Errors: 400 `guest_request_invalid` (a missing or bad `X-Nexus-Guest`, or a body outside the bounds above); 400
+      `turnstile_failed` (Cloudflare refused the token); 429 `guest_rounds_used` (this guest id used its rounds or its
+      output tokens); 429 `guest_address_limit` (this address used today's rounds); 429 `guest_chat_paused` (the spend
+      bucket cannot hold this round, or the guest organization's budget is spent); 429 `rate_limited` (over 30 guest
+      requests a minute from one address); 502 `turnstile_unavailable` (Cloudflare did not answer in 5 s); 503
+      `guest_chat_not_configured`. A refusal counts no round.
+
+
+      Exempt: a public route. It takes no credential, so the Gateway has no caller to tie a key to.
+    security: []
+    parameters:
+      - name: X-Nexus-Guest
+        in: header
+        required: true
+        description: "The browser's guest id: a random UUID it keeps (in localStorage). Its rounds count under it."
+        schema:
+          type: string
+          format: uuid
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKey
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas.yaml#/GuestChatRequest
+    responses:
+      "200":
+        description: The answer, as an event stream
+        headers:
+          X-Nexus-Guest-Rounds-Used:
+            description: The rounds this guest id has used, this one included
+            schema:
+              type: integer
+              minimum: 0
+          X-Nexus-Guest-Rounds-Limit:
+            description: The rounds a guest id gets
+            schema:
+              type: integer
+              minimum: 0
+        content:
+          text/event-stream:
+            schema:
+              $ref: ../components/schemas.yaml#/ChatStreamChunk
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: public
+    x-idempotency: optional
