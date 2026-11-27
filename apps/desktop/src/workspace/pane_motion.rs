@@ -1,9 +1,10 @@
 //! The Workbench's motion. Opening and closing match side-pane.css: the pane slides in from the window's edge at its
 //! full width, so its tools never reflow, and the session gives way to it frame by frame. Maximizing and restoring
 //! grow and shrink the pane over the session along the same curves, instead of switching layouts in one frame.
+//! A drawer (a narrow window) never fades: it slides in solid over a scrim, so no session text reads through it.
 use gpui_kit::prelude::*;
 use gpui_kit::*;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub(super) enum Kind {
@@ -27,6 +28,7 @@ struct Transition {
     from: f32,
     to: f32,
     mode: Mode,
+    duration: Duration,
 }
 
 #[derive(Clone, Copy, Default)]
@@ -48,7 +50,18 @@ pub(super) struct Frame {
     epoch: usize,
     from: f32,
     to: f32,
+    duration: Duration,
     pub(super) moving: bool,
+}
+
+/// How long a move takes. A drawer leaves faster than it came (`UI_LONG`), as exits are shorter than entrances
+/// (DESIGN.md); the docked pane keeps side-pane.css's `PANEL` both ways.
+fn duration(kind: Kind, mode: Mode, to: f32) -> Duration {
+    if kind == Kind::Drawer && mode == Mode::Slide && to == 0. {
+        crate::motion::UI_LONG
+    } else {
+        crate::motion::PANEL
+    }
 }
 
 fn easing(time: f32, closing: bool) -> f32 {
@@ -62,7 +75,7 @@ fn easing(time: f32, closing: bool) -> f32 {
 impl Motion {
     fn position(&self, now: Instant, mode: Mode) -> Option<f32> {
         let step = self.transition.filter(|step| step.mode == mode)?;
-        let time = now.saturating_duration_since(step.at).as_secs_f32() / crate::motion::PANEL.as_secs_f32();
+        let time = now.saturating_duration_since(step.at).as_secs_f32() / step.duration.as_secs_f32();
         Some(step.from + (step.to - step.from) * easing(time.min(1.), step.to == 0.))
     }
 
@@ -80,6 +93,7 @@ impl Motion {
             from,
             to,
             mode,
+            duration: duration(self.kind, mode, to),
         });
     }
 
@@ -123,16 +137,18 @@ impl Motion {
         }
         if self
             .transition
-            .is_some_and(|step| now.saturating_duration_since(step.at) >= crate::motion::PANEL)
+            .is_some_and(|step| now.saturating_duration_since(step.at) >= step.duration)
         {
             self.transition = None;
         }
         if !self.shown && self.transition.is_none() {
             return None;
         }
-        let (from, to, mode) = self
+        let (from, to, mode, duration) = self
             .transition
-            .map_or((1., 1., Mode::Slide), |step| (step.from, step.to, step.mode));
+            .map_or((1., 1., Mode::Slide, crate::motion::PANEL), |step| {
+                (step.from, step.to, step.mode, step.duration)
+            });
         Some(Frame {
             kind: self.kind,
             rest: self.rest,
@@ -140,6 +156,7 @@ impl Motion {
             epoch: self.epoch,
             from,
             to,
+            duration,
             moving: self.transition.is_some(),
         })
     }
@@ -148,6 +165,11 @@ impl Motion {
 impl Frame {
     pub(super) fn wake_epoch(self) -> Option<usize> {
         self.moving.then_some(self.epoch)
+    }
+
+    /// How long the current move takes: the owner's timer waits this long before it settles the pane.
+    pub(super) fn duration(self) -> Duration {
+        self.duration
     }
 
     /// Maximized and still: the pane takes the content area in the session's place.
@@ -205,7 +227,7 @@ pub(super) fn render(pane: AnyElement, rest: f32, full: f32, state: Frame) -> An
             })
             .with_animation(
                 ("side-pane-grow", state.epoch),
-                Animation::new(crate::motion::PANEL).with_easing(move |time| easing(time, closing)),
+                Animation::new(state.duration).with_easing(move |time| easing(time, closing)),
                 move |frame, progress| frame.w(px(rest + span * (from + (to - from) * progress))),
             )
             .into_any_element();
@@ -224,7 +246,8 @@ pub(super) fn render(pane: AnyElement, rest: f32, full: f32, state: Frame) -> An
         .when(closing, blocked);
     let style = move |frame: Stateful<Div>, fraction: f32| {
         if drawer {
-            frame.w(px(width)).right(px(-16. * (1. - fraction))).opacity(fraction)
+            // Solid on every frame: it moves its whole width, and never fades over the session.
+            frame.w(px(width)).right(px(drawer_offset(width, fraction)))
         } else {
             frame.w(px(width * fraction))
         }
@@ -232,16 +255,98 @@ pub(super) fn render(pane: AnyElement, rest: f32, full: f32, state: Frame) -> An
     frame
         .with_animation(
             ("side-pane-slide", state.epoch),
-            Animation::new(crate::motion::PANEL).with_easing(move |time| easing(time, closing)),
+            Animation::new(state.duration).with_easing(move |time| easing(time, closing)),
             move |frame, progress| style(frame, from + (to - from) * progress),
         )
         .into_any_element()
 }
 
+/// A drawer's right edge while it slides: off the window's edge by its own width at 0, in place at 1.
+fn drawer_offset(width: f32, fraction: f32) -> f32 {
+    -width * (1. - fraction)
+}
+
+/// Whether a drawer leaves room for a scrim: one as wide as the content area (Terminal) hides the whole session.
+pub(super) fn drawer_scrim(width: f32, full: f32) -> bool {
+    width < full - 0.5
+}
+
+/// A drawer over the session: a scrim dims the content area, and the drawer sits on it. The scrim follows the
+/// drawer's own slide (the same epoch, curve and fraction), so it dims as the drawer arrives and lifts as it leaves,
+/// and a reversed slide keeps both in step. It takes no mouse input: a click on the session still closes the drawer
+/// through the drawer's own `on_mouse_down_out`.
+pub(super) fn drawer_room(drawer: AnyElement, scrim: Hsla, full: f32, state: Frame) -> AnyElement {
+    let closing = state.to == 0.;
+    let (from, to) = (state.from, state.to);
+    let layer = div().id("side-pane-scrim").absolute().inset_0().bg(scrim);
+    let layer = if state.moving && state.mode == Mode::Slide {
+        layer
+            .with_animation(
+                ("side-pane-scrim", state.epoch),
+                Animation::new(state.duration).with_easing(move |time| easing(time, closing)),
+                move |layer, progress| layer.opacity(from + (to - from) * progress),
+            )
+            .into_any_element()
+    } else {
+        layer.into_any_element()
+    };
+    div()
+        .absolute()
+        .top_0()
+        .right_0()
+        .bottom_0()
+        .w(px(full))
+        .overflow_hidden()
+        .child(layer)
+        .child(drawer)
+        .into_any_element()
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{Kind, Mode, Motion};
+    use super::{Kind, Mode, Motion, drawer_offset, drawer_scrim};
     use std::time::{Duration, Instant};
+
+    /// A drawer moves its whole width and never fades: off screen at 0, in place at 1, half its width out half way.
+    /// A fade let the session's text read through it on narrow windows.
+    #[test]
+    fn a_drawer_slides_its_whole_width_instead_of_fading() {
+        assert_eq!(drawer_offset(380., 0.), -380.);
+        assert_eq!(drawer_offset(380., 0.5), -190.);
+        assert_eq!(drawer_offset(380., 1.), 0.);
+    }
+
+    /// A drawer as wide as the content area hides the whole session, so it draws no scrim; a narrower one does.
+    #[test]
+    fn only_a_drawer_narrower_than_the_content_area_draws_a_scrim() {
+        assert!(drawer_scrim(380., 700.));
+        assert!(drawer_scrim(386., 420.));
+        assert!(!drawer_scrim(700., 700.));
+    }
+
+    /// A drawer leaves faster than it came (`UI_LONG` after `PANEL`); a docked pane keeps `PANEL` both ways.
+    #[test]
+    fn a_drawer_leaves_in_ui_long_and_a_docked_pane_in_panel() {
+        let now = Instant::now();
+        let mut drawer = Motion::default();
+        drawer.update(false, Kind::Drawer, now, false);
+        let opening = drawer.update(true, Kind::Drawer, now, false).expect("drawer opens");
+        assert_eq!(opening.duration(), crate::motion::PANEL);
+        let open = now + crate::motion::PANEL;
+        assert!(!drawer.update(true, Kind::Drawer, open, false).expect("open").moving);
+        let leaving = drawer.update(false, Kind::Drawer, open, false).expect("drawer leaves");
+        assert_eq!(leaving.duration(), crate::motion::UI_LONG);
+        assert!(
+            drawer
+                .update(false, Kind::Drawer, open + crate::motion::UI_LONG, false)
+                .is_none()
+        );
+
+        let mut docked = Motion::default();
+        docked.update(true, Kind::Docked, now, false);
+        let leaving = docked.update(false, Kind::Docked, now, false).expect("docked leaves");
+        assert_eq!(leaving.duration(), crate::motion::PANEL);
+    }
 
     /// A docked Workbench's head is its column's head in the title bar, also maximized and on the way between, and
     /// while it slides out. A drawer, and a drawer maximized, keep their head over the session.

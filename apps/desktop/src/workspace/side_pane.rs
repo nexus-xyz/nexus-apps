@@ -2258,8 +2258,9 @@ impl Workspace {
         let previous_epoch = self.side.motion_task.borrow().as_ref().map(|(epoch, _)| *epoch);
         match frame.wake_epoch() {
             Some(epoch) if previous_epoch != Some(epoch) => {
+                let duration = frame.duration();
                 let task = cx.spawn(async move |this, cx| {
-                    cx.background_executor().timer(crate::motion::PANEL).await;
+                    cx.background_executor().timer(duration).await;
                     let _ = this.update(cx, |this, cx| {
                         let mut motion = this.side.motion.get();
                         motion.finish(epoch);
@@ -2675,7 +2676,14 @@ impl Workspace {
                 .child(super::pane_motion::render(slot, width, full, frame))
                 .into_any_element()
         });
-        Some((super::pane_motion::render(pane, width, full, frame), title_head))
+        let pane = super::pane_motion::render(pane, width, full, frame);
+        // A drawer, also while it grows to or shrinks from maximized, dims the session it covers.
+        let pane = if drawer && !settled_full && super::pane_motion::drawer_scrim(width, full) {
+            super::pane_motion::drawer_room(pane, palette.scrim, full, frame)
+        } else {
+            pane
+        };
+        Some((pane, title_head))
     }
 
     /// The tool's content, fading in when another tab takes the pane (`motion::UI`), as a popover does. Only a switch
