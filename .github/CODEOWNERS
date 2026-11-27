@@ -1,2 +1,4 @@
 # Every change needs a review from a Nexus maintainer. The main ruleset requires a code owner approval.
 * @nexus-xyz/team
+# .github/ (workflows, Dependabot, these owners) needs an infra review instead: the last matching line wins.
+/.github/ @nexus-xyz/eng-infra
