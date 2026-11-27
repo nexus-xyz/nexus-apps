@@ -1,0 +1,39 @@
+# Maintainer: Nexus Laboratories, Inc. <support@nexus.inc>
+# Generated from apps/desktop/packaging/linux/aur/ in the Nexus Desktop repository:
+# render.sh moves pkgver and the checksum to each stable release. Do not edit the AUR copy by hand.
+pkgname=nexus-desktop-bin
+pkgver=0.11.2
+pkgrel=1
+pkgdesc="Nexus, the open-source AI IDE: run coding agents side by side"
+arch=('x86_64')
+url="https://nexus.inc/"
+license=('Apache-2.0')
+depends=('gtk3' 'glib2' 'gdk-pixbuf2' 'alsa-lib' 'nss' 'nspr' 'at-spi2-core' 'libcups' 'dbus' 'mesa'
+         'libxkbcommon' 'libxkbcommon-x11' 'libx11' 'libxcb' 'libxcomposite' 'libxdamage' 'libxext'
+         'libxfixes' 'libxrandr' 'expat' 'cairo' 'pango' 'systemd-libs')
+optdepends=('xdg-utils: open nexus:// links in the app')
+provides=('nexus-desktop')
+conflicts=('nexus-desktop')
+options=('!strip' '!debug')
+source=("https://downloads.nexus.inc/desktop/stable/${pkgver}/nexus-desktop-${pkgver}-linux-x86_64.tar.xz")
+sha256sums=('dc57a4926ecefebf427d0213cb7bb2da43de858b34d687376d4348686ebdd012')
+
+package() {
+  local app="nexus-desktop-${pkgver}-linux-x86_64"
+  install -d "$pkgdir/opt/nexus-desktop" "$pkgdir/usr/bin"
+  cp -a "$srcdir/$app/." "$pkgdir/opt/nexus-desktop/"
+  # Without install.sh beside the binary the app's own updater stays off: pacman updates it.
+  rm -f "$pkgdir/opt/nexus-desktop/install.sh" "$pkgdir/opt/nexus-desktop/nexus-desktop-gpui.desktop" \
+    "$pkgdir/opt/nexus-desktop/nexus-desktop-gpui.png"
+  ln -s /opt/nexus-desktop/nexus-desktop-gpui "$pkgdir/usr/bin/nexus-desktop-gpui"
+  install -Dm644 "$srcdir/$app/nexus-desktop-gpui.desktop" "$pkgdir/usr/share/applications/nexus-desktop-gpui.desktop"
+  install -Dm644 "$srcdir/$app/nexus-desktop-gpui.png" "$pkgdir/usr/share/icons/hicolor/256x256/apps/nexus-desktop-gpui.png"
+  # Tarballs from the release after 0.11.2 carry the license text; 0.11.2 declares Apache-2.0 and has none.
+  if [ -f "$srcdir/$app/LICENSE" ]; then
+    install -Dm644 "$srcdir/$app/LICENSE" "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+  fi
+  # CEF-LICENSE.txt ships from 0.11.2 on.
+  if [ -f "$srcdir/$app/CEF-LICENSE.txt" ]; then
+    install -Dm644 "$srcdir/$app/CEF-LICENSE.txt" "$pkgdir/usr/share/licenses/$pkgname/CEF-LICENSE.txt"
+  fi
+}

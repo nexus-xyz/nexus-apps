@@ -1,0 +1,680 @@
+# Path items. The root openapi.yaml references each one.
+/v1/connections:
+  get:
+    tags:
+      - Connectors
+    operationId: listConnections
+    summary: >-
+      Your own live connections and the organization's (what it may lend), never a secret. The organization's GitHub App
+      installations are listed too, as its github connections (the account is the installation id). A member sees the
+      organization's without whose account it is or its last four characters.
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - connections
+              properties:
+                connections:
+                  type: array
+                  items:
+                    $ref: ../components/schemas.yaml#/Connection
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: connections.manage_own
+/v1/connections/oauth/finish:
+  post:
+    tags:
+      - Connectors
+    operationId: finishOAuthConnection
+    summary: >-
+      Finish connecting an account with OAuth: the vendor returned the person to Nexus UI
+      (`/settings/connectors/oauth`), which hands back its `code` (or `error`) and `state` with the person's session.
+      Only the person who started may finish, so an authorize link sent to someone else connects nothing; availability
+      and role are checked again. The tokens are kept for the holder the state names.
+    parameters:
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKeyRequired
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required:
+              - state
+            properties:
+              state:
+                type: string
+              code:
+                type: string
+              error:
+                type: string
+              realmId:
+                type: string
+                description: >-
+                  The company QuickBooks names on its return, which Gateway checks with the new token. Another vendor's
+                  return adds nothing.
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                connector:
+                  type: string
+                connections:
+                  type: array
+                  items:
+                    $ref: ../components/schemas.yaml#/Connection
+      "400":
+        description: >-
+          No state (`oauth_state_missing`); a state Nexus did not issue, not yours, or already finished
+          (`oauth_state_invalid`); the person declined (`oauth_denied`); the vendor refused the code, or the account it
+          names (`credential_refused`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "403":
+        description: >-
+          The organization's needs an owner or admin (`role_required`); the connector is no longer available to you
+          (`connector_disabled`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "409":
+        description: "Your state is older than ten minutes (`oauth_state_invalid`): connect again"
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "428":
+        $ref: ../components/common.yaml#/responses/PreconditionRequired
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: connections.manage_own
+    x-idempotency: required
+/v1/connections/{connector}:
+  post:
+    tags:
+      - Connectors
+    operationId: connect
+    summary: >-
+      Connect an account with the connector's key form (GET /v1/connectors lists who may connect and the form). The
+      vendor checks the key first; nothing it refuses is kept. `scope: org` connects the organization's account (owners
+      and admins: `policy.manage`); otherwise it is yours, and the organization must have made the connector available
+      to you. Connecting an account again replaces its credential. Audited as connector_credential.added or .replaced,
+      with the last four characters only.
+    parameters:
+      - name: connector
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[a-z][a-z0-9-]*$
+        description: The connector (`jira`)
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKeyRequired
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              scope:
+                type: string
+                enum:
+                  - user
+                  - org
+                default: user
+            additionalProperties: true
+            description: "`scope`, and the connector's form fields (jira: site, email, token)"
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - connections
+              properties:
+                connections:
+                  type: array
+                  items:
+                    $ref: ../components/schemas.yaml#/Connection
+      "400":
+        description: >-
+          A field the form does not take, a host the vendor does not serve, or a key the vendor refused
+          (`credential_refused`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "403":
+        description: >-
+          The organization's needs an owner or admin (`role_required`); the connector is not available to you
+          (`connector_disabled`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "404":
+        description: No such connector
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "428":
+        $ref: ../components/common.yaml#/responses/PreconditionRequired
+      "429":
+        description: The vendor is rate limiting the check (`rate_limited`, with `retry_after`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "502":
+        description: The vendor failed the check (`upstream_error`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: connections.manage_own
+    x-idempotency: required
+/v1/connections/{connector}/oauth:
+  post:
+    tags:
+      - Connectors
+    operationId: startOAuthConnection
+    summary: >-
+      Start connecting an account with OAuth: the vendor's authorize URL, good once for ten minutes. `scope: org`
+      connects the organization's (owners and admins); otherwise it is yours, and the organization must have made the
+      connector available to you. The vendor returns the person to Nexus UI, which finishes with POST
+      /v1/connections/oauth/finish.
+    parameters:
+      - name: connector
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[a-z][a-z0-9-]*$
+        description: The connector (`notion`)
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKeyRequired
+    requestBody:
+      required: false
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              scope:
+                type: string
+                enum:
+                  - user
+                  - org
+                default: user
+              access:
+                type: string
+                enum:
+                  - read
+                  - write
+                default: read
+                description: >-
+                  Only when the server asks for write scopes on demand; otherwise refused with 400. `read` asks the
+                  vendor for the connector's reads only. `write` asks for its reads and its write scopes: send it after
+                  a write answered 403 `write_consent_required`. The new tokens replace the connection's.
+            additionalProperties: false
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - authorizeUrl
+              properties:
+                authorizeUrl:
+                  type: string
+                  format: uri
+      "403":
+        description: >-
+          The organization's needs an owner or admin (`role_required`); the connector is not available to you
+          (`connector_disabled`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "404":
+        description: No such connector
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "428":
+        $ref: ../components/common.yaml#/responses/PreconditionRequired
+      "503":
+        description: This gateway has no OAuth app for the connector (`not_configured`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: connections.manage_own
+    x-idempotency: required
+/v1/connections/{connector}/{account}:
+  delete:
+    tags:
+      - Connectors
+    operationId: disconnect
+    summary: >-
+      Disconnect your own connection to an account (or, with `scope=org`, the organization's: owners and admins). The
+      account is named by its id, name or host. Its credential is revoked once no live connection uses it; an OAuth
+      grant is then revoked at the vendor too, and `vendorRevoked` says whether the vendor confirmed it. Audited as
+      connector_credential.revoked.
+    parameters:
+      - name: connector
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[a-z][a-z0-9-]*$
+      - name: account
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[A-Za-z0-9._:@+-]{1,256}$
+        description: The account's id, name or host
+      - name: scope
+        in: query
+        required: false
+        schema:
+          type: string
+          enum:
+            - user
+            - org
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKey
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              type: object
+      "400":
+        description: >-
+          The connector takes no connection at that scope: a GitHub installation is unlinked with DELETE
+          /v1/github/installations/{id}
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "404":
+        description: No live connection to that account
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: connections.manage_own
+    x-idempotency: optional
+/v1/connectors:
+  get:
+    tags:
+      - Connectors
+    operationId: connectors
+    summary: >-
+      The connectors Gateway offers, their operations, and whether each is usable by the caller. A connector reaches an
+      outside service by name, such as `linear`, `github`, `jira`, `slack` or `notion`: issues and tickets, pull
+      requests, messages, mail, calendars, docs and files. Check it before you say a named service is unavailable.
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                connectors:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      stage:
+                        type: string
+                        enum:
+                          - preview
+                          - released
+                        description: >-
+                          How far it is along its release: production offers only released connectors, a preview Gateway
+                          both
+                      offered:
+                        type: boolean
+                        description: >-
+                          Whether this Gateway offers it. No one uses one it does not offer: a call answers 403
+                          connector_not_offered
+                      usable:
+                        type:
+                          - boolean
+                          - "null"
+                        description: >-
+                          Whether the organization made it available to the caller (GET /v1/policies/connectors); null
+                          when it could not be read; false for one this Gateway does not offer
+                      connects:
+                        type: array
+                        items:
+                          type: string
+                          enum:
+                            - user
+                            - org
+                        description: >-
+                          Whose connections it runs with: a person's own (user), the organization's (org); empty when it
+                          resolves its own credential. A call takes an optional `account` when it is not empty.
+                      form:
+                        type:
+                          - object
+                          - "null"
+                        description: >-
+                          The fields POST /v1/connections/{connector} takes, as a JSON Schema whose secret fields carry
+                          `x-nexus-secret: true`; null when it does not connect with a key
+                      oauth:
+                        type: boolean
+                        description: Whether it connects with OAuth on this gateway (POST /v1/connections/{connector}/oauth)
+                      offline_input:
+                        type: object
+                        additionalProperties:
+                          type: string
+                        description: >-
+                          Only on a gateway that reads this connector's offline test data: the form's fields that test
+                          data accepts. POST them to /v1/connections/{connector} with the `scope` that `connects`
+                          admits: `user` or `org`. A secret field holds a placeholder, never a key. Absent when the
+                          connector calls its vendor.
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: connectors.use
+/v1/connectors/{name}:
+  get:
+    tags:
+      - Connectors
+    operationId: describeConnector
+    summary: >-
+      One connector by its service's name (`linear` for Linear issues and tickets) and its operations, each with its
+      `effect` (`read` or `mutate`) and its `request` schema, and whether the caller may use it (`usable`). It answers
+      for every connector; readConnector and writeConnector run only one the organization made available to the caller.
+      404 when no connector has this name.
+    parameters:
+      - name: name
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[a-z][a-z0-9-]*$
+        description: The connector, as `GET /v1/connectors` lists it (`github`, `jira`)
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                description:
+                  type: string
+                stage:
+                  type: string
+                  enum:
+                    - preview
+                    - released
+                  description: "How far it is along its release: production offers only released connectors, a preview Gateway both"
+                offered:
+                  type: boolean
+                  description: >-
+                    Whether this Gateway offers it. No one uses one it does not offer: a call answers 403
+                    connector_not_offered
+                usable:
+                  type:
+                    - boolean
+                    - "null"
+                  description: >-
+                    Whether the organization made it available to the caller (GET /v1/policies/connectors); null when it
+                    could not be read; false for one this Gateway does not offer
+                connects:
+                  type: array
+                  items:
+                    type: string
+                    enum:
+                      - user
+                      - org
+                  description: >-
+                    Whose connections it runs with: a person's own (user), the organization's (org); empty when it
+                    resolves its own credential. A call takes an optional `account` when it is not empty.
+                form:
+                  type:
+                    - object
+                    - "null"
+                  description: >-
+                    The fields POST /v1/connections/{connector} takes, as a JSON Schema whose secret fields carry
+                    `x-nexus-secret: true`; null when it does not connect with a key
+                oauth:
+                  type: boolean
+                  description: Whether it connects with OAuth on this gateway (POST /v1/connections/{connector}/oauth)
+                operations:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      name:
+                        type: string
+                      summary:
+                        type: string
+                      effect:
+                        type: string
+                        enum:
+                          - read
+                          - mutate
+                      request:
+                        type: object
+                        description: The JSON schema of the operation's parameters.
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: connectors.use
+/v1/connectors/{name}/{operation}:
+  post:
+    tags:
+      - Connectors
+    operationId: writeConnector
+    summary: >-
+      Run one connector operation, a read or a change. A change runs only for a module holding a write grant for it (PUT
+      /v1/policies/grants/{product}/{capability}); a person's change is refused with 403 `write_not_granted` until
+      people get write scopes. A chat agent's link writes only with the approval record the person confirmed for exactly
+      this call, named in `x-nexus-approval`, while the organization has chat writes on: else 403 `write_not_granted`
+      (no record), `approval_invalid` or `chat_writes_off`. The record is used by the call, once. Every change attempt
+      and every scoped read is audited as `connector.write`. `github/pull_merge` squash-merges only at
+      `expected_head_sha` and only when branch protection allows it, never past it: 400 `merge_method_refused`, 409
+      `head_changed`, `not_mergeable` or `pull_not_open`. `github/pull_edit` and `pull_reviewers` change only an open
+      pull request (409 `pull_not_open`), and GitHub's refusal of a reviewer is 422 `reviewer_refused`.
+      `github/pull_state` closes or reopens and never merges: 409 `pull_merged`, 422 `not_reopenable`.
+      `github/pull_labels` adds only a label the repository has: 404 `label_unknown`. A runner's change inside a native
+      session names the session and its fencing token (`x-nexus-cloud-session`, `x-nexus-fencing-token`): 400
+      `invalid_session_fence` without both, 404 `session_not_found` for a session that is not yours, 409 `session_ended`
+      for an ended one, and 409 `lost_runner` when another runner took the session; nothing is called, and the refusal
+      is audited. A change that names no fence while its credential holds a native session's live runner lease is
+      refused with 409 `fence_required` (`error.nexus.session` names the session) when the server requires the fence;
+      nothing is called, and the refusal is audited. When the server asks for write scopes on demand, a change on an
+      OAuth connection that holds none of the connector's write scopes is refused with 403 `write_consent_required`;
+      nothing is called. `error.nexus` names the `connector`, the `account`, the `scopes` the change needs, and the
+      `consent` call that asks for them (POST /v1/connections/{connector}/oauth with `access: write`). A GitHub write
+      with an uncertain outcome returns 502 with `error.nexus.outcome: unknown`. For `github/issue_comment`,
+      `pull_review`, and `issue_create`, retry with the same key to replay a completed write or apply it once. A retry
+      that cannot read the target is 502 `reconciliation_failed` and writes nothing. Send an `Idempotency-Key` with
+      every change. While the Gateway enforces connector write keys (off by default), a change without one is 428
+      `idempotency_key_required`, and nothing is called. A read never needs one.
+    parameters:
+      - name: name
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[a-z][a-z0-9-]*$
+        description: The connector, as `GET /v1/connectors` lists it (`github`, `jira`)
+      - name: operation
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[a-z][a-z0-9_-]*$
+        description: The operation, as `GET /v1/connectors/{name}` lists it
+      - name: x-nexus-approval
+        in: header
+        required: false
+        schema:
+          type: string
+          pattern: ^apr_[0-9a-f]{32}$
+        description: A chat agent's confirmed approval record for this exact call (`POST /v1/approvals`)
+      - name: x-nexus-cloud-session
+        in: header
+        required: false
+        schema:
+          type: string
+          pattern: ^cs_[A-Za-z0-9_-]{1,64}$
+        description: >-
+          The native session (`/v1/sessions`) a runner's change is made inside, with `x-nexus-fencing-token`. Send both
+          or neither.
+      - name: x-nexus-fencing-token
+        in: header
+        required: false
+        schema:
+          type: string
+          pattern: ^[1-9][0-9]*$
+        description: >-
+          The fencing token the runner got when it took the session (POST /v1/sessions/{id}/runner). A change whose
+          token is not the session's current one is refused with 409 `lost_runner` before the outside system is called,
+          and audited as `connector.write` with `outcome: denied`.
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKeyRequired
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            description: The operation's parameters, as its `request` schema in `GET /v1/connectors/{name}` describes them.
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              type: object
+              description: The operation's answer.
+      "428":
+        $ref: ../components/common.yaml#/responses/PreconditionRequired
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: connectors.use
+    x-nexus-untrusted-answer: true
+    x-idempotency: required
+/v1/connectors/{name}/{operation}/read:
+  post:
+    tags:
+      - Connectors
+    operationId: readConnector
+    summary: >-
+      Run one connector operation that only reads, as the caller, with the credential the connector resolves for the
+      call. 403 `not_a_read` when the operation changes something (use writeConnector), and 403 `connector_disabled`
+      when the organization has not made the connector available to the caller. A scoped read is audited as
+      `connector.write`. A repeat is safe, so it takes no idempotency key.
+    parameters:
+      - name: name
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[a-z][a-z0-9-]*$
+        description: The connector, as `GET /v1/connectors` lists it (`github`, `jira`)
+      - name: operation
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[a-z][a-z0-9_-]*$
+        description: The operation, as `GET /v1/connectors/{name}` lists it
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKey
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            description: The operation's parameters, as its `request` schema in `GET /v1/connectors/{name}` describes them.
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              type: object
+              description: The operation's answer.
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: connectors.use
+    x-nexus-read-only: true
+    x-nexus-untrusted-answer: true
+    x-idempotency: optional
+    description: "Exempt: this POST only reads. It changes no state."

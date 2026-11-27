@@ -1,0 +1,1998 @@
+# Path items. The root openapi.yaml references each one.
+/v1/agent/approvals/rules:
+  delete:
+    tags:
+      - Your agent
+    operationId: agentRevokeRules
+    summary: >-
+      Revoke every "Always allow" rule. Gateway forwards it to the agent API with your own token, after its own
+      authentication and rate limit; only a person's credential or their agent link may call it. Off unless the Gateway
+      turns the agent proxy on.
+    responses:
+      "200":
+        description: The agent API's answer, as it sent it
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/AgentApiBody
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: >-
+          Error: Gateway's own (401, 403 `not_a_person`, 429, 502 `agents_api_unreachable`, 503 `not_configured`, 504
+          `upstream_timeout`), or the agent API's, passed through
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - $ref: ../components/schemas.yaml#/Error
+                - $ref: ../components/schemas.yaml#/AgentApiError
+    x-nexus-permission: models.use
+    x-internal-stability: beta
+    parameters:
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKey
+    x-idempotency: optional
+/v1/agent/approvals/rules/{id}:
+  delete:
+    tags:
+      - Your agent
+    operationId: agentRevokeRule
+    summary: >-
+      Revoke one "Always allow" rule. Gateway forwards it to the agent API with your own token, after its own
+      authentication and rate limit; only a person's credential or their agent link may call it. Off unless the Gateway
+      turns the agent proxy on.
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[A-Za-z0-9_:-][A-Za-z0-9._:-]{0,127}$
+        description: The agent API's id
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKey
+    responses:
+      "200":
+        description: The agent API's answer, as it sent it
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/AgentApiBody
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: >-
+          Error: Gateway's own (401, 403 `not_a_person`, 429, 502 `agents_api_unreachable`, 503 `not_configured`, 504
+          `upstream_timeout`), or the agent API's, passed through
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - $ref: ../components/schemas.yaml#/Error
+                - $ref: ../components/schemas.yaml#/AgentApiError
+    x-nexus-permission: models.use
+    x-internal-stability: beta
+    x-idempotency: optional
+/v1/agent/approvals/settings:
+  get:
+    tags:
+      - Your agent
+    operationId: agentGetApprovalSettings
+    summary: >-
+      Your spend line, your "Always allow" rules and "Sent using Nexus". Gateway forwards it to the agent API with your
+      own token, after its own authentication and rate limit; only a person's credential or their agent link may call
+      it. Off unless the Gateway turns the agent proxy on.
+    responses:
+      "200":
+        description: The agent API's answer, as it sent it
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/AgentApiBody
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: >-
+          Error: Gateway's own (401, 403 `not_a_person`, 429, 502 `agents_api_unreachable`, 503 `not_configured`, 504
+          `upstream_timeout`), or the agent API's, passed through
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - $ref: ../components/schemas.yaml#/Error
+                - $ref: ../components/schemas.yaml#/AgentApiError
+    x-nexus-permission: models.use
+    x-internal-stability: beta
+  put:
+    tags:
+      - Your agent
+    operationId: agentSetApprovalSettings
+    summary: >-
+      Set your spend line or "Sent using Nexus". Gateway forwards it to the agent API with your own token, after its own
+      authentication and rate limit; only a person's credential or their agent link may call it. Off unless the Gateway
+      turns the agent proxy on.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas.yaml#/AgentApiBody
+    responses:
+      "200":
+        description: The agent API's answer, as it sent it
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/AgentApiBody
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: >-
+          Error: Gateway's own (401, 403 `not_a_person`, 429, 502 `agents_api_unreachable`, 503 `not_configured`, 504
+          `upstream_timeout`), or the agent API's, passed through
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - $ref: ../components/schemas.yaml#/Error
+                - $ref: ../components/schemas.yaml#/AgentApiError
+    x-nexus-permission: models.use
+    x-internal-stability: beta
+    parameters:
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKey
+    x-idempotency: optional
+/v1/agent/ask:
+  post:
+    tags:
+      - Your agent
+    operationId: agentAsk
+    summary: >-
+      Ask your agent, the one `@nexus` is in Slack. `stream: true`, or `Accept: text/event-stream`, streams the answer
+      as server-sent events: `started`, `model`, `text` (each `delta`), `step`, then `done` or `error`. Gateway forwards
+      it to the agent API with your own token, after its own authentication and rate limit; only a person's credential
+      or their agent link may call it. Off unless the Gateway turns the agent proxy on.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas.yaml#/AgentAskRequest
+    responses:
+      "200":
+        description: "The answer: whole as JSON, or streamed as server-sent events"
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/AgentApiBody
+          text/event-stream:
+            schema:
+              type: string
+              description: Events `started`, `model`, `text`, `step`, then `done` or `error`, each with a JSON `data` line
+      "428":
+        $ref: ../components/common.yaml#/responses/PreconditionRequired
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: >-
+          Error: Gateway's own (401, 403 `not_a_person`, 429, 502 `agents_api_unreachable`, 503 `not_configured`, 504
+          `upstream_timeout`), or the agent API's, passed through
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - $ref: ../components/schemas.yaml#/Error
+                - $ref: ../components/schemas.yaml#/AgentApiError
+    x-nexus-permission: models.use
+    x-internal-stability: beta
+    parameters:
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKeyRequired
+    x-idempotency: required
+/v1/agent/brief/today:
+  get:
+    tags:
+      - Your agent
+    operationId: agentGetBrief
+    summary: >-
+      Today's morning brief, the one Slack's DM got. Gateway forwards it to the agent API with your own token, after its
+      own authentication and rate limit; only a person's credential or their agent link may call it. Off unless the
+      Gateway turns the agent proxy on.
+    responses:
+      "200":
+        description: The agent API's answer, as it sent it
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/AgentApiBody
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: >-
+          Error: Gateway's own (401, 403 `not_a_person`, 429, 502 `agents_api_unreachable`, 503 `not_configured`, 504
+          `upstream_timeout`), or the agent API's, passed through
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - $ref: ../components/schemas.yaml#/Error
+                - $ref: ../components/schemas.yaml#/AgentApiError
+    x-nexus-permission: models.use
+    x-internal-stability: beta
+/v1/agent/context:
+  get:
+    tags:
+      - Your agent
+    operationId: agentGetContext
+    summary: >-
+      What an ask may name as context (the composer's `@` menu). Gateway forwards it to the agent API with your own
+      token, after its own authentication and rate limit; only a person's credential or their agent link may call it.
+      Off unless the Gateway turns the agent proxy on.
+    responses:
+      "200":
+        description: The agent API's answer, as it sent it
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/AgentApiBody
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: >-
+          Error: Gateway's own (401, 403 `not_a_person`, 429, 502 `agents_api_unreachable`, 503 `not_configured`, 504
+          `upstream_timeout`), or the agent API's, passed through
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - $ref: ../components/schemas.yaml#/Error
+                - $ref: ../components/schemas.yaml#/AgentApiError
+    x-nexus-permission: models.use
+    x-internal-stability: beta
+/v1/agent/conversations:
+  get:
+    tags:
+      - Your agent
+    operationId: agentListConversations
+    summary: >-
+      Your conversations from every surface, newest activity first. Page with `limit` and `before`. Gateway forwards it
+      to the agent API with your own token, after its own authentication and rate limit; only a person's credential or
+      their agent link may call it. Off unless the Gateway turns the agent proxy on.
+    parameters:
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 50
+        description: At most this many (50)
+      - name: before
+        in: query
+        required: false
+        schema:
+          type: string
+        description: The cursor of the page before
+    responses:
+      "200":
+        description: The agent API's answer, as it sent it
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/AgentApiBody
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: >-
+          Error: Gateway's own (401, 403 `not_a_person`, 429, 502 `agents_api_unreachable`, 503 `not_configured`, 504
+          `upstream_timeout`), or the agent API's, passed through
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - $ref: ../components/schemas.yaml#/Error
+                - $ref: ../components/schemas.yaml#/AgentApiError
+    x-nexus-permission: models.use
+    x-internal-stability: beta
+/v1/agent/conversations/{id}:
+  get:
+    tags:
+      - Your agent
+    operationId: agentGetConversation
+    summary: >-
+      Your turns in one conversation, or 404. Gateway forwards it to the agent API with your own token, after its own
+      authentication and rate limit; only a person's credential or their agent link may call it. Off unless the Gateway
+      turns the agent proxy on.
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[A-Za-z0-9_:-][A-Za-z0-9._:-]{0,127}$
+        description: The agent API's id
+    responses:
+      "200":
+        description: The agent API's answer, as it sent it
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/AgentApiBody
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: >-
+          Error: Gateway's own (401, 403 `not_a_person`, 429, 502 `agents_api_unreachable`, 503 `not_configured`, 504
+          `upstream_timeout`), or the agent API's, passed through
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - $ref: ../components/schemas.yaml#/Error
+                - $ref: ../components/schemas.yaml#/AgentApiError
+    x-nexus-permission: models.use
+    x-internal-stability: beta
+/v1/agent/errands:
+  get:
+    tags:
+      - Your agent
+    operationId: agentListErrands
+    summary: >-
+      Your errands. Gateway forwards it to the agent API with your own token, after its own authentication and rate
+      limit; only a person's credential or their agent link may call it. Off unless the Gateway turns the agent proxy
+      on.
+    responses:
+      "200":
+        description: The agent API's answer, as it sent it
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/AgentApiBody
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: >-
+          Error: Gateway's own (401, 403 `not_a_person`, 429, 502 `agents_api_unreachable`, 503 `not_configured`, 504
+          `upstream_timeout`), or the agent API's, passed through
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - $ref: ../components/schemas.yaml#/Error
+                - $ref: ../components/schemas.yaml#/AgentApiError
+    x-nexus-permission: models.use
+    x-internal-stability: beta
+  post:
+    tags:
+      - Your agent
+    operationId: agentStartErrand
+    summary: >-
+      Start an errand (`{goal}`). Gateway forwards it to the agent API with your own token, after its own authentication
+      and rate limit; only a person's credential or their agent link may call it. Off unless the Gateway turns the agent
+      proxy on.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas.yaml#/AgentApiBody
+    responses:
+      "200":
+        description: The agent API's answer, as it sent it
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/AgentApiBody
+      "428":
+        $ref: ../components/common.yaml#/responses/PreconditionRequired
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: >-
+          Error: Gateway's own (401, 403 `not_a_person`, 429, 502 `agents_api_unreachable`, 503 `not_configured`, 504
+          `upstream_timeout`), or the agent API's, passed through
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - $ref: ../components/schemas.yaml#/Error
+                - $ref: ../components/schemas.yaml#/AgentApiError
+    x-nexus-permission: models.use
+    x-internal-stability: beta
+    parameters:
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKeyRequired
+    x-idempotency: required
+/v1/agent/errands/{id}:
+  get:
+    tags:
+      - Your agent
+    operationId: agentGetErrand
+    summary: >-
+      One errand. Gateway forwards it to the agent API with your own token, after its own authentication and rate limit;
+      only a person's credential or their agent link may call it. Off unless the Gateway turns the agent proxy on.
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[A-Za-z0-9_:-][A-Za-z0-9._:-]{0,127}$
+        description: The agent API's id
+    responses:
+      "200":
+        description: The agent API's answer, as it sent it
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/AgentApiBody
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: >-
+          Error: Gateway's own (401, 403 `not_a_person`, 429, 502 `agents_api_unreachable`, 503 `not_configured`, 504
+          `upstream_timeout`), or the agent API's, passed through
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - $ref: ../components/schemas.yaml#/Error
+                - $ref: ../components/schemas.yaml#/AgentApiError
+    x-nexus-permission: models.use
+    x-internal-stability: beta
+  post:
+    tags:
+      - Your agent
+    operationId: agentActOnErrand
+    summary: >-
+      Confirm, close or cancel an errand (`{action}`: `confirm`, `done` or `cancel`). Gateway forwards it to the agent
+      API with your own token, after its own authentication and rate limit; only a person's credential or their agent
+      link may call it. Off unless the Gateway turns the agent proxy on.
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[A-Za-z0-9_:-][A-Za-z0-9._:-]{0,127}$
+        description: The agent API's id
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKeyRequired
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas.yaml#/AgentApiBody
+    responses:
+      "200":
+        description: The agent API's answer, as it sent it
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/AgentApiBody
+      "428":
+        $ref: ../components/common.yaml#/responses/PreconditionRequired
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: >-
+          Error: Gateway's own (401, 403 `not_a_person`, 429, 502 `agents_api_unreachable`, 503 `not_configured`, 504
+          `upstream_timeout`), or the agent API's, passed through
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - $ref: ../components/schemas.yaml#/Error
+                - $ref: ../components/schemas.yaml#/AgentApiError
+    x-nexus-permission: models.use
+    x-internal-stability: beta
+    x-idempotency: required
+  patch:
+    tags:
+      - Your agent
+    operationId: agentEditErrand
+    summary: >-
+      Rename, pin, archive or close an errand. Gateway forwards it to the agent API with your own token, after its own
+      authentication and rate limit; only a person's credential or their agent link may call it. Off unless the Gateway
+      turns the agent proxy on.
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[A-Za-z0-9_:-][A-Za-z0-9._:-]{0,127}$
+        description: The agent API's id
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKey
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas.yaml#/AgentApiBody
+    responses:
+      "200":
+        description: The agent API's answer, as it sent it
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/AgentApiBody
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: >-
+          Error: Gateway's own (401, 403 `not_a_person`, 429, 502 `agents_api_unreachable`, 503 `not_configured`, 504
+          `upstream_timeout`), or the agent API's, passed through
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - $ref: ../components/schemas.yaml#/Error
+                - $ref: ../components/schemas.yaml#/AgentApiError
+    x-nexus-permission: models.use
+    x-internal-stability: beta
+    x-idempotency: optional
+/v1/agent/errands/{id}/handoff:
+  get:
+    tags:
+      - Your agent
+    operationId: agentGetErrandHandoff
+    summary: >-
+      The errand as a coding session's prompt. Gateway forwards it to the agent API with your own token, after its own
+      authentication and rate limit; only a person's credential or their agent link may call it. Off unless the Gateway
+      turns the agent proxy on.
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[A-Za-z0-9_:-][A-Za-z0-9._:-]{0,127}$
+        description: The agent API's id
+    responses:
+      "200":
+        description: The agent API's answer, as it sent it
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/AgentApiBody
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: >-
+          Error: Gateway's own (401, 403 `not_a_person`, 429, 502 `agents_api_unreachable`, 503 `not_configured`, 504
+          `upstream_timeout`), or the agent API's, passed through
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - $ref: ../components/schemas.yaml#/Error
+                - $ref: ../components/schemas.yaml#/AgentApiError
+    x-nexus-permission: models.use
+    x-internal-stability: beta
+  post:
+    tags:
+      - Your agent
+    operationId: agentRecordErrandHandoff
+    summary: >-
+      Record the step "Handed off to a session". Gateway forwards it to the agent API with your own token, after its own
+      authentication and rate limit; only a person's credential or their agent link may call it. Off unless the Gateway
+      turns the agent proxy on.
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[A-Za-z0-9_:-][A-Za-z0-9._:-]{0,127}$
+        description: The agent API's id
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKeyRequired
+    requestBody:
+      required: false
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas.yaml#/AgentApiBody
+    responses:
+      "200":
+        description: The agent API's answer, as it sent it
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/AgentApiBody
+      "428":
+        $ref: ../components/common.yaml#/responses/PreconditionRequired
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: >-
+          Error: Gateway's own (401, 403 `not_a_person`, 429, 502 `agents_api_unreachable`, 503 `not_configured`, 504
+          `upstream_timeout`), or the agent API's, passed through
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - $ref: ../components/schemas.yaml#/Error
+                - $ref: ../components/schemas.yaml#/AgentApiError
+    x-nexus-permission: models.use
+    x-internal-stability: beta
+    x-idempotency: required
+/v1/agent/errands/{id}/messages:
+  post:
+    tags:
+      - Your agent
+    operationId: agentReplyToErrand
+    summary: >-
+      Reply about an errand (`{message}`), in its own thread. Answers in one piece. Gateway forwards it to the agent API
+      with your own token, after its own authentication and rate limit; only a person's credential or their agent link
+      may call it. Off unless the Gateway turns the agent proxy on.
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[A-Za-z0-9_:-][A-Za-z0-9._:-]{0,127}$
+        description: The agent API's id
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKeyRequired
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas.yaml#/AgentApiBody
+    responses:
+      "200":
+        description: The agent API's answer, as it sent it
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/AgentApiBody
+      "428":
+        $ref: ../components/common.yaml#/responses/PreconditionRequired
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: >-
+          Error: Gateway's own (401, 403 `not_a_person`, 429, 502 `agents_api_unreachable`, 503 `not_configured`, 504
+          `upstream_timeout`), or the agent API's, passed through
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - $ref: ../components/schemas.yaml#/Error
+                - $ref: ../components/schemas.yaml#/AgentApiError
+    x-nexus-permission: models.use
+    x-internal-stability: beta
+    x-idempotency: required
+/v1/agent/intro:
+  get:
+    tags:
+      - Your agent
+    operationId: agentGetIntro
+    summary: >-
+      What your agent shows the first time you open it, once. Gateway forwards it to the agent API with your own token,
+      after its own authentication and rate limit; only a person's credential or their agent link may call it. Off
+      unless the Gateway turns the agent proxy on.
+    responses:
+      "200":
+        description: The agent API's answer, as it sent it
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/AgentApiBody
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: >-
+          Error: Gateway's own (401, 403 `not_a_person`, 429, 502 `agents_api_unreachable`, 503 `not_configured`, 504
+          `upstream_timeout`), or the agent API's, passed through
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - $ref: ../components/schemas.yaml#/Error
+                - $ref: ../components/schemas.yaml#/AgentApiError
+    x-nexus-permission: models.use
+    x-internal-stability: beta
+/v1/agent/intro/seen:
+  post:
+    tags:
+      - Your agent
+    operationId: agentMarkIntroSeen
+    summary: >-
+      Keep that you saw the first open, on every app. Gateway forwards it to the agent API with your own token, after
+      its own authentication and rate limit; only a person's credential or their agent link may call it. Off unless the
+      Gateway turns the agent proxy on.
+    responses:
+      "200":
+        description: The agent API's answer, as it sent it
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/AgentApiBody
+      "428":
+        $ref: ../components/common.yaml#/responses/PreconditionRequired
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: >-
+          Error: Gateway's own (401, 403 `not_a_person`, 429, 502 `agents_api_unreachable`, 503 `not_configured`, 504
+          `upstream_timeout`), or the agent API's, passed through
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - $ref: ../components/schemas.yaml#/Error
+                - $ref: ../components/schemas.yaml#/AgentApiError
+    x-nexus-permission: models.use
+    x-internal-stability: beta
+    parameters:
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKeyRequired
+    x-idempotency: required
+/v1/agent/memory:
+  get:
+    tags:
+      - Your agent
+    operationId: agentGetMemory
+    summary: >-
+      What your agent keeps about you: its notes, and whether it learns. Gateway forwards it to the agent API with your
+      own token, after its own authentication and rate limit; only a person's credential or their agent link may call
+      it. Off unless the Gateway turns the agent proxy on.
+    responses:
+      "200":
+        description: The agent API's answer, as it sent it
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/AgentApiBody
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: >-
+          Error: Gateway's own (401, 403 `not_a_person`, 429, 502 `agents_api_unreachable`, 503 `not_configured`, 504
+          `upstream_timeout`), or the agent API's, passed through
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - $ref: ../components/schemas.yaml#/Error
+                - $ref: ../components/schemas.yaml#/AgentApiError
+    x-nexus-permission: models.use
+    x-internal-stability: beta
+  delete:
+    tags:
+      - Your agent
+    operationId: agentForgetMemory
+    summary: >-
+      Forget every note your agent keeps about you. Gateway forwards it to the agent API with your own token, after its
+      own authentication and rate limit; only a person's credential or their agent link may call it. Off unless the
+      Gateway turns the agent proxy on.
+    responses:
+      "200":
+        description: The agent API's answer, as it sent it
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/AgentApiBody
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: >-
+          Error: Gateway's own (401, 403 `not_a_person`, 429, 502 `agents_api_unreachable`, 503 `not_configured`, 504
+          `upstream_timeout`), or the agent API's, passed through
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - $ref: ../components/schemas.yaml#/Error
+                - $ref: ../components/schemas.yaml#/AgentApiError
+    x-nexus-permission: models.use
+    x-internal-stability: beta
+    parameters:
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKey
+    x-idempotency: optional
+/v1/agent/memory/learning:
+  put:
+    tags:
+      - Your agent
+    operationId: agentSetLearning
+    summary: >-
+      Pause or resume learning (`{paused}`). Gateway forwards it to the agent API with your own token, after its own
+      authentication and rate limit; only a person's credential or their agent link may call it. Off unless the Gateway
+      turns the agent proxy on.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas.yaml#/AgentApiBody
+    responses:
+      "200":
+        description: The agent API's answer, as it sent it
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/AgentApiBody
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: >-
+          Error: Gateway's own (401, 403 `not_a_person`, 429, 502 `agents_api_unreachable`, 503 `not_configured`, 504
+          `upstream_timeout`), or the agent API's, passed through
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - $ref: ../components/schemas.yaml#/Error
+                - $ref: ../components/schemas.yaml#/AgentApiError
+    x-nexus-permission: models.use
+    x-internal-stability: beta
+    parameters:
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKey
+    x-idempotency: optional
+/v1/agent/memory/notes:
+  post:
+    tags:
+      - Your agent
+    operationId: agentAddNote
+    summary: >-
+      Add a note (`{text}`) to your agent's memory. Gateway forwards it to the agent API with your own token, after its
+      own authentication and rate limit; only a person's credential or their agent link may call it. Off unless the
+      Gateway turns the agent proxy on.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas.yaml#/AgentApiBody
+    responses:
+      "200":
+        description: The agent API's answer, as it sent it
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/AgentApiBody
+      "428":
+        $ref: ../components/common.yaml#/responses/PreconditionRequired
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: >-
+          Error: Gateway's own (401, 403 `not_a_person`, 429, 502 `agents_api_unreachable`, 503 `not_configured`, 504
+          `upstream_timeout`), or the agent API's, passed through
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - $ref: ../components/schemas.yaml#/Error
+                - $ref: ../components/schemas.yaml#/AgentApiError
+    x-nexus-permission: models.use
+    x-internal-stability: beta
+    parameters:
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKeyRequired
+    x-idempotency: required
+/v1/agent/memory/notes/{id}:
+  patch:
+    tags:
+      - Your agent
+    operationId: agentEditNote
+    summary: >-
+      Edit one note (`{text}`). Gateway forwards it to the agent API with your own token, after its own authentication
+      and rate limit; only a person's credential or their agent link may call it. Off unless the Gateway turns the agent
+      proxy on.
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[A-Za-z0-9_:-][A-Za-z0-9._:-]{0,127}$
+        description: The agent API's id
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKey
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas.yaml#/AgentApiBody
+    responses:
+      "200":
+        description: The agent API's answer, as it sent it
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/AgentApiBody
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: >-
+          Error: Gateway's own (401, 403 `not_a_person`, 429, 502 `agents_api_unreachable`, 503 `not_configured`, 504
+          `upstream_timeout`), or the agent API's, passed through
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - $ref: ../components/schemas.yaml#/Error
+                - $ref: ../components/schemas.yaml#/AgentApiError
+    x-nexus-permission: models.use
+    x-internal-stability: beta
+    x-idempotency: optional
+  delete:
+    tags:
+      - Your agent
+    operationId: agentForgetNote
+    summary: >-
+      Forget one note. Gateway forwards it to the agent API with your own token, after its own authentication and rate
+      limit; only a person's credential or their agent link may call it. Off unless the Gateway turns the agent proxy
+      on.
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[A-Za-z0-9_:-][A-Za-z0-9._:-]{0,127}$
+        description: The agent API's id
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKey
+    responses:
+      "200":
+        description: The agent API's answer, as it sent it
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/AgentApiBody
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: >-
+          Error: Gateway's own (401, 403 `not_a_person`, 429, 502 `agents_api_unreachable`, 503 `not_configured`, 504
+          `upstream_timeout`), or the agent API's, passed through
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - $ref: ../components/schemas.yaml#/Error
+                - $ref: ../components/schemas.yaml#/AgentApiError
+    x-nexus-permission: models.use
+    x-internal-stability: beta
+    x-idempotency: optional
+/v1/agent/model:
+  get:
+    tags:
+      - Your agent
+    operationId: agentGetModel
+    summary: >-
+      The model your agent answers with (the composer's Auto chip). Gateway forwards it to the agent API with your own
+      token, after its own authentication and rate limit; only a person's credential or their agent link may call it.
+      Off unless the Gateway turns the agent proxy on.
+    responses:
+      "200":
+        description: The agent API's answer, as it sent it
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/AgentApiBody
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: >-
+          Error: Gateway's own (401, 403 `not_a_person`, 429, 502 `agents_api_unreachable`, 503 `not_configured`, 504
+          `upstream_timeout`), or the agent API's, passed through
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - $ref: ../components/schemas.yaml#/Error
+                - $ref: ../components/schemas.yaml#/AgentApiError
+    x-nexus-permission: models.use
+    x-internal-stability: beta
+  put:
+    tags:
+      - Your agent
+    operationId: agentSetModel
+    summary: >-
+      Set the model your agent answers with (`{model}`). Gateway forwards it to the agent API with your own token, after
+      its own authentication and rate limit; only a person's credential or their agent link may call it. Off unless the
+      Gateway turns the agent proxy on.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas.yaml#/AgentApiBody
+    responses:
+      "200":
+        description: The agent API's answer, as it sent it
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/AgentApiBody
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: >-
+          Error: Gateway's own (401, 403 `not_a_person`, 429, 502 `agents_api_unreachable`, 503 `not_configured`, 504
+          `upstream_timeout`), or the agent API's, passed through
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - $ref: ../components/schemas.yaml#/Error
+                - $ref: ../components/schemas.yaml#/AgentApiError
+    x-nexus-permission: models.use
+    x-internal-stability: beta
+    parameters:
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKey
+    x-idempotency: optional
+/v1/agent/pause:
+  get:
+    tags:
+      - Your agent
+    operationId: agentGetPause
+    summary: >-
+      Whether your agent is paused. Gateway forwards it to the agent API with your own token, after its own
+      authentication and rate limit; only a person's credential or their agent link may call it. Off unless the Gateway
+      turns the agent proxy on.
+    responses:
+      "200":
+        description: The agent API's answer, as it sent it
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/AgentApiBody
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: >-
+          Error: Gateway's own (401, 403 `not_a_person`, 429, 502 `agents_api_unreachable`, 503 `not_configured`, 504
+          `upstream_timeout`), or the agent API's, passed through
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - $ref: ../components/schemas.yaml#/Error
+                - $ref: ../components/schemas.yaml#/AgentApiError
+    x-nexus-permission: models.use
+    x-internal-stability: beta
+  put:
+    tags:
+      - Your agent
+    operationId: agentSetPause
+    summary: >-
+      Pause or resume your agent (`{paused}`). Gateway forwards it to the agent API with your own token, after its own
+      authentication and rate limit; only a person's credential or their agent link may call it. Off unless the Gateway
+      turns the agent proxy on.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas.yaml#/AgentApiBody
+    responses:
+      "200":
+        description: The agent API's answer, as it sent it
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/AgentApiBody
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: >-
+          Error: Gateway's own (401, 403 `not_a_person`, 429, 502 `agents_api_unreachable`, 503 `not_configured`, 504
+          `upstream_timeout`), or the agent API's, passed through
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - $ref: ../components/schemas.yaml#/Error
+                - $ref: ../components/schemas.yaml#/AgentApiError
+    x-nexus-permission: models.use
+    x-internal-stability: beta
+    parameters:
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKey
+    x-idempotency: optional
+/v1/agent/privacy:
+  get:
+    tags:
+      - Your agent
+    operationId: agentGetPrivacy
+    summary: >-
+      What your agent can reach: its links and connected accounts. Gateway forwards it to the agent API with your own
+      token, after its own authentication and rate limit; only a person's credential or their agent link may call it.
+      Off unless the Gateway turns the agent proxy on.
+    responses:
+      "200":
+        description: The agent API's answer, as it sent it
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/AgentApiBody
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: >-
+          Error: Gateway's own (401, 403 `not_a_person`, 429, 502 `agents_api_unreachable`, 503 `not_configured`, 504
+          `upstream_timeout`), or the agent API's, passed through
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - $ref: ../components/schemas.yaml#/Error
+                - $ref: ../components/schemas.yaml#/AgentApiError
+    x-nexus-permission: models.use
+    x-internal-stability: beta
+/v1/agent/proactivity:
+  get:
+    tags:
+      - Your agent
+    operationId: agentGetProactivity
+    summary: >-
+      Your proactivity dial, the kinds you turned off and your quiet hours. Gateway forwards it to the agent API with
+      your own token, after its own authentication and rate limit; only a person's credential or their agent link may
+      call it. Off unless the Gateway turns the agent proxy on.
+    responses:
+      "200":
+        description: The agent API's answer, as it sent it
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/AgentApiBody
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: >-
+          Error: Gateway's own (401, 403 `not_a_person`, 429, 502 `agents_api_unreachable`, 503 `not_configured`, 504
+          `upstream_timeout`), or the agent API's, passed through
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - $ref: ../components/schemas.yaml#/Error
+                - $ref: ../components/schemas.yaml#/AgentApiError
+    x-nexus-permission: models.use
+    x-internal-stability: beta
+  put:
+    tags:
+      - Your agent
+    operationId: agentSetProactivity
+    summary: >-
+      Set your proactivity dial, kinds or quiet hours. Gateway forwards it to the agent API with your own token, after
+      its own authentication and rate limit; only a person's credential or their agent link may call it. Off unless the
+      Gateway turns the agent proxy on.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas.yaml#/AgentApiBody
+    responses:
+      "200":
+        description: The agent API's answer, as it sent it
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/AgentApiBody
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: >-
+          Error: Gateway's own (401, 403 `not_a_person`, 429, 502 `agents_api_unreachable`, 503 `not_configured`, 504
+          `upstream_timeout`), or the agent API's, passed through
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - $ref: ../components/schemas.yaml#/Error
+                - $ref: ../components/schemas.yaml#/AgentApiError
+    x-nexus-permission: models.use
+    x-internal-stability: beta
+    parameters:
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKey
+    x-idempotency: optional
+/v1/agent/projects:
+  get:
+    tags:
+      - Your agent
+    operationId: agentListProjects
+    summary: >-
+      Your projects. Gateway forwards it to the agent API with your own token, after its own authentication and rate
+      limit; only a person's credential or their agent link may call it. Off unless the Gateway turns the agent proxy
+      on.
+    responses:
+      "200":
+        description: The agent API's answer, as it sent it
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/AgentApiBody
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: >-
+          Error: Gateway's own (401, 403 `not_a_person`, 429, 502 `agents_api_unreachable`, 503 `not_configured`, 504
+          `upstream_timeout`), or the agent API's, passed through
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - $ref: ../components/schemas.yaml#/Error
+                - $ref: ../components/schemas.yaml#/AgentApiError
+    x-nexus-permission: models.use
+    x-internal-stability: beta
+/v1/agent/projects/link:
+  post:
+    tags:
+      - Your agent
+    operationId: agentLinkProject
+    summary: >-
+      Bind a name-only project to a Gateway project (`{name, projectId}`). Gateway forwards it to the agent API with
+      your own token, after its own authentication and rate limit; only a person's credential or their agent link may
+      call it. Off unless the Gateway turns the agent proxy on.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas.yaml#/AgentApiBody
+    responses:
+      "200":
+        description: The agent API's answer, as it sent it
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/AgentApiBody
+      "428":
+        $ref: ../components/common.yaml#/responses/PreconditionRequired
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: >-
+          Error: Gateway's own (401, 403 `not_a_person`, 429, 502 `agents_api_unreachable`, 503 `not_configured`, 504
+          `upstream_timeout`), or the agent API's, passed through
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - $ref: ../components/schemas.yaml#/Error
+                - $ref: ../components/schemas.yaml#/AgentApiError
+    x-nexus-permission: models.use
+    x-internal-stability: beta
+    parameters:
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKeyRequired
+    x-idempotency: required
+/v1/agent/projects/view:
+  get:
+    tags:
+      - Your agent
+    operationId: agentViewProject
+    summary: >-
+      One project's page, by `id` or `name`. Gateway forwards it to the agent API with your own token, after its own
+      authentication and rate limit; only a person's credential or their agent link may call it. Off unless the Gateway
+      turns the agent proxy on.
+    parameters:
+      - name: id
+        in: query
+        required: false
+        schema:
+          type: string
+        description: The project's id
+      - name: name
+        in: query
+        required: false
+        schema:
+          type: string
+        description: A name-only project's name
+    responses:
+      "200":
+        description: The agent API's answer, as it sent it
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/AgentApiBody
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: >-
+          Error: Gateway's own (401, 403 `not_a_person`, 429, 502 `agents_api_unreachable`, 503 `not_configured`, 504
+          `upstream_timeout`), or the agent API's, passed through
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - $ref: ../components/schemas.yaml#/Error
+                - $ref: ../components/schemas.yaml#/AgentApiError
+    x-nexus-permission: models.use
+    x-internal-stability: beta
+/v1/agent/revoke:
+  post:
+    tags:
+      - Your agent
+    operationId: agentRevokeAll
+    summary: >-
+      Revoke what your agent can reach. Gateway forwards it to the agent API with your own token, after its own
+      authentication and rate limit; only a person's credential or their agent link may call it. Off unless the Gateway
+      turns the agent proxy on.
+    requestBody:
+      required: false
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas.yaml#/AgentApiBody
+    responses:
+      "200":
+        description: The agent API's answer, as it sent it
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/AgentApiBody
+      "428":
+        $ref: ../components/common.yaml#/responses/PreconditionRequired
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: >-
+          Error: Gateway's own (401, 403 `not_a_person`, 429, 502 `agents_api_unreachable`, 503 `not_configured`, 504
+          `upstream_timeout`), or the agent API's, passed through
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - $ref: ../components/schemas.yaml#/Error
+                - $ref: ../components/schemas.yaml#/AgentApiError
+    x-nexus-permission: models.use
+    x-internal-stability: beta
+    parameters:
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKeyRequired
+    x-idempotency: required
+/v1/agent/vault:
+  get:
+    tags:
+      - Your agent
+    operationId: agentGetVault
+    summary: >-
+      Your passwords and payments: never a password or a card number. Gateway forwards it to the agent API with your own
+      token, after its own authentication and rate limit; only a person's credential or their agent link may call it.
+      Off unless the Gateway turns the agent proxy on.
+    responses:
+      "200":
+        description: The agent API's answer, as it sent it
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/AgentApiBody
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: >-
+          Error: Gateway's own (401, 403 `not_a_person`, 429, 502 `agents_api_unreachable`, 503 `not_configured`, 504
+          `upstream_timeout`), or the agent API's, passed through
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - $ref: ../components/schemas.yaml#/Error
+                - $ref: ../components/schemas.yaml#/AgentApiError
+    x-nexus-permission: models.use
+    x-internal-stability: beta
+/v1/agent/vault/activity:
+  get:
+    tags:
+      - Your agent
+    operationId: agentGetVaultActivity
+    summary: >-
+      Your vault's activity. Gateway forwards it to the agent API with your own token, after its own authentication and
+      rate limit; only a person's credential or their agent link may call it. Off unless the Gateway turns the agent
+      proxy on.
+    responses:
+      "200":
+        description: The agent API's answer, as it sent it
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/AgentApiBody
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: >-
+          Error: Gateway's own (401, 403 `not_a_person`, 429, 502 `agents_api_unreachable`, 503 `not_configured`, 504
+          `upstream_timeout`), or the agent API's, passed through
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - $ref: ../components/schemas.yaml#/Error
+                - $ref: ../components/schemas.yaml#/AgentApiError
+    x-nexus-permission: models.use
+    x-internal-stability: beta
+/v1/agent/vault/asks:
+  post:
+    tags:
+      - Your agent
+    operationId: agentAskVault
+    summary: >-
+      Ask to use a login; you approve it on your desktop. An agent link may call it. Gateway forwards it to the agent
+      API with your own token, after its own authentication and rate limit; only a person's credential or their agent
+      link may call it. Off unless the Gateway turns the agent proxy on.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas.yaml#/AgentApiBody
+    responses:
+      "200":
+        description: The agent API's answer, as it sent it
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/AgentApiBody
+      "428":
+        $ref: ../components/common.yaml#/responses/PreconditionRequired
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: >-
+          Error: Gateway's own (401, 403 `not_a_person`, 429, 502 `agents_api_unreachable`, 503 `not_configured`, 504
+          `upstream_timeout`), or the agent API's, passed through
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - $ref: ../components/schemas.yaml#/Error
+                - $ref: ../components/schemas.yaml#/AgentApiError
+    x-nexus-permission: models.use
+    x-internal-stability: beta
+    parameters:
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKeyRequired
+    x-idempotency: required
+/v1/agent/vault/asks/{id}/approve:
+  post:
+    tags:
+      - Your agent
+    operationId: agentApproveVaultAsk
+    summary: >-
+      Approve an ask to use a login. Gateway forwards it to the agent API with your own token, after its own
+      authentication and rate limit; only a person's credential or their agent link may call it. Off unless the Gateway
+      turns the agent proxy on.
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[A-Za-z0-9_:-][A-Za-z0-9._:-]{0,127}$
+        description: The agent API's id
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKeyRequired
+    requestBody:
+      required: false
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas.yaml#/AgentApiBody
+    responses:
+      "200":
+        description: The agent API's answer, as it sent it
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/AgentApiBody
+      "428":
+        $ref: ../components/common.yaml#/responses/PreconditionRequired
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: >-
+          Error: Gateway's own (401, 403 `not_a_person`, 429, 502 `agents_api_unreachable`, 503 `not_configured`, 504
+          `upstream_timeout`), or the agent API's, passed through
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - $ref: ../components/schemas.yaml#/Error
+                - $ref: ../components/schemas.yaml#/AgentApiError
+    x-nexus-permission: models.use
+    x-internal-stability: beta
+    x-idempotency: required
+/v1/agent/vault/asks/{id}/decline:
+  post:
+    tags:
+      - Your agent
+    operationId: agentDeclineVaultAsk
+    summary: >-
+      Decline an ask to use a login. Gateway forwards it to the agent API with your own token, after its own
+      authentication and rate limit; only a person's credential or their agent link may call it. Off unless the Gateway
+      turns the agent proxy on.
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[A-Za-z0-9_:-][A-Za-z0-9._:-]{0,127}$
+        description: The agent API's id
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKeyRequired
+    requestBody:
+      required: false
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas.yaml#/AgentApiBody
+    responses:
+      "200":
+        description: The agent API's answer, as it sent it
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/AgentApiBody
+      "428":
+        $ref: ../components/common.yaml#/responses/PreconditionRequired
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: >-
+          Error: Gateway's own (401, 403 `not_a_person`, 429, 502 `agents_api_unreachable`, 503 `not_configured`, 504
+          `upstream_timeout`), or the agent API's, passed through
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - $ref: ../components/schemas.yaml#/Error
+                - $ref: ../components/schemas.yaml#/AgentApiError
+    x-nexus-permission: models.use
+    x-internal-stability: beta
+    x-idempotency: required
+/v1/agent/vault/card:
+  put:
+    tags:
+      - Your agent
+    operationId: agentSetVaultCard
+    summary: >-
+      Freeze or unfreeze your card (`{frozen}`). Gateway forwards it to the agent API with your own token, after its own
+      authentication and rate limit; only a person's credential or their agent link may call it. Off unless the Gateway
+      turns the agent proxy on.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas.yaml#/AgentApiBody
+    responses:
+      "200":
+        description: The agent API's answer, as it sent it
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/AgentApiBody
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: >-
+          Error: Gateway's own (401, 403 `not_a_person`, 429, 502 `agents_api_unreachable`, 503 `not_configured`, 504
+          `upstream_timeout`), or the agent API's, passed through
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - $ref: ../components/schemas.yaml#/Error
+                - $ref: ../components/schemas.yaml#/AgentApiError
+    x-nexus-permission: models.use
+    x-internal-stability: beta
+    parameters:
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKey
+    x-idempotency: optional
+/v1/agent/vault/index:
+  put:
+    tags:
+      - Your agent
+    operationId: agentSetVaultIndex
+    summary: >-
+      Your desktop's vault index: names and hosts, never a secret. Gateway forwards it to the agent API with your own
+      token, after its own authentication and rate limit; only a person's credential or their agent link may call it.
+      Off unless the Gateway turns the agent proxy on.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas.yaml#/AgentApiBody
+    responses:
+      "200":
+        description: The agent API's answer, as it sent it
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/AgentApiBody
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: >-
+          Error: Gateway's own (401, 403 `not_a_person`, 429, 502 `agents_api_unreachable`, 503 `not_configured`, 504
+          `upstream_timeout`), or the agent API's, passed through
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - $ref: ../components/schemas.yaml#/Error
+                - $ref: ../components/schemas.yaml#/AgentApiError
+    x-nexus-permission: models.use
+    x-internal-stability: beta
+    parameters:
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKey
+    x-idempotency: optional
+/v1/agent/vault/logins/{id}:
+  put:
+    tags:
+      - Your agent
+    operationId: agentSetVaultLogin
+    summary: >-
+      Change how your agent may use one login. Gateway forwards it to the agent API with your own token, after its own
+      authentication and rate limit; only a person's credential or their agent link may call it. Off unless the Gateway
+      turns the agent proxy on.
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[A-Za-z0-9_:-][A-Za-z0-9._:-]{0,127}$
+        description: The agent API's id
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKey
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas.yaml#/AgentApiBody
+    responses:
+      "200":
+        description: The agent API's answer, as it sent it
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/AgentApiBody
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: >-
+          Error: Gateway's own (401, 403 `not_a_person`, 429, 502 `agents_api_unreachable`, 503 `not_configured`, 504
+          `upstream_timeout`), or the agent API's, passed through
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - $ref: ../components/schemas.yaml#/Error
+                - $ref: ../components/schemas.yaml#/AgentApiError
+    x-nexus-permission: models.use
+    x-internal-stability: beta
+    x-idempotency: optional
+/v1/agent/watches:
+  get:
+    tags:
+      - Your agent
+    operationId: agentListWatches
+    summary: >-
+      Your watches. Gateway forwards it to the agent API with your own token, after its own authentication and rate
+      limit; only a person's credential or their agent link may call it. Off unless the Gateway turns the agent proxy
+      on.
+    responses:
+      "200":
+        description: The agent API's answer, as it sent it
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/AgentApiBody
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: >-
+          Error: Gateway's own (401, 403 `not_a_person`, 429, 502 `agents_api_unreachable`, 503 `not_configured`, 504
+          `upstream_timeout`), or the agent API's, passed through
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - $ref: ../components/schemas.yaml#/Error
+                - $ref: ../components/schemas.yaml#/AgentApiError
+    x-nexus-permission: models.use
+    x-internal-stability: beta
+  post:
+    tags:
+      - Your agent
+    operationId: agentKeepWatch
+    summary: >-
+      Keep a watch your agent proposed. Gateway forwards it to the agent API with your own token, after its own
+      authentication and rate limit; only a person's credential or their agent link may call it. Off unless the Gateway
+      turns the agent proxy on.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas.yaml#/AgentApiBody
+    responses:
+      "200":
+        description: The agent API's answer, as it sent it
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/AgentApiBody
+      "428":
+        $ref: ../components/common.yaml#/responses/PreconditionRequired
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: >-
+          Error: Gateway's own (401, 403 `not_a_person`, 429, 502 `agents_api_unreachable`, 503 `not_configured`, 504
+          `upstream_timeout`), or the agent API's, passed through
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - $ref: ../components/schemas.yaml#/Error
+                - $ref: ../components/schemas.yaml#/AgentApiError
+    x-nexus-permission: models.use
+    x-internal-stability: beta
+    parameters:
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKeyRequired
+    x-idempotency: required
+/v1/agent/watches/{id}:
+  get:
+    tags:
+      - Your agent
+    operationId: agentGetWatch
+    summary: >-
+      One watch. Gateway forwards it to the agent API with your own token, after its own authentication and rate limit;
+      only a person's credential or their agent link may call it. Off unless the Gateway turns the agent proxy on.
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[A-Za-z0-9_:-][A-Za-z0-9._:-]{0,127}$
+        description: The agent API's id
+    responses:
+      "200":
+        description: The agent API's answer, as it sent it
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/AgentApiBody
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: >-
+          Error: Gateway's own (401, 403 `not_a_person`, 429, 502 `agents_api_unreachable`, 503 `not_configured`, 504
+          `upstream_timeout`), or the agent API's, passed through
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - $ref: ../components/schemas.yaml#/Error
+                - $ref: ../components/schemas.yaml#/AgentApiError
+    x-nexus-permission: models.use
+    x-internal-stability: beta
+  patch:
+    tags:
+      - Your agent
+    operationId: agentEditWatch
+    summary: >-
+      Edit a watch. Gateway forwards it to the agent API with your own token, after its own authentication and rate
+      limit; only a person's credential or their agent link may call it. Off unless the Gateway turns the agent proxy
+      on.
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[A-Za-z0-9_:-][A-Za-z0-9._:-]{0,127}$
+        description: The agent API's id
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKey
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas.yaml#/AgentApiBody
+    responses:
+      "200":
+        description: The agent API's answer, as it sent it
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/AgentApiBody
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: >-
+          Error: Gateway's own (401, 403 `not_a_person`, 429, 502 `agents_api_unreachable`, 503 `not_configured`, 504
+          `upstream_timeout`), or the agent API's, passed through
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - $ref: ../components/schemas.yaml#/Error
+                - $ref: ../components/schemas.yaml#/AgentApiError
+    x-nexus-permission: models.use
+    x-internal-stability: beta
+    x-idempotency: optional
+  delete:
+    tags:
+      - Your agent
+    operationId: agentDeleteWatch
+    summary: >-
+      Delete a watch. Gateway forwards it to the agent API with your own token, after its own authentication and rate
+      limit; only a person's credential or their agent link may call it. Off unless the Gateway turns the agent proxy
+      on.
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[A-Za-z0-9_:-][A-Za-z0-9._:-]{0,127}$
+        description: The agent API's id
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKey
+    responses:
+      "200":
+        description: The agent API's answer, as it sent it
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/AgentApiBody
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: >-
+          Error: Gateway's own (401, 403 `not_a_person`, 429, 502 `agents_api_unreachable`, 503 `not_configured`, 504
+          `upstream_timeout`), or the agent API's, passed through
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - $ref: ../components/schemas.yaml#/Error
+                - $ref: ../components/schemas.yaml#/AgentApiError
+    x-nexus-permission: models.use
+    x-internal-stability: beta
+    x-idempotency: optional
+/v1/agent/writes/{card}:
+  patch:
+    tags:
+      - Your agent
+    operationId: agentEditWrite
+    summary: >-
+      Edit a write that waits for your approval. Gateway forwards it to the agent API with your own token, after its own
+      authentication and rate limit; only a person's credential or their agent link may call it. Off unless the Gateway
+      turns the agent proxy on.
+    parameters:
+      - name: card
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[A-Za-z0-9_:-][A-Za-z0-9._:-]{0,127}$
+        description: The agent API's id
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKey
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas.yaml#/AgentApiBody
+    responses:
+      "200":
+        description: The agent API's answer, as it sent it
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/AgentApiBody
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: >-
+          Error: Gateway's own (401, 403 `not_a_person`, 429, 502 `agents_api_unreachable`, 503 `not_configured`, 504
+          `upstream_timeout`), or the agent API's, passed through
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - $ref: ../components/schemas.yaml#/Error
+                - $ref: ../components/schemas.yaml#/AgentApiError
+    x-nexus-permission: models.use
+    x-internal-stability: beta
+    x-idempotency: optional
+/v1/agent/writes/{card}/approve:
+  post:
+    tags:
+      - Your agent
+    operationId: agentApproveWrite
+    summary: >-
+      Approve a write your agent proposed in the chat (`{always}` also allows it from now on). Gateway forwards it to
+      the agent API with your own token, after its own authentication and rate limit; only a person's credential or
+      their agent link may call it. Off unless the Gateway turns the agent proxy on.
+    parameters:
+      - name: card
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[A-Za-z0-9_:-][A-Za-z0-9._:-]{0,127}$
+        description: The agent API's id
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKeyRequired
+    requestBody:
+      required: false
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas.yaml#/AgentApiBody
+    responses:
+      "200":
+        description: The agent API's answer, as it sent it
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/AgentApiBody
+      "428":
+        $ref: ../components/common.yaml#/responses/PreconditionRequired
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: >-
+          Error: Gateway's own (401, 403 `not_a_person`, 429, 502 `agents_api_unreachable`, 503 `not_configured`, 504
+          `upstream_timeout`), or the agent API's, passed through
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - $ref: ../components/schemas.yaml#/Error
+                - $ref: ../components/schemas.yaml#/AgentApiError
+    x-nexus-permission: models.use
+    x-internal-stability: beta
+    x-idempotency: required
+/v1/agent/writes/{card}/decline:
+  post:
+    tags:
+      - Your agent
+    operationId: agentDeclineWrite
+    summary: >-
+      Decline a write your agent proposed in the chat. Gateway forwards it to the agent API with your own token, after
+      its own authentication and rate limit; only a person's credential or their agent link may call it. Off unless the
+      Gateway turns the agent proxy on.
+    parameters:
+      - name: card
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[A-Za-z0-9_:-][A-Za-z0-9._:-]{0,127}$
+        description: The agent API's id
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKeyRequired
+    requestBody:
+      required: false
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas.yaml#/AgentApiBody
+    responses:
+      "200":
+        description: The agent API's answer, as it sent it
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/AgentApiBody
+      "428":
+        $ref: ../components/common.yaml#/responses/PreconditionRequired
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: >-
+          Error: Gateway's own (401, 403 `not_a_person`, 429, 502 `agents_api_unreachable`, 503 `not_configured`, 504
+          `upstream_timeout`), or the agent API's, passed through
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - $ref: ../components/schemas.yaml#/Error
+                - $ref: ../components/schemas.yaml#/AgentApiError
+    x-nexus-permission: models.use
+    x-internal-stability: beta
+    x-idempotency: required

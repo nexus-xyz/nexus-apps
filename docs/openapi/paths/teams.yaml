@@ -1,0 +1,968 @@
+# Path items. The root openapi.yaml references each one.
+/v1/people/{userId}/default-team:
+  put:
+    tags:
+      - Teams
+    operationId: setDefaultTeam
+    summary: >-
+      Set a default team: your own (`me`), among the teams you are in; anyone's for owners and admins. `{"team": null}`
+      clears it.
+    parameters:
+      - name: userId
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[A-Za-z0-9_-]+$
+        description: A user id, or `me`
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKey
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              team:
+                type:
+                  - string
+                  - "null"
+                examples:
+                  - web
+            required:
+              - team
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              type: object
+            example:
+              userId: usr_3Kd9TqW2bNxe
+              team:
+                id: team_x7Ka2LmPq9Rd
+                slug: platform
+                name: Platform
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: teams.use
+    x-idempotency: optional
+/v1/teams:
+  get:
+    tags:
+      - Teams
+    operationId: listTeams
+    summary: >-
+      The organization's teams, with member counts, your role in each and your default team (every member). With
+      `tree=1`: the teams nested under their parents, with leads and headcount. The list (not the tree) pages with
+      `limit` and `cursor`.
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                teams:
+                  type: array
+                  items:
+                    $ref: ../components/schemas.yaml#/Team
+                default:
+                  type:
+                    - string
+                    - "null"
+                tree:
+                  type: array
+                  items:
+                    $ref: ../components/schemas.yaml#/TeamNode
+                  description: "With tree=1: the top-level teams."
+                nextCursor:
+                  type: string
+                  description: The next page's cursor, while more items follow. Only when limit or cursor was sent.
+            example:
+              teams:
+                - id: team_x7Ka2LmPq9Rd
+                  slug: platform
+                  name: Platform
+                  createdAt: "2026-10-02T10:00:00.000Z"
+                  members: 4
+                  myRole: lead
+                  isDefault: true
+                  level: department
+                  depth: 1
+                  pending: 1
+                  childCount: 1
+                - id: team_Q2wN8cLx4Tzk
+                  slug: web
+                  name: Web
+                  createdAt: "2026-10-05T10:00:00.000Z"
+                  members: 2
+                  myRole: member
+                  isDefault: false
+                  parentId: team_x7Ka2LmPq9Rd
+                  parent: platform
+                  level: team
+                  depth: 2
+                  pending: 0
+                  childCount: 0
+              default: platform
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    parameters:
+      - name: tree
+        in: query
+        required: false
+        description: "1: return `tree` (nested) instead of `teams`"
+        schema:
+          type: string
+          enum:
+            - "1"
+      - name: depth
+        in: query
+        required: false
+        description: "With tree=1: how many levels to return"
+        schema:
+          type: integer
+          minimum: 1
+      - name: limit
+        in: query
+        required: false
+        description: Items per page, 1 to 500 (default 100). Without limit or cursor the answer holds the whole list.
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 500
+      - name: cursor
+        in: query
+        required: false
+        description: nextCursor from the previous page. A cursor whose item left the list answers 400 `invalid_cursor`.
+        schema:
+          type: string
+    x-nexus-permission: teams.use
+  post:
+    tags:
+      - Teams
+    operationId: createTeam
+    summary: >-
+      Create a team (owners and admins), optionally under a parent team and with a level label. The slug is unique in
+      the organization and follows the org slug rule (`pending` and `import` are reserved). An organization holds at
+      most 2,000 teams: the next is refused with 409 `team_limit`.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              slug:
+                type: string
+                examples:
+                  - web
+              name:
+                type: string
+                examples:
+                  - Web
+              description:
+                type: string
+              parent:
+                type:
+                  - string
+                  - "null"
+                description: The parent team's slug or id; absent or null for a top-level team.
+                examples:
+                  - engineering
+              level:
+                type: string
+                description: "A short label of the organization's choosing: 1 to 32 lower-case letters, digits or dashes."
+                examples:
+                  - department
+            required:
+              - slug
+    responses:
+      "201":
+        description: Created
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/TeamDetail
+            example:
+              id: team_D3fG7hJ2kL9m
+              slug: data
+              name: Data
+              createdAt: "2026-10-30T13:00:00.000Z"
+              members: 0
+              depth: 1
+              pending: 0
+              childCount: 0
+              memberList: []
+              pendingList: []
+              path: []
+              children: []
+      "428":
+        $ref: ../components/common.yaml#/responses/PreconditionRequired
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: teams.manage
+    parameters:
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKeyRequired
+    x-idempotency: required
+/v1/teams/import:
+  post:
+    tags:
+      - Teams
+    operationId: importTeams
+    summary: >-
+      Load the organization's teams from a file, in one transaction (owners and admins). Teams are matched by slug:
+      missing ones are created, existing ones moved, renamed and relabelled; leads and members are set by email (pending
+      for emails not in the organization yet) and `home` sets default teams. Idempotent: the same file twice changes
+      nothing the second time. `dryRun` returns the same diff and changes nothing; `prune` also removes what the file
+      does not list (never spend). A dry run returns a `plan` (a hash of the diff): apply with `plan` set to it and
+      Gateway refuses (409 `plan_changed`) if the organization changed since, so exactly the reviewed changes apply. An
+      import that would leave more than 2,000 teams in the organization, and adds any, is refused with 409 `team_limit`.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas.yaml#/TeamImport
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/TeamImportDiff
+            example:
+              dryRun: true
+              prune: false
+              created:
+                - data
+              moved: []
+              renamed:
+                - slug: web
+                  from: Web
+                  to: Web Apps
+              relevelled: []
+              membershipsAdded:
+                - team: data
+                  email: bruno@acme.com
+                  role: lead
+              rolesChanged: []
+              membershipsRemoved: []
+              pending:
+                - team: data
+                  email: carla@acme.com
+                  role: member
+              pendingRemoved: []
+              defaults: []
+              deleted: []
+              warnings: []
+              totals:
+                teams: 3
+                memberships: 5
+                pending: 2
+              plan: 3f9a1c07b2e4d856
+      "428":
+        $ref: ../components/common.yaml#/responses/PreconditionRequired
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: teams.manage
+    parameters:
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKeyRequired
+    x-idempotency: required
+/v1/teams/pending:
+  delete:
+    tags:
+      - Teams
+    operationId: cancelPendingTeamMembers
+    summary: >-
+      Cancel pending team members (owners and admins): one by `id`, or every one for an `email` (optionally in one
+      `team`).
+    parameters:
+      - name: id
+        in: query
+        required: false
+        schema:
+          type: string
+      - name: email
+        in: query
+        required: false
+        schema:
+          type: string
+      - name: team
+        in: query
+        required: false
+        schema:
+          type: string
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKey
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                cancelled:
+                  type: array
+                  items:
+                    $ref: ../components/schemas.yaml#/PendingMember
+            example:
+              cancelled:
+                - id: team_Q2wN8cLx4Tzk:carla@acme.com
+                  teamId: team_Q2wN8cLx4Tzk
+                  team: web
+                  email: carla@acme.com
+                  role: member
+                  home: true
+                  addedBy: usr_3Kd9TqW2bNxe
+                  createdAt: "2026-10-30T13:00:00.000Z"
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: teams.manage
+    x-idempotency: optional
+  get:
+    tags:
+      - Teams
+    operationId: listPendingTeamMembers
+    summary: >-
+      Pending team members: people added by an email not in the organization yet (owners and admins). With `by=person`,
+      one row per email with all their teams and their home team, and whether Gateway can invite them.
+    parameters:
+      - name: team
+        in: query
+        required: false
+        description: Only this team (slug)
+        schema:
+          type: string
+      - name: by
+        in: query
+        required: false
+        description: "`person`: group by email (`people`); default: one row per pending membership (`pending`)"
+        schema:
+          type: string
+          enum:
+            - entry
+            - person
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - type: object
+                  properties:
+                    pending:
+                      type: array
+                      items:
+                        $ref: ../components/schemas.yaml#/PendingMember
+                - type: object
+                  properties:
+                    people:
+                      type: array
+                      items:
+                        $ref: ../components/schemas.yaml#/PendingPerson
+                    invitations:
+                      type: string
+                      enum:
+                        - available
+                        - not_configured
+                      description: Whether this Gateway can send invitations.
+            example:
+              pending:
+                - id: team_Q2wN8cLx4Tzk:carla@acme.com
+                  teamId: team_Q2wN8cLx4Tzk
+                  team: web
+                  email: carla@acme.com
+                  role: member
+                  home: true
+                  addedBy: usr_3Kd9TqW2bNxe
+                  createdAt: "2026-10-30T13:00:00.000Z"
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: teams.manage
+/v1/teams/{slug}:
+  delete:
+    tags:
+      - Teams
+    operationId: deleteTeam
+    summary: >-
+      Delete a team and its memberships (owners and admins). A team with child teams is refused (409 `has_children`)
+      unless `cascade=1`, which deletes the whole subtree. Spend attributed to any of them keeps the team's id and slug.
+    parameters:
+      - name: slug
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^(?:[a-z0-9][a-z0-9-]{0,126}|team_[A-Za-z0-9]+)$
+      - name: cascade
+        in: query
+        required: false
+        description: "1: also delete every team under it"
+        schema:
+          type: string
+          enum:
+            - "1"
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKey
+      - $ref: ../components/common.yaml#/parameters/IfMatch
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                deleted:
+                  type: boolean
+                id:
+                  type: string
+                slug:
+                  type: string
+                teams:
+                  type: array
+                  items:
+                    type: string
+                  description: Every team deleted (slugs).
+            example:
+              deleted: true
+              id: team_Q2wN8cLx4Tzk
+              slug: web
+              teams:
+                - web
+        headers:
+          ETag:
+            $ref: ../components/common.yaml#/headers/ETag
+      "412":
+        $ref: ../components/common.yaml#/responses/VersionMismatch
+      "428":
+        $ref: ../components/common.yaml#/responses/PreconditionRequired
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: teams.manage
+    x-idempotency: optional
+    x-if-match: required
+  get:
+    tags:
+      - Teams
+    operationId: getTeam
+    summary: A team, its members, pending members, path (ancestors) and child teams (every member).
+    parameters:
+      - name: slug
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^(?:[a-z0-9][a-z0-9-]{0,126}|team_[A-Za-z0-9]+)$
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/TeamDetail
+            example:
+              id: team_Q2wN8cLx4Tzk
+              slug: web
+              name: Web
+              createdAt: "2026-10-05T10:00:00.000Z"
+              members: 2
+              myRole: member
+              isDefault: false
+              parentId: team_x7Ka2LmPq9Rd
+              parent: platform
+              level: team
+              depth: 2
+              pending: 1
+              childCount: 0
+              memberList:
+                - userId: usr_7Lm2RxV9cQta
+                  email: bruno@acme.com
+                  name: Bruno Lima
+                  role: lead
+                  isDefault: true
+                  joinedAt: "2026-10-05T10:00:00.000Z"
+                - userId: usr_3Kd9TqW2bNxe
+                  email: ana@acme.com
+                  name: Ana Souza
+                  role: member
+                  isDefault: false
+                  joinedAt: "2026-10-05T10:05:00.000Z"
+              pendingList:
+                - id: team_Q2wN8cLx4Tzk:carla@acme.com
+                  teamId: team_Q2wN8cLx4Tzk
+                  team: web
+                  email: carla@acme.com
+                  role: member
+                  home: true
+                  addedBy: usr_3Kd9TqW2bNxe
+                  createdAt: "2026-10-30T13:00:00.000Z"
+              path:
+                - id: team_x7Ka2LmPq9Rd
+                  slug: platform
+                  name: Platform
+                  level: department
+              children: []
+        headers:
+          ETag:
+            $ref: ../components/common.yaml#/headers/ETag
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: teams.use
+  patch:
+    tags:
+      - Teams
+    operationId: updateTeam
+    summary: >-
+      Change a team (owners and admins): its slug, name, description or level, or move it under another parent (`parent:
+      null` makes it top-level; no cycles, at most 10 levels). Past spend keeps the slug it had; a moved team keeps its
+      history and rollups follow the current tree.
+    parameters:
+      - name: slug
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^(?:[a-z0-9][a-z0-9-]{0,126}|team_[A-Za-z0-9]+)$
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKey
+      - $ref: ../components/common.yaml#/parameters/IfMatch
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              slug:
+                type: string
+              name:
+                type: string
+              description:
+                type:
+                  - string
+                  - "null"
+              parent:
+                type:
+                  - string
+                  - "null"
+                description: The new parent's slug or id, or null for the top level.
+              level:
+                type:
+                  - string
+                  - "null"
+                description: The level label; null clears it.
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/TeamDetail
+            example:
+              id: team_Q2wN8cLx4Tzk
+              slug: web
+              name: Web Apps
+              createdAt: "2026-10-05T10:00:00.000Z"
+              members: 2
+              myRole: member
+              isDefault: false
+              parentId: team_x7Ka2LmPq9Rd
+              parent: platform
+              level: team
+              depth: 2
+              pending: 0
+              childCount: 0
+              memberList:
+                - userId: usr_7Lm2RxV9cQta
+                  email: bruno@acme.com
+                  name: Bruno Lima
+                  role: lead
+                  isDefault: true
+                  joinedAt: "2026-10-05T10:00:00.000Z"
+                - userId: usr_3Kd9TqW2bNxe
+                  email: ana@acme.com
+                  name: Ana Souza
+                  role: member
+                  isDefault: false
+                  joinedAt: "2026-10-05T10:05:00.000Z"
+              pendingList: []
+              path:
+                - id: team_x7Ka2LmPq9Rd
+                  slug: platform
+                  name: Platform
+                  level: department
+              children: []
+        headers:
+          ETag:
+            $ref: ../components/common.yaml#/headers/ETag
+      "412":
+        $ref: ../components/common.yaml#/responses/VersionMismatch
+      "428":
+        $ref: ../components/common.yaml#/responses/PreconditionRequired
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: teams.manage
+    x-idempotency: optional
+    x-if-match: required
+/v1/teams/{slug}/budget:
+  get:
+    tags:
+      - Teams
+    operationId: getTeamBudget
+    summary: >-
+      A team's cap, as the caller may see it. An owner or admin gets the cap on that team and nothing from the teams
+      above it (`scope: cap`): its limit, period, mode, spent, reserved, what is left and when it resets. A member of
+      the team gets only what is left for them along the team's path, with the period and reset of the cap that binds
+      (`scope: own`); the limit, spent and reserved of a team above theirs are never shown. `budget` is null when no cap
+      applies. 404 `unknown_team`; 403 `not_in_team` for a member who is not in the team.
+    parameters:
+      - name: slug
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^(?:[a-z0-9][a-z0-9-]{0,126}|team_[A-Za-z0-9]+)$
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/TeamBudget
+            example:
+              team:
+                slug: platform
+                name: Platform
+              scope: cap
+              budget:
+                remainingUsd: 312.4
+                period: month
+                resetsAt: "2026-11-01T00:00:00.000Z"
+                limitUsd: 500
+                mode: hard_stop
+                spentUsd: 186.1
+                reservedUsd: 1.5
+                updatedAt: "2026-10-03T11:20:09.000Z"
+              canManage: true
+      "403":
+        description: A member who is not in the team (`not_in_team`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+            example:
+              error:
+                message: you are not in team platform; members read the budget of the teams they belong to
+                type: permission_error
+                code: not_in_team
+      "404":
+        description: No such team (`unknown_team`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+            example:
+              error:
+                message: no team research in this organization
+                type: not_found
+                code: unknown_team
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: teams.use
+  put:
+    tags:
+      - Teams
+    operationId: setTeamBudget
+    summary: >-
+      Set a team's cap (owners and admins): an amount in US dollars per day, week or month, counted for the team and
+      every team under it, and a stop mode. `hard_stop` refuses the call; `warn` and `approval` answer 400
+      `mode_not_available` until they are built. Cutting a cap below what the team used refuses the next call and leaves
+      calls in progress alone. Audited as budget.team_changed, before and after. With `dryRun: true` it checks and
+      answers the same, and changes nothing. The amount is `amountUsd` (a number, deprecated, or a decimal string) or
+      `amountUsdDecimal`, read exactly. 400 `invalid_amount`, `too_many_decimals`, `amount_mismatch`, `invalid_period`,
+      `invalid_mode`; 404 `unknown_team`.
+    parameters:
+      - name: slug
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^(?:[a-z0-9][a-z0-9-]{0,126}|team_[A-Za-z0-9]+)$
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKey
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas.yaml#/BudgetSetting
+          example:
+            amountUsdDecimal: "500.00"
+            period: month
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/TeamBudgetChange
+            example:
+              dryRun: false
+              team:
+                slug: platform
+                name: Platform
+              before:
+                limitUsd: 300
+                limitUsdDecimal: "300.000000"
+                period: month
+                mode: hard_stop
+              after:
+                limitUsd: 500
+                limitUsdDecimal: "500.000000"
+                period: month
+                mode: hard_stop
+      "400":
+        description: >-
+          Not a valid cap (`invalid_amount`, `too_many_decimals`, `amount_mismatch`, `invalid_period`, `invalid_mode`,
+          `mode_not_available`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+            example:
+              error:
+                message: mode warn is not available yet; only hard_stop is
+                type: invalid_request_error
+                code: mode_not_available
+      "403":
+        description: "Only owners and admins set a cap (`role_required`): a member without `budgets.manage`"
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+            example:
+              error:
+                message: only the org's owner or admins can set team budgets (budgets.manage)
+                type: permission_error
+                code: role_required
+      "404":
+        description: No such team (`unknown_team`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+            example:
+              error:
+                message: no team research in this organization
+                type: not_found
+                code: unknown_team
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: budgets.manage
+    x-idempotency: optional
+/v1/teams/{slug}/members:
+  post:
+    tags:
+      - Teams
+    operationId: addTeamMember
+    summary: >-
+      Add someone to a team, by userId or email (owners and admins). An email of someone not in the organization yet is
+      kept as a pending membership (202) until they join it. The first team someone joins becomes their default, unless
+      `home` makes this one it.
+    parameters:
+      - name: slug
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^(?:[a-z0-9][a-z0-9-]{0,126}|team_[A-Za-z0-9]+)$
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKeyRequired
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              userId:
+                type: string
+              email:
+                type: string
+              role:
+                $ref: ../components/schemas.yaml#/TeamRole
+              home:
+                type: boolean
+                description: Make this their default (home) team; for a pending member, when they join.
+    responses:
+      "201":
+        description: Created
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                team:
+                  type: string
+                member:
+                  $ref: ../components/schemas.yaml#/TeamMember
+                pending:
+                  type: boolean
+                  enum:
+                    - false
+            example:
+              team: web
+              member:
+                userId: usr_7Lm2RxV9cQta
+                email: bruno@acme.com
+                name: Bruno Lima
+                role: member
+                isDefault: false
+                joinedAt: "2026-10-30T13:00:00.000Z"
+              pending: false
+      "202":
+        description: "Pending: not in the organization yet"
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                pending:
+                  type: boolean
+                  enum:
+                    - true
+                team:
+                  type: string
+                entry:
+                  $ref: ../components/schemas.yaml#/PendingMember
+            example:
+              pending: true
+              team: web
+              entry:
+                id: team_Q2wN8cLx4Tzk:carla@acme.com
+                teamId: team_Q2wN8cLx4Tzk
+                team: web
+                email: carla@acme.com
+                role: member
+                home: false
+                addedBy: usr_3Kd9TqW2bNxe
+                createdAt: "2026-10-30T13:00:00.000Z"
+      "428":
+        $ref: ../components/common.yaml#/responses/PreconditionRequired
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: teams.manage
+    x-idempotency: required
+/v1/teams/{slug}/members/{userId}:
+  delete:
+    tags:
+      - Teams
+    operationId: removeTeamMember
+    summary: Take someone out of a team (owners and admins). If it was their default, another of their teams becomes it.
+    parameters:
+      - name: slug
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^(?:[a-z0-9][a-z0-9-]{0,126}|team_[A-Za-z0-9]+)$
+      - name: userId
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[A-Za-z0-9_-]+$
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKey
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              type: object
+            example:
+              removed: true
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: teams.manage
+    x-idempotency: optional
