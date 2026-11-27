@@ -10,6 +10,7 @@ pub mod handoff;
 pub mod messages;
 pub mod results;
 pub mod spend;
+pub(crate) mod steer;
 
 use std::collections::{HashMap, HashSet};
 use std::sync::MutexGuard;
@@ -150,7 +151,7 @@ pub enum OrchCode {
     /// Not a direct child of the caller.
     NotYourSession,
     Halted,
-    /// The child has a turn under way or is starting.
+    /// The target is busy and cannot take a mid-turn steer.
     Busy,
     /// The app could not do it (its store failed, say): not the caller's doing.
     Failed,

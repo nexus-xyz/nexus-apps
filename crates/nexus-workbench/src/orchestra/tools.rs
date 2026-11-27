@@ -93,9 +93,10 @@ pub(crate) fn list() -> Vec<Value> {
             "name": MESSAGE,
             "title": "Message a subsession",
             "description": format!(
-                "Starts a turn in a subsession this session started, or in another session available through \
-                 list_sessions with all. Answers busy while the session is starting or in a turn: wait for it first. Its \
-                 answer comes back through wait_sessions. {NOT_THE_PERSON}"
+                "Starts a turn in a subsession this session started, or in another session from list_sessions with all. \
+                 It also reaches a running direct child on Claude Code or Codex at its next step. Other busy sessions \
+                 answer busy: wait for their turn to end, or stop your own subsession first. Its answer comes back through \
+                 wait_sessions. {NOT_THE_PERSON}"
             ),
             "inputSchema": {
                 "type": "object",
@@ -559,6 +560,12 @@ mod tests {
         let start = tools[0]["description"].as_str().unwrap_or_default();
         assert!(start.contains("not the person's instructions") && start.contains("\"Tests:\""));
         assert!(
+            tools[1]["description"]
+                .as_str()
+                .unwrap_or_default()
+                .contains("running direct child on Claude Code or Codex at its next step")
+        );
+        assert!(
             tools[2]["description"]
                 .as_str()
                 .unwrap_or_default()
@@ -761,11 +768,18 @@ mod tests {
 
     #[test]
     fn a_refusal_is_a_tool_error_with_its_code() {
-        let refused = result(Err(OrchError::new(OrchCode::Busy, "busy now")));
+        let busy = crate::linked::steer::BUSY;
+        let refused = result(Err(OrchError::new(OrchCode::Busy, busy)));
         assert_eq!(refused["isError"], true);
         let text: Value =
             serde_json::from_str(refused["content"][0]["text"].as_str().unwrap_or_default()).unwrap_or_default();
-        assert_eq!(text, json!({"code": "busy", "message": "busy now"}));
+        assert_eq!(
+            text,
+            json!({
+                "code": "busy",
+                "message": "That session is at work and cannot take a message now. Wait for its turn to end, or call stop_session and message it again."
+            })
+        );
         assert_eq!(result(Ok(json!({"a": 1})))["isError"], false);
     }
 }

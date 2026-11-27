@@ -4671,7 +4671,8 @@ impl Workbench {
     ///
     /// A notice the run ends before the agent reads it is dropped: `finish` counts only messages with a `User` event.
     /// Its `Notice` row stays. Readers find some notices by their text, so `text` must not match them: a
-    /// `crew_fold::PROCESS_ENDED` text, the `moving::MOVED` prefix, or "compacted the conversation" (`context_breakdown`).
+    /// `crew_fold::PROCESS_ENDED` text, the `moving::MOVED` prefix, or the exact
+    /// `CLAUDE_COMPACTION_NOTICE` and `CODEX_COMPACTION_NOTICE` texts (`context_breakdown`).
     pub fn steer_notice(&self, thread_id: &str, text: &str) -> Result<()> {
         let text = text.trim_end();
         if text.trim().is_empty() {

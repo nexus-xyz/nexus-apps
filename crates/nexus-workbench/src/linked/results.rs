@@ -1680,14 +1680,15 @@ impl Workbench {
         ))
     }
 
-    /// Sends a direct child a message from its parent (`message_session`), starting its agent if it is not running.
-    /// An automatic turn. Nothing waits behind a child's turn: a child at work answers `busy`.
+    /// Sends a direct child a message from its parent (`message_session`), starting its agent if idle.
+    /// Steers a running child mid-turn when its agent supports `steers_mid_turn` (Claude Code or Codex).
+    /// Other busy children answer `busy`. Counts as one automatic turn in both cases.
     ///
-    /// Refused: not in this organization (`org_mismatch`); not a direct child (`not_your_session`); the parent's
-    /// orchestration is off (`off`) or it is in Plan only (`plan_mode`); either is halted (`halted`); the tree is paused
-    /// (`paused`); the child has a turn, a queued message or is starting (`busy`); the parent's active children are at
-    /// the limit, as for a start (`children_limit`); an empty or overlong text, or one that starts with
-    /// [`RESULTS_HEADER`] (`bad_input`).
+    /// Refused: outside this organization (`org_mismatch`); not a direct child (`not_your_session`); parent
+    /// orchestration off (`off`) or in Plan only (`plan_mode`); either halted (`halted`); tree paused (`paused`);
+    /// child starting, stopping, or running a non-steering agent (`busy`); active children at the limit when not
+    /// steering a running child (`children_limit`); archived running child, empty or overlong text, or forged header
+    /// (`bad_input`).
     pub async fn message_child(&self, parent_id: &str, child_id: &str, text: &str) -> Result<(), OrchError> {
         let Some(parent) = self.reader().thread(parent_id)?.filter(|p| self.in_scope(&p.scope)) else {
             return refuse(
@@ -1744,12 +1745,12 @@ impl Workbench {
         if text.starts_with(RESULTS_HEADER) {
             return refuse(OrchCode::BadInput, FORGED);
         }
-        // One message at a time per child: a second finds it busy, never queued behind the first.
+        // One message at a time per child: serialize checks and delivery.
         let gate = self.creation_gate(&super::halts::message_gate(child_id));
         let _gate = gate.lock().await;
         // Read both again under the gate: a Stop or a Delete since the checks above wrote its halts before it waited on
         // this gate, so a message it would miss is refused here.
-        match (self.reader().thread(parent_id)?, self.reader().thread(child_id)?) {
+        let (parent, child) = match (self.reader().thread(parent_id)?, self.reader().thread(child_id)?) {
             (Some(p), Some(c)) if c.summary.parent_thread_id.as_deref() == Some(parent_id) => {
                 if let Some(halt) = Halt::of(&p) {
                     return refuse(OrchCode::Halted, super::halts::refusal(halt));
@@ -1760,6 +1761,7 @@ impl Workbench {
                         "The person stopped that session, or one above it. Only they can start it again.",
                     );
                 }
+                (p, c)
             }
             _ => {
                 return refuse(
@@ -1767,42 +1769,49 @@ impl Workbench {
                     "That session is no longer one this session started.",
                 );
             }
-        }
-        // A message wakes a finished child: it counts against the parent's active children as a start does (L9).
-        if let Some(max) = self.config().orchestration.max_live_children {
-            let children = self.store().children(parent_id)?;
-            if super::reached(Some(max), children.iter().filter(|c| self.active(c)).count()) {
-                return refuse(
-                    OrchCode::ChildrenLimit,
-                    format!("{max} of this session's subsessions are already at work. Wait for one to finish."),
-                );
+        };
+        let check_children_limit = || -> Result<(), OrchError> {
+            if let Some(max) = self.config().orchestration.max_live_children {
+                let children = self.store().children(parent_id)?;
+                if super::reached(Some(max), children.iter().filter(|c| self.active(c)).count()) {
+                    return refuse(
+                        OrchCode::ChildrenLimit,
+                        format!("{max} of this session's subsessions are already at work. Wait for one to finish."),
+                    );
+                }
             }
+            Ok(())
+        };
+        // A message wakes a finished child and counts against active children (L9); skip only when steering mid-turn.
+        let mut limit_checked = !matches!(self.child_delivery(&child)?, super::steer::ChildDelivery::Steer);
+        if limit_checked {
+            check_children_limit()?;
         }
         let root = self.root_of(&parent)?;
-        let pauses = {
+        let (delivery, pauses) = loop {
             let mut trees = self.trees();
             if self.paused_in(&trees, &root) {
                 return refuse(OrchCode::Paused, super::PAUSED);
             }
-            let busy = match self.live(child_id) {
-                Some(live) => {
-                    let state = live.state();
-                    state.done || state.stop.is_some() || !state.turns.is_empty() || !state.unsent.is_empty()
-                }
-                None => self
-                    .reader()
-                    .thread(child_id)?
-                    .is_some_and(|child| child.summary.status == ThreadStatus::Starting),
-            };
-            if busy {
-                return refuse(
-                    OrchCode::Busy,
-                    "That session is at work. Wait for it to finish, then message it.",
-                );
+            let delivery = self.child_delivery(&child)?;
+            if matches!(delivery, super::steer::ChildDelivery::Busy) {
+                return refuse(OrchCode::Busy, super::steer::BUSY);
+            }
+            if matches!(delivery, super::steer::ChildDelivery::Steer) && child.summary.archived {
+                return refuse(OrchCode::BadInput, super::steer::ARCHIVED);
+            }
+            if !limit_checked && matches!(delivery, super::steer::ChildDelivery::Idle) {
+                drop(trees);
+                check_children_limit()?;
+                limit_checked = true;
+                continue;
             }
             trees.entry(root.clone()).or_default().auto_turns += 1;
-            self.paused_in(&trees, &root)
+            break (delivery, self.paused_in(&trees, &root));
         };
+        if matches!(delivery, super::steer::ChildDelivery::Steer) {
+            return self.steer_running_child(&parent, child_id, text, &root, pauses);
+        }
         let from = Sender::Session {
             thread_id: parent.summary.id.clone(),
             title: parent.summary.title.clone(),

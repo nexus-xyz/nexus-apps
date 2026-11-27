@@ -931,7 +931,7 @@ impl Driver {
             }
             // A sub-agent compacting its own conversation is not the session's.
             "contextCompaction" if done && parent.is_none() => vec![Out::Event(WbEvent::Notice {
-                text: "Codex compacted the conversation to fit its context window.".into(),
+                text: crate::context_breakdown::CODEX_COMPACTION_NOTICE.into(),
             })],
             "commandExecution" | "fileChange" | "mcpToolCall" | "dynamicToolCall" | "webSearch" => {
                 let calls = calls(item);
