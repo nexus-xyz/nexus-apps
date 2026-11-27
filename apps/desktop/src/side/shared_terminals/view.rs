@@ -60,6 +60,7 @@ impl SharedTerminals {
                     open.then(|| self.submitted_inputs.get(&entry.id)).flatten(),
                     // Whether the details show the command box, which the row's width decides.
                     open.then(|| self.cut.borrow().get(&entry.id).copied()).flatten(),
+                    open && self.inputs_open.contains(&entry.id),
                     !history && !self.read_only && self.lingering(&entry.id),
                 )
                     .hash(&mut hasher);

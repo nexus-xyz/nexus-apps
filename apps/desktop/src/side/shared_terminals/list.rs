@@ -67,6 +67,17 @@ pub(super) fn shows_command(more_lines: usize, request: bool, cut: Option<bool>)
     request || more_lines > 0 || cut.unwrap_or(true)
 }
 
+/// Whether an open row folds the agent's typed inputs to one line: only beside the output well, which already echoes
+/// them, and until the person opens the record.
+pub(super) fn folds_inputs(output_shown: bool, opened: bool) -> bool {
+    output_shown && !opened
+}
+
+/// The folded line: "The agent typed 1 input", "The agent typed 3 inputs".
+pub(super) fn inputs_summary(count: u64) -> String {
+    format!("The agent typed {count} input{}", if count == 1 { "" } else { "s" })
+}
+
 /// A shell's row title: its name, or "Shell" when it has none.
 pub(super) fn shell_name(name: &str) -> String {
     let name = name.split_whitespace().collect::<Vec<_>>().join(" ");
@@ -285,6 +296,15 @@ mod tests {
         assert!(shows_command(2, false, Some(false)), "more lines than the row's one");
         assert!(shows_command(0, true, Some(false)), "a request is reviewed in its box");
         assert!(shows_command(0, false, None), "not measured yet");
+    }
+
+    #[test]
+    fn typed_inputs_fold_only_beside_the_well_that_echoes_them() {
+        assert!(folds_inputs(true, false));
+        assert!(!folds_inputs(true, true), "the person opened the record");
+        assert!(!folds_inputs(false, false), "no well: the record is the only trace");
+        assert_eq!(inputs_summary(1), "The agent typed 1 input");
+        assert_eq!(inputs_summary(3), "The agent typed 3 inputs");
     }
 
     #[test]
