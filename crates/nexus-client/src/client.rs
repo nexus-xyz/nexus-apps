@@ -540,7 +540,7 @@ mod tests {
                 .expect("build agent access request");
             assert_eq!(
                 request.headers()[nexus_agents::AGENT_LAUNCHERS_HEADER],
-                "claude,codex,agy,cursor-agent"
+                "claude,codex,agy,cursor-agent,grok"
             );
         }
         let request = client

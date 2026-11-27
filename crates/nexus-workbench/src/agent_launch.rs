@@ -161,6 +161,18 @@ pub async fn choose_model(client: &Client, agent: SessionAgent, asked: Option<&s
         }))
 }
 
+/// Read Grok's effective configuration on a blocking worker before using the personal login.
+pub(crate) async fn check_grok_subscription(
+    program: PathBuf,
+    cwd: PathBuf,
+    mut env: HashMap<String, String>,
+) -> Result<(), String> {
+    nexus_local_agents::grok::subscription_env(&mut env);
+    tokio::task::spawn_blocking(move || nexus_local_agents::grok::check_subscription(&program, &cwd, &env))
+        .await
+        .map_err(|_| "Could not verify Grok subscription settings.".to_owned())?
+}
+
 /// Checks the payer and chooses the model before a Gateway session is opened.
 pub async fn prepare(
     client: &Client,
@@ -197,6 +209,12 @@ pub async fn prepare_with_auto(
                 label(agent),
             )
         });
+    }
+    if agent == SessionAgent::Grok {
+        if request.provider.is_some() {
+            return Err("Grok runs on your local subscription only.".into());
+        }
+        check_grok_subscription(program.to_owned(), request.cwd.clone(), env.clone()).await?;
     }
     let path_env = env.get("PATH").cloned().unwrap_or_default();
     let mut routed_effort = None;
@@ -1028,6 +1046,41 @@ pub(crate) mod tests {
             efforts: Vec::new(),
             resolved_id: Some("claude-opus-5-5".into()),
         }
+    }
+
+    #[tokio::test]
+    async fn grok_config_refusal_precedes_the_gateway_session_record() {
+        nexus_client::install_tls();
+        let calls = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+        let seen = calls.clone();
+        let (url, server) = fake_gateway(move |path, _| {
+            seen.lock().expect("recorded Gateway requests").push(path.to_owned());
+            match path {
+                "/v1/orgs/settings" => (200, json!({"agentSubscriptions":true})),
+                "/v1/agents/sessions" => (200, json!({"id":"unexpected-session"})),
+                _ => (404, json!({})),
+            }
+        })
+        .await;
+        let client = Client::new(nexus_client::ClientOptions::new(&url));
+        let request = crate::LaunchRequest {
+            agent: SessionAgent::Grok,
+            model: None,
+            ..auto_request(Via::Subscription)
+        };
+        let refused = open_session(
+            &client,
+            &request,
+            Path::new("unused"),
+            HashMap::from([("GROK_AUTH_PATH".into(), "alternate".into())]),
+            None,
+            None,
+            &crate::provider::SessionFacts { usage_data: false },
+        )
+        .await;
+        assert!(matches!(refused, Err(message) if message.contains("GROK_AUTH_PATH")));
+        assert_eq!(*calls.lock().expect("recorded Gateway requests"), ["/v1/orgs/settings"]);
+        server.abort();
     }
 
     #[tokio::test]

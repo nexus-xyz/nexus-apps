@@ -119,6 +119,7 @@ mod navigation;
 mod new_code;
 pub(crate) mod nexus_sign_in;
 mod no_key;
+pub(crate) use new_code::{local_plan_agent, mode_for_agent};
 mod notice_host;
 mod org_menu;
 mod org_scope;

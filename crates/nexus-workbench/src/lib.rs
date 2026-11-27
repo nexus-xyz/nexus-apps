@@ -5181,7 +5181,25 @@ impl Workbench {
                 return Err(error);
             }
         };
-        let payer_checked = if let Some(provider) = &record.summary.provider {
+        let grok_checked = if agent == SessionAgent::Grok {
+            if record.summary.via != Via::Subscription || record.summary.provider.is_some() {
+                Err("Grok runs on your local subscription only.".to_string())
+            } else {
+                nexus_local_agents::grok::subscription_env(&mut launch.spawn.env);
+                // Hosts can add environment while preparing the spawn. Check the actual child as well.
+                agent_launch::check_grok_subscription(
+                    launch.spawn.program.clone(),
+                    launch.spawn.cwd.clone(),
+                    launch.spawn.env.clone(),
+                )
+                .await
+            }
+        } else {
+            Ok(())
+        };
+        let payer_checked = if grok_checked.is_err() {
+            grok_checked
+        } else if let Some(provider) = &record.summary.provider {
             launch
                 .local_provider
                 .as_ref()

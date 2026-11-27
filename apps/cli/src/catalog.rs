@@ -1167,6 +1167,7 @@ const ENVIRONMENT: &[(&str, &str)] = &[
         "NEXUS_CURSOR_AUTH",
         "subscription: run nexus cursor-agent on your Cursor plan",
     ),
+    ("NEXUS_GROK_AUTH", "subscription: run nexus grok on your Grok plan"),
     (
         "NEXUS_RECORDINGS_DIR",
         "Where nexus recordings reads screen recordings (default: Nexus for Mac's folder)",
@@ -1851,6 +1852,13 @@ const FLAG_TEXT: &[(&str, &str)] = &[
         "agy --model",
         "agy's own flag: the model it runs, by its id (auto is not available)",
     ),
+    ("grok --json", "A JSON summary on stdout when Grok exits"),
+    ("grok --subscription", "Run Grok on your personal subscription"),
+    (
+        "grok --team",
+        "The team this session is attributed to (also NEXUS_TEAM)",
+    ),
+    ("grok --model", "Grok's own model ID"),
     ("cursor-agent --json", "A JSON summary on stdout when Cursor exits"),
     ("cursor-agent --subscription", "Run on your Cursor plan"),
     (

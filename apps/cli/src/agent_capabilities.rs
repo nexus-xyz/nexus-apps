@@ -195,6 +195,7 @@ mod tests {
         assert_eq!(of(Agent::Codex), (Some("openai"), Some(UsageSource::Otel)));
         assert_eq!(of(Agent::Antigravity), (None, Some(UsageSource::ConversationDb)));
         assert_eq!(of(Agent::Cursor), (None, None));
+        assert_eq!(of(Agent::Grok), (None, None));
         assert_eq!(of(Agent::Opencode), (None, None));
     }
 
@@ -205,12 +206,12 @@ mod tests {
         assert_eq!(agent_ids(|capabilities| capabilities.session_log, "|"), "claude|codex");
     }
 
-    /// Only Claude Code's and Codex's launchers are known to start on a prompt given as their first argument.
+    /// These launchers accept the prompt that Review hands off.
     #[test]
-    fn prompt_arguments_are_claude_codes_and_codexs() {
+    fn launchers_accepting_a_prompt_argument() {
         assert_eq!(
             agent_ids(|capabilities| capabilities.prompt_argument, "|"),
-            "claude|codex"
+            "claude|codex|grok"
         );
     }
 

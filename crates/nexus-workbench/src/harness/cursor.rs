@@ -18,6 +18,7 @@ use crate::mcp_servers::{McpServer, Values};
 pub(crate) const ACP_PROFILE: Profile = Profile {
     name: Cow::Borrowed("Cursor"),
     sign_in: Some(Cow::Borrowed("cursor_login")),
+    subscription_auth: None,
     sign_in_help: Cow::Borrowed("Run `cursor-agent login` in a terminal"),
     meta: || json!({}),
     modes: Some(ModeMapping {
@@ -28,6 +29,7 @@ pub(crate) const ACP_PROFILE: Profile = Profile {
             _ => None,
         },
         requested: |mode, _| mode_id(mode),
+        accepts_unreported_opening: false,
         confirm_opening: true,
     }),
     auto: None,

@@ -660,11 +660,13 @@ mod tests {
     fn help_names_each_launcher_and_its_plan() {
         let help = agents_help(&Style::new(false)).join("\n");
         assert!(
-            help.contains("how nexus claude, nexus codex, nexus agy and nexus cursor-agent reach their models"),
+            help.contains(
+                "how nexus claude, nexus codex, nexus agy, nexus cursor-agent and nexus grok reach their models"
+            ),
             "{help}"
         );
         assert!(
-            help.contains("on your own Claude, ChatGPT, Google AI or Cursor plan"),
+            help.contains("on your own Claude, ChatGPT, Google AI, Cursor or Grok plan"),
             "{help}"
         );
         assert_eq!(prose_list(&["a".into()], "or"), "a");

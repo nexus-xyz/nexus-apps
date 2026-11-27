@@ -1081,6 +1081,7 @@ mod tests {
             .filter(|agent| nexus_workbench::harness::harness(*agent).session_features().local_only)
             .collect();
         assert!(local_only.contains(&SessionAgent::Antigravity));
+        assert!(local_only.contains(&SessionAgent::Grok));
         for agent in local_only {
             for on_server in [true, false] {
                 let host = HeadlessHost::new(

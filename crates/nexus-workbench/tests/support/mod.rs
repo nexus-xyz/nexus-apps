@@ -84,6 +84,7 @@ impl Host for TestHost {
                 env!("CARGO_BIN_EXE_fake-nexus"),
                 [("FAKE_NEXUS_DIR".to_string(), memory)],
             ),
+            SessionAgent::Grok => (env!("CARGO_BIN_EXE_fake-agy"), [("FAKE_GROK_DIR".to_string(), memory)]),
             SessionAgent::Antigravity => (env!("CARGO_BIN_EXE_fake-agy"), [("FAKE_AGY_DIR".to_string(), memory)]),
             #[cfg(feature = "cursor")]
             SessionAgent::Cursor => (

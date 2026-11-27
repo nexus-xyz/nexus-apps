@@ -196,7 +196,7 @@ impl Machine for SlowDiscovery {
                 SessionAgent::Cursor => None,
                 #[cfg(feature = "opencode")]
                 SessionAgent::Opencode => None,
-                SessionAgent::Claude | SessionAgent::Nexus => None,
+                SessionAgent::Claude | SessionAgent::Nexus | SessionAgent::Grok => None,
             }
         })
     }
@@ -736,6 +736,7 @@ async fn overview_answers_as_the_code_page_reads_it() {
         json!({ "agent": "cursor", "path": null, "version": null }),
         #[cfg(feature = "opencode")]
         json!({ "agent": "opencode", "path": null, "version": null }),
+        json!({ "agent": "grok", "path": null, "version": null }),
     ];
     assert_eq!(
         overview,

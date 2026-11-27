@@ -202,7 +202,10 @@ pub fn setup_steps(entry: &Value, route: Route, options: SetupOptions) -> Vec<Se
         "install",
         "you",
         format!("Install {name}"),
-        text(entry, "install").map(String::from),
+        match options.local {
+            Some(local) if local.agent == "grok" => Some(Agent::Grok.local_install_command().into()),
+            _ => text(entry, "install").map(String::from),
+        },
         options.local.map(|local| local.installed),
     ));
     steps.push(step(

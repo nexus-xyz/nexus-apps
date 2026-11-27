@@ -18,6 +18,7 @@ use crate::mcp_servers::{McpServer, Values};
 const ACP_PROFILE: Profile = Profile {
     name: Cow::Borrowed("OpenCode"),
     sign_in: None,
+    subscription_auth: None,
     sign_in_help: Cow::Borrowed("Configure a provider with `opencode auth login` in a terminal"),
     meta: || json!({}),
     modes: None,

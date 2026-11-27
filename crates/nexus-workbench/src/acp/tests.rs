@@ -48,6 +48,36 @@ fn methods(out: &[Out]) -> Vec<String> {
         .collect()
 }
 
+#[test]
+fn grok_opens_only_with_the_personal_sign_in_and_its_optional_cached_token() {
+    for (ids, accept) in [
+        (Some(vec!["cached_token", "grok.com"]), true),
+        (Some(vec!["grok.com", "cached_token"]), true),
+        (Some(vec!["grok.com"]), true),
+        (Some(vec!["cached_token"]), false),
+        (Some(vec!["grok.com", "xai.api_key"]), false),
+        (Some(vec!["grok.com", "other"]), false),
+        (Some(vec![]), false),
+        (None, false),
+    ] {
+        let mut driver = nexus_agents::Grok.protocol(&start());
+        let id = sent(&driver.open())[0]["id"].clone();
+        let mut result = json!({"protocolVersion":1});
+        if let Some(ids) = &ids {
+            result["authMethods"] = json!(ids.iter().map(|id| json!({"id":id})).collect::<Vec<_>>());
+        }
+        let out = driver.read(&json!({"jsonrpc":"2.0","id":id,"result":result}).to_string());
+        if accept {
+            assert_eq!(methods(&out), ["session/new"], "{ids:?}");
+        } else {
+            assert!(
+                sent(&out).is_empty() && out.iter().any(|out| matches!(out, Out::Close)),
+                "{ids:?}"
+            );
+        }
+    }
+}
+
 /// Opens a conversation as agy 1.5.8 answers: its `initialize` and `session/new` answers.
 fn opened(acp: &mut Driver) -> Vec<Out> {
     let mut out = acp.open();

@@ -208,7 +208,7 @@ pub struct Choice {
 /// organization (`remembered`, `paths::new_session_defaults`), with the client's picks over them. A mode asked for is
 /// used only when it is lower. A worktree needs a git project. Who pays follows Gateway's route, as New session's
 /// default does.
-pub fn choose(asked: &Asked, remembered: &Value, git: bool, access: &AgentAccess) -> Choice {
+pub fn choose(asked: &Asked, remembered: &Value, git: bool, access: Option<&AgentAccess>, local_plans: bool) -> Choice {
     let base_agent = remembered["agent"]
         .as_str()
         .and_then(SessionAgent::parse)
@@ -222,17 +222,23 @@ pub fn choose(asked: &Asked, remembered: &Value, git: bool, access: &AgentAccess
         .model
         .clone()
         .or_else(|| remembered["models"][agent.as_str()]["model"].as_str().map(String::from));
-    let mode = match asked.mode {
-        Some(mode) if mode.rank() < base_mode.rank() => mode,
-        _ => base_mode,
-    };
+    let remembered_mode = remembered["agentModes"][agent.as_str()]
+        .as_str()
+        .and_then(PermissionMode::parse);
+    let saved = crate::workspace::mode_for_agent(agent, Some(remembered_mode.unwrap_or(base_mode))).lower(base_mode);
+    let ceiling = asked.mode.unwrap_or(saved).lower(saved);
+    let mode = crate::workspace::mode_for_agent(agent, Some(ceiling)).lower(ceiling);
     let worktree = asked.worktree.unwrap_or(remembered["workspace"] == "worktree") && git;
     Choice {
         agent,
         model,
         mode,
         worktree,
-        via: access.default_via(agent),
+        via: match access {
+            Some(access) => access.default_via(agent),
+            None if local_plans && crate::workspace::local_plan_agent(agent) => Via::Subscription,
+            None => Via::Nexus,
+        },
     }
 }
 
@@ -245,6 +251,7 @@ pub struct GpuiOutside {
     pub org: Arc<dyn Fn() -> String + Send + Sync>,
     /// Gateway's client under the person's sign-in, when signed in.
     pub client: Arc<dyn Fn() -> Option<nexus_client::Client> + Send + Sync>,
+    pub local_plans: nexus_workbench::provider::LocalProvidersOptIn,
     /// A prompt waits or was answered: the windows draw again.
     pub changed: Arc<dyn Fn() + Send + Sync>,
 }
@@ -306,11 +313,14 @@ impl GpuiOutside {
         };
         let project = tools::in_sight(tools::find_project(&projects, &query)?)?.clone();
         let remembered = crate::paths::new_session_defaults(&(self.org)());
-        let access = match (self.client)() {
-            Some(client) => self.runtime.block_on(crate::code_run::read_access(&client)),
-            None => AgentAccess::default(),
-        };
-        let choice = choose(&asked, &remembered, project.branch.is_some(), &access);
+        let access = (self.client)().map(|client| self.runtime.block_on(crate::code_run::read_access(&client)));
+        let choice = choose(
+            &asked,
+            &remembered,
+            project.branch.is_some(),
+            access.as_ref(),
+            self.local_plans.enabled(),
+        );
         // Over the service, a new worktree's branch takes the person's prefix, as New session's does.
         let prefix = self
             .api
@@ -354,7 +364,7 @@ mod tests {
         let remembered = json!({"agent": "codex", "mode": "acceptEdits", "workspace": "worktree",
             "models": {"codex": {"model": "gpt-5"}, "claude": {"model": "opus"}}});
         let none = AgentAccess::default();
-        let choice = choose(&Asked::default(), &remembered, true, &none);
+        let choice = choose(&Asked::default(), &remembered, true, Some(&none), false);
         assert_eq!(
             choice,
             Choice {
@@ -371,7 +381,7 @@ mod tests {
             mode: Some(PermissionMode::BypassPermissions),
             ..Asked::default()
         };
-        let choice = choose(&asked, &remembered, true, &none);
+        let choice = choose(&asked, &remembered, true, Some(&none), false);
         assert_eq!(
             (choice.agent, choice.model.as_deref(), choice.mode),
             (SessionAgent::Claude, Some("opus"), PermissionMode::AcceptEdits)
@@ -381,15 +391,55 @@ mod tests {
             worktree: Some(false),
             ..Asked::default()
         };
-        let choice = choose(&asked, &remembered, true, &none);
+        let choice = choose(&asked, &remembered, true, Some(&none), false);
         assert_eq!((choice.mode, choice.worktree), (PermissionMode::Plan, false));
         // A folder that is not a git repository gets no worktree.
-        assert!(!choose(&Asked::default(), &remembered, false, &none).worktree);
+        assert!(!choose(&Asked::default(), &remembered, false, Some(&none), false).worktree);
+    }
+
+    #[test]
+    fn a_fresh_local_grok_start_uses_ask_and_observes_organization_policy() {
+        let asked = Asked {
+            agent: Some(SessionAgent::Grok),
+            ..Asked::default()
+        };
+        let choice = choose(&asked, &Value::Null, false, None, true);
+        assert_eq!((choice.mode, choice.via), (PermissionMode::Default, Via::Subscription));
+        assert_eq!(choose(&asked, &Value::Null, false, None, false).via, Via::Nexus);
+        assert_eq!(
+            choose(&asked, &Value::Null, false, Some(&AgentAccess::default()), true).via,
+            Via::Nexus
+        );
+        assert_eq!(
+            choose(&asked, &json!({"mode":"plan"}), false, None, true).mode,
+            PermissionMode::Plan
+        );
+        let asked = Asked {
+            mode: Some(PermissionMode::Default),
+            ..asked
+        };
+        assert_eq!(
+            choose(
+                &asked,
+                &json!({"mode":"auto","agentModes":{"grok":"plan"}}),
+                false,
+                None,
+                true
+            )
+            .mode,
+            PermissionMode::Plan
+        );
     }
 
     #[test]
     fn a_first_start_takes_new_sessions_first_choices() {
-        let choice = choose(&Asked::default(), &Value::Null, true, &AgentAccess::default());
+        let choice = choose(
+            &Asked::default(),
+            &Value::Null,
+            true,
+            Some(&AgentAccess::default()),
+            false,
+        );
         assert_eq!(
             (choice.agent, choice.model, choice.mode, choice.worktree),
             (SessionAgent::Claude, None, PermissionMode::Auto, false)

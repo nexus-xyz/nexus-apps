@@ -273,6 +273,17 @@ fn starts_in_the_current_folders_project_with_the_picks_given() {
         seen.lock().expect("seen").calls.last().expect("call")["args"],
         json!({"project": project, "prompt": "Find why the tests are slow", "agent": "codex", "permission_mode": "plan", "name": "orchestrator", "worktree": false})
     );
+    let started = run(
+        &dir,
+        &socket,
+        &["sessions", "start", "Review this project", "--agent", "grok"],
+        "",
+    );
+    assert_eq!(started.code, 0, "{}", started.err);
+    assert_eq!(
+        seen.lock().expect("seen").calls.last().expect("Grok start call")["args"],
+        json!({"project": project, "prompt": "Review this project", "agent": "grok"})
+    );
     assert_eq!(
         run(&dir, &socket, &["sessions", "start", "--worktree", "--folder", "x"], "").code,
         2

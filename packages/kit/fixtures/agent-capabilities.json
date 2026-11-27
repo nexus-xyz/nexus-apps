@@ -212,7 +212,7 @@
         ]
       },
       "executable": "grok",
-      "cliLauncher": false,
+      "cliLauncher": true,
       "configuredProvider": null,
       "logout": "grok logout",
       "resume": "--resume",
@@ -220,7 +220,7 @@
         "gateway": null,
         "usageReporting": null,
         "sessionLog": false,
-        "promptArgument": false
+        "promptArgument": true
       }
     }
   ]

@@ -625,11 +625,11 @@ pub fn launch_agent(agent: Agent, argv: &[String], ctx: &Context, config: &Confi
             match agent.entry().billing.gateway {
                 Some(_) => format!(
                     "Install it with `{}`, then run `nexus {command}` again (Nexus does not install it for you). To use your own {plan_name} plan instead of Gateway, also run `{plan_login}` once. `nexus agents` shows what is set up.",
-                    agent.entry().install.command
+                    agent.local_install_command()
                 ),
                 None => format!(
                     "Install it with `{}`, then run `nexus {command}` again (Nexus does not install it for you). `nexus agents` shows what is set up.",
-                    agent.entry().install.command
+                    agent.local_install_command()
                 ),
             },
         )
@@ -674,7 +674,12 @@ pub fn launch_agent(agent: Agent, argv: &[String], ctx: &Context, config: &Confi
     }
     require_route(agent.entry(), choice.route)?;
     let route = choice.route;
-    let asked = named_model(agent, &args.forwarded);
+    let grok_args = if agent == Agent::Grok {
+        Some(grok_terminal(&bin, &cwd, &ctx.env, &args.forwarded)?)
+    } else {
+        None
+    };
+    let asked = named_model(agent, grok_args.as_deref().unwrap_or(&args.forwarded));
     // Gateway chooses `auto` within the organization's policies, and no policy applies to an agent without a Gateway
     // route (`/v1/agents/check` refuses it), so its model is the one the person names, or its own default.
     let plan_only = agent.entry().billing.gateway.is_none();
@@ -734,7 +739,7 @@ pub fn launch_agent(agent: Agent, argv: &[String], ctx: &Context, config: &Confi
     };
     let mut forwarded = match &recording {
         Some(recording) => with_recording(agent, &args.forwarded, recording),
-        None => args.forwarded.clone(),
+        None => grok_args.unwrap_or_else(|| args.forwarded.clone()),
     };
     // The commits the session makes in a nexus-xyz repository name Nexus as a co-author. Only for Nexus's
     // own people while Nexus tries it on its own work first. The agent is told, or it offers to undo it.
@@ -834,7 +839,7 @@ pub fn launch_agent(agent: Agent, argv: &[String], ctx: &Context, config: &Confi
             ("plan", plan.map(|p| json!(p))),
         ]),
     )?;
-    if agent == Agent::Cursor && session["id"].as_str().is_none_or(str::is_empty) {
+    if matches!(agent, Agent::Cursor | Agent::Grok) && session["id"].as_str().is_none_or(str::is_empty) {
         return Err(CliError::usage("Nexus Gateway did not return a session ID.", None).into());
     }
     let session_id = js_string(session.get("id"));
@@ -873,7 +878,8 @@ pub fn launch_agent(agent: Agent, argv: &[String], ctx: &Context, config: &Confi
         Agent::Codex => codex_resumed(&forwarded),
         Agent::Antigravity => antigravity_resumed(&forwarded),
         Agent::Cursor => resumed_with(&forwarded, "--resume"),
-        Agent::Opencode | Agent::Grok => Conversation::Unknown,
+        Agent::Grok => claude_conversation(&forwarded),
+        Agent::Opencode => Conversation::Unknown,
     };
     if let Conversation::New(id) = &conversation {
         forwarded.splice(0..0, ["--session-id".to_string(), id.clone()]);
@@ -1180,6 +1186,16 @@ pub fn launch_agent(agent: Agent, argv: &[String], ctx: &Context, config: &Confi
     Ok(exit_code)
 }
 
+fn grok_terminal(bin: &Path, cwd: &Path, env: &HashMap<String, String>, args: &[String]) -> Result<Vec<String>> {
+    let grok =
+        nexus_client::local_agents::grok::terminal_args(args).map_err(|message| CliError::usage(message, None))?;
+    let mut env = env.clone();
+    nexus_client::local_agents::grok::subscription_env(&mut env);
+    nexus_client::local_agents::grok::check_subscription(bin, cwd, &env)
+        .map_err(|message| CliError::usage(message, None))?;
+    Ok(grok)
+}
+
 /// `nexus claude` and the other launchers with no Nexus account (`NEXUS_BYO_PROVIDERS`): the agent runs on its own
 /// sign-in, the person's plan or key, as if they had started it themselves. No Gateway, no session, nothing recorded.
 fn launch_without_account(
@@ -1197,11 +1213,6 @@ fn launch_without_account(
     if choice.route == Route::Gateway {
         return Err(crate::byo::account_required(&format!("`nexus {command}` through Gateway"), ctx, config).into());
     }
-    if is_auto_name(named_model(agent, &args.forwarded).as_deref()) {
-        return Err(
-            crate::byo::account_required("Letting Nexus choose the model (`--model auto`)", ctx, config).into(),
-        );
-    }
     let forwarded = match args.recording.as_deref() {
         Some(which) => with_recording(agent, &args.forwarded, &crate::recordings::find(ctx, Some(which))?),
         None => args.forwarded.clone(),
@@ -1210,10 +1221,26 @@ fn launch_without_account(
     for name in LAUNCHER_VARS {
         env.remove(*name);
     }
+    let forwarded = if agent == Agent::Grok {
+        nexus_client::local_agents::grok::subscription_env(&mut env);
+        grok_terminal(bin, &ctx.cwd, &env, &forwarded)?
+    } else {
+        forwarded
+    };
+    if is_auto_name(named_model(agent, &forwarded).as_deref()) {
+        return Err(
+            crate::byo::account_required("Letting Nexus choose the model (`--model auto`)", ctx, config).into(),
+        );
+    }
     let launch_args = prompt_in_file(bin, forwarded, ctx.config_path.parent().unwrap_or(Path::new(".")));
     if !args.json {
+        let payer = if agent == Agent::Grok {
+            "your Grok subscription"
+        } else {
+            "your plan or key"
+        };
         ctx.io.err(&style.dim(&format!(
-            "{agent_label} on its own sign-in (your plan or key) {} not signed in to Nexus, so nothing is recorded",
+            "{agent_label} on its own sign-in ({payer}) {} not signed in to Nexus, so nothing is recorded",
             style.bullet
         )));
     }
@@ -1991,7 +2018,7 @@ fn launcher_help(
         format!(
             "  {} {agent_label}: {} {}",
             style.dim("Needs"),
-            agent.entry().install.command,
+            agent.local_install_command(),
             style.dim("(nexus agents shows what is set up)")
         ),
         format!(
@@ -2021,7 +2048,7 @@ fn plan_only_help(style: &Style, agent: Agent, access: Option<&Value>) -> Vec<St
             style.dim("Sign in (nexus auth login) to see whether your organization allows your own plan.")
         ),
     };
-    vec![
+    let mut lines = vec![
         format!(
             "{} {}",
             style.bold(&format!("nexus {command}")),
@@ -2038,15 +2065,27 @@ fn plan_only_help(style: &Style, agent: Agent, access: Option<&Value>) -> Vec<St
         ),
         "  --api, --via gateway, --model auto and --recording are not available.".to_string(),
         format!("  {} are not passed to it.", entry.billing.plan_overrides.join(", ")),
-        format!(
-            "  It does not start while ~/{}/settings.json sets \"modelProvider\": remove that key.",
-            entry.profile.dir
-        ),
-        format!(
-            "  Arguments after Nexus's own flags (or after --) go to {label} unchanged; {}",
-            style.cyan(&format!("nexus {command} -- --help"))
-        ),
-        format!("  shows {label}'s own help."),
+    ];
+    if agent == Agent::Grok {
+        lines.extend([
+            "  Run `grok login` on this computer. Nexus checks for credential and model endpoint overrides.".into(),
+            "  Use -p for a single prompt, --model <id>, --resume [id], or --continue.".into(),
+            "  Run `grok --help` for vendor help.".into(),
+        ]);
+    } else {
+        lines.extend([
+            format!(
+                "  It does not start while ~/{}/settings.json sets \"modelProvider\": remove that key.",
+                entry.profile.dir
+            ),
+            format!(
+                "  Arguments after Nexus's own flags (or after --) go to {label} unchanged; {}",
+                style.cyan(&format!("nexus {command} -- --help"))
+            ),
+            format!("  shows {label}'s own help."),
+        ]);
+    }
+    lines.extend([
         String::new(),
         format!("  {}A JSON summary on stdout when {label} exits", pad_end("--json", 16)),
         format!(
@@ -2069,7 +2108,7 @@ fn plan_only_help(style: &Style, agent: Agent, access: Option<&Value>) -> Vec<St
         format!(
             "  {} {label}: {} {}",
             style.dim("Needs"),
-            entry.install.command,
+            agent.local_install_command(),
             style.dim("(nexus agents shows what is set up)")
         ),
         format!("  {}  nexus {command} {}", style.dim("Example"), entry.session.example),
@@ -2078,7 +2117,8 @@ fn plan_only_help(style: &Style, agent: Agent, access: Option<&Value>) -> Vec<St
             style.dim("Resume"),
             entry.session.resume.replace("{id}", "<id>")
         ),
-    ]
+    ]);
+    lines
 }
 
 /// A UUID in its 36-character hyphenated form, the only form both CLIs send, as Gateway checks it

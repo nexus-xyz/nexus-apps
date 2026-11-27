@@ -72,6 +72,10 @@
       "description": "subscription: run nexus cursor-agent on your Cursor plan"
     },
     {
+      "name": "NEXUS_GROK_AUTH",
+      "description": "subscription: run nexus grok on your Grok plan"
+    },
+    {
       "name": "NEXUS_RECORDINGS_DIR",
       "description": "Where nexus recordings reads screen recordings (default: Nexus for Mac's folder)"
     },
@@ -3249,6 +3253,46 @@
       ]
     },
     {
+      "name": "grok",
+      "usage": "nexus grok [--json] [--subscription] [--team <slug>] [--] [grok args…]",
+      "description": "Grok on your own Grok plan: its calls go straight to xAI, and Nexus records the session",
+      "flags": [
+        {
+          "name": "--json",
+          "description": "A JSON summary on stdout when Grok exits"
+        },
+        {
+          "name": "--subscription",
+          "description": "Run Grok on your personal subscription"
+        },
+        {
+          "name": "--team",
+          "value": "<slug>",
+          "description": "The team this session is attributed to (also NEXUS_TEAM)"
+        },
+        {
+          "name": "--model",
+          "value": "<id>",
+          "description": "Grok's own model ID"
+        }
+      ],
+      "examples": [
+        "nexus grok -p \"hello\"",
+        "nexus grok --team web",
+        "nexus grok -- --resume <id>"
+      ],
+      "exitCodes": [
+        {
+          "code": 0,
+          "meaning": "The agent's own exit code is passed through"
+        },
+        {
+          "code": 2,
+          "meaning": "--api, --via gateway, --model auto or --recording: not available, and the agent does not start"
+        }
+      ]
+    },
+    {
       "name": "agents",
       "usage": "nexus agents <command>",
       "description": "Your coding agents: whether each is installed and signed in on this machine, the route each takes (through Gateway, or on your own plan), who pays on it, and what is left to set up, with the command for each step. Works signed out (this machine only). Signed in, --csv or --jsonl writes the organization's agent sessions to a file",
@@ -3326,7 +3370,7 @@
         },
         {
           "name": "agents use",
-          "usage": "nexus agents use <claude|codex|agy|cursor-agent> <gateway|subscription|default>",
+          "usage": "nexus agents use <claude|codex|agy|cursor-agent|grok> <gateway|subscription|default>",
           "description": "The route an agent takes when you name none, in every Nexus app you sign in to",
           "flags": [],
           "examples": []
@@ -3725,7 +3769,7 @@
             {
               "name": "--agent",
               "value": "<A>",
-              "description": "claude or codex or nexus or antigravity or cursor; default: the project's"
+              "description": "claude or codex or nexus or antigravity or cursor or grok; default: the project's"
             },
             {
               "name": "--model",

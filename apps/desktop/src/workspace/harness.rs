@@ -231,6 +231,7 @@ impl Workspace {
 pub(super) fn install_command(agent: SessionAgent, gateway: &str, ssh: Option<&str>) -> String {
     // A coding agent installs with its entry's command; Nexus's own agent from this Gateway's installer.
     let command = match agent.coding() {
+        Some(coding) if ssh.is_none() => coding.local_install_command().to_string(),
         Some(coding) => coding.entry().install.command.to_string(),
         None => format!(
             "curl -fsSL {} | bash",

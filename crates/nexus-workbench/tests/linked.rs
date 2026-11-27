@@ -782,7 +782,7 @@ async fn e6_mode_clamp_on_resume() {
             SessionAgent::Cursor => unreachable!("not among the agents this test runs"),
             #[cfg(feature = "opencode")]
             SessionAgent::Opencode => unreachable!("not among the agents this test runs"),
-            SessionAgent::Nexus | SessionAgent::Antigravity => {}
+            SessionAgent::Nexus | SessionAgent::Antigravity | SessionAgent::Grok => {}
         }
         s.workbench.shutdown().await;
         let _ = std::fs::remove_dir_all(&s.root);
