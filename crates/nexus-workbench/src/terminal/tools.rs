@@ -24,7 +24,7 @@ pub fn definitions(steers_mid_turn: bool) -> Vec<Value> {
     let mut run_description = "Run a command in this session's shared Terminal tab and worktree. Each command has its own PTY, shell environment and real exit status. Auto and Full access execute directly; other modes stage it for the person to Run or Decline. Read incremental output using terminal_read and the returned ID. Never rerun a provider-owned command just to display it.".to_string();
     if steers_mid_turn {
         run_description.push_str(
-            " Set watch to true to get one notice with the command's name, ID and exit code when a long command exits.",
+            " Set watch to true to get one notice with the command's name, ID and exit code when a long command exits: it wakes you even after your turn ends, so do not poll the command or schedule a wake-up for it.",
         );
         run_properties.insert(
             "watch".into(),
@@ -65,4 +65,42 @@ pub(crate) async fn call(workbench: &Workbench, caller: &str, name: &str, args: 
         }
     };
     Some(json!({"content":[{"type":"text","text":value.to_string()}],"isError":failed}))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::definitions;
+    use serde_json::Value;
+
+    fn run(steers_mid_turn: bool) -> Value {
+        definitions(steers_mid_turn)
+            .into_iter()
+            .find(|tool| tool["name"] == "terminal_run")
+            .expect("terminal_run is listed")
+    }
+
+    /// An agent that can be woken mid-turn learns that `watch` replaces polling and a scheduled wake-up. One that
+    /// cannot gets no `watch` and no word of it.
+    #[test]
+    fn watch_is_offered_as_the_way_to_be_woken_only_where_it_works() {
+        let watched = run(true);
+        let description = watched["description"].as_str().unwrap_or_default();
+        assert!(watched["inputSchema"]["properties"].get("watch").is_some());
+        assert!(
+            description.contains("wakes you even after your turn ends"),
+            "{description}"
+        );
+        assert!(
+            description.contains("do not poll the command or schedule a wake-up"),
+            "{description}"
+        );
+
+        let plain = run(false);
+        let description = plain["description"].as_str().unwrap_or_default();
+        assert!(plain["inputSchema"]["properties"].get("watch").is_none());
+        assert!(
+            !description.contains("watch") && !description.contains("wake"),
+            "{description}"
+        );
+    }
 }

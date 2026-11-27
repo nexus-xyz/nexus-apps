@@ -512,6 +512,24 @@ mod tests {
         );
     }
 
+    /// A long command in the workbench is watched, not polled or checked with a wake-up: the hook comes first, and a
+    /// wake-up is the fallback for what Nexus cannot watch. The sentence names `watch` only as `terminal_run` offers it,
+    /// so an agent whose `terminal_run` has none (`terminal::definitions`) is not told to use it.
+    #[test]
+    fn sessions_are_told_to_watch_a_long_command_and_keep_wake_ups_for_the_rest() {
+        let text = instructions();
+        let watch = TERMINAL_GUIDANCE
+            .lines()
+            .find(|line| line.starts_with("When terminal_run offers watch,"))
+            .expect("the watch guidance");
+        assert!(text.contains(watch));
+        assert!(watch.contains("watch set to true"));
+        assert!(watch.contains("do not schedule a wake-up to check on it"));
+        assert!(watch.contains("only for what Nexus cannot watch"));
+        // An agent with no shared terminal is not told about it.
+        assert!(!session_tool_instructions().contains("terminal_run"));
+    }
+
     #[test]
     fn every_session_is_told_about_pages() {
         let text = instructions();
