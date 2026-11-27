@@ -60,6 +60,13 @@ pub(super) fn label(name: &str, command: &str) -> Option<String> {
     (!name.is_empty() && !flat(command).starts_with(&name)).then_some(name)
 }
 
+/// Whether an open command's details show its whole command. A request always does: the person reviews it there. A
+/// command of more lines does, and so does one the row cuts. `cut` is the row's last measure, `None` before its first
+/// paint: the box shows until the row is known to show the command whole.
+pub(super) fn shows_command(more_lines: usize, request: bool, cut: Option<bool>) -> bool {
+    request || more_lines > 0 || cut.unwrap_or(true)
+}
+
 /// A shell's row title: its name, or "Shell" when it has none.
 pub(super) fn shell_name(name: &str) -> String {
     let name = name.split_whitespace().collect::<Vec<_>>().join(" ");
@@ -269,6 +276,15 @@ mod tests {
         assert_eq!(folder("/srv/repo", home), "/srv/repo");
         assert_eq!(folder("/", home), "/");
         assert_eq!(folder("/home/ana/x", None), "/home/ana/x");
+    }
+
+    #[test]
+    fn the_details_repeat_a_command_only_when_the_row_cannot_show_it_whole() {
+        assert!(!shows_command(0, false, Some(false)), "a short line shown whole");
+        assert!(shows_command(0, false, Some(true)), "a line the row cuts");
+        assert!(shows_command(2, false, Some(false)), "more lines than the row's one");
+        assert!(shows_command(0, true, Some(false)), "a request is reviewed in its box");
+        assert!(shows_command(0, false, None), "not measured yet");
     }
 
     #[test]
