@@ -7,7 +7,7 @@ pkgrel=1
 pkgdesc="Nexus, the open-source AI IDE: run coding agents side by side"
 arch=('x86_64')
 url="https://nexus.inc/"
-license=('Apache-2.0')
+license=('MIT')
 depends=('gtk3' 'glib2' 'gdk-pixbuf2' 'alsa-lib' 'nss' 'nspr' 'at-spi2-core' 'libcups' 'dbus' 'mesa'
          'libxkbcommon' 'libxkbcommon-x11' 'libx11' 'libxcb' 'libxcomposite' 'libxdamage' 'libxext'
          'libxfixes' 'libxrandr' 'expat' 'cairo' 'pango' 'systemd-libs')
@@ -28,7 +28,7 @@ package() {
   ln -s /opt/nexus-desktop/nexus-desktop-gpui "$pkgdir/usr/bin/nexus-desktop-gpui"
   install -Dm644 "$srcdir/$app/nexus-desktop-gpui.desktop" "$pkgdir/usr/share/applications/nexus-desktop-gpui.desktop"
   install -Dm644 "$srcdir/$app/nexus-desktop-gpui.png" "$pkgdir/usr/share/icons/hicolor/256x256/apps/nexus-desktop-gpui.png"
-  # Tarballs from the release after 0.11.2 carry the license text; 0.11.2 declares Apache-2.0 and has none.
+  # Tarballs from the release after 0.11.2 carry the license text; 0.11.2 has none.
   if [ -f "$srcdir/$app/LICENSE" ]; then
     install -Dm644 "$srcdir/$app/LICENSE" "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
   fi
