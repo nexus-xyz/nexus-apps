@@ -1,2 +1,3 @@
 # Build output. `cargo` writes here, and CEF's binary distribution lands in target/cef (.cargo/config.toml).
 /target/
+node_modules/

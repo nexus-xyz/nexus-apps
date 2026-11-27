@@ -1,0 +1,8 @@
+{
+  "name": "nexus-ci-eas-cli",
+  "private": true,
+  "description": "eas-cli for mobile-release.yml's iOS job, pinned with its whole dependency tree.",
+  "dependencies": {
+    "eas-cli": "27.1.0"
+  }
+}

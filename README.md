@@ -66,6 +66,32 @@ the shared host service live in the `nexus-workbench`, `nexus-host` and `nexus-r
 in CEF, in a separate web host process, so a page crash does not stop the app. Longer
 architecture and contributor guides will come later.
 
+## The mobile app
+
+`apps/mobile` is Nexus for iPhone and Android: an Expo (React Native) app on the same Gateway, through the TypeScript
+kit in `packages/kit`. [apps/mobile/README.md](apps/mobile/README.md) describes it.
+
+```sh
+cd apps/mobile
+npm ci
+npx expo run:ios       # needs Xcode; or run:android with Android Studio
+```
+
+The store accounts, the Nexus icon and Nexus's own hosts are not in this repository. `app.config.ts` reads the
+accounts and hosts from the environment (`NEXUS_MOBILE_*`), so a build from here runs under your own, with Expo's
+default icon.
+
+The kit's and the app's tests run at the repository root:
+
+```sh
+npm ci
+npm test                                 # vitest: packages/kit and apps/mobile
+npm run typecheck:kit
+(cd apps/mobile && npm run typecheck)
+```
+
+Nexus's store builds come from `mobile-v*` tags (`.github/workflows/mobile-release.yml`).
+
 ## Contributing
 
 We welcome bug reports, fixes and features. Read [CONTRIBUTING.md](CONTRIBUTING.md) first.
@@ -76,6 +102,6 @@ Project decisions are described in [GOVERNANCE.md](GOVERNANCE.md).
 
 ## License
 
-Nexus Desktop is licensed under the [MIT license](LICENSE).
+Nexus Desktop, the command line and the mobile app are licensed under the [MIT license](LICENSE).
 Third-party code keeps its own license. Its notices are in [NOTICE](NOTICE).
 The Nexus name and logo are not covered by that license. See [TRADEMARKS.md](TRADEMARKS.md).

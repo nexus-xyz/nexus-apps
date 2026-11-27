@@ -84,3 +84,18 @@ condition = "AND"
 paths = ['''(^|/)(nexus-cli|apps/cli)/tests/help\.rs$''']
 regexTarget = "match"
 regexes = ['''^ada@gmail\.com$''']
+
+# The phone app (2026-11-27). app.json names no store account: app.config.ts reads them from the environment, so a
+# fork builds under its own. A store account id written back into the app's config is reported here.
+[[rules]]
+id = "store-account"
+description = "A store account in the phone app's config: EAS project or owner, App Store Connect app, Apple team."
+path = '''(^|/)apps/mobile/[^/]+\.json$'''
+regex = '''"(?:ascAppId|appleTeamId|projectId|owner)"\s*:\s*"'''
+keywords = ["ascappid", "appleteamid", "projectid", "owner"]
+
+[[rules]]
+id = "app-host"
+description = "A Fly or Vercel app host: a deployment's own name, not a public domain."
+regex = '''(?i)\b[a-z0-9-]+\.(?:fly\.dev|vercel\.app)\b'''
+keywords = ["fly.dev", "vercel.app"]

@@ -1,0 +1,475 @@
+# Nexus for Android and iPhone: the store builds.
+#
+#   release    a tag `mobile-v<MAJOR.MINOR.PATCH>` on main, equal to apps/mobile/VERSION. Android: a Play App Bundle
+#              signed with the release key, uploaded to Google Play's internal testing track as a draft. iOS: a build
+#              on EAS, which EAS Submit uploads to TestFlight. Every job that reads a secret runs in the
+#              `mobile-release` environment, which asks a second person to approve.
+#   rehearsal  a run by hand (Actions → mobile-release → Run workflow), or a tag `mobile-v<version>-rehearsal.<n>`.
+#              No environment and no secret: an Android release build with no release key (Expo's template signs it
+#              with its debug key) and a placeholder application id, and the iOS project generated without Xcode.
+#              It publishes nothing: no store, no GitHub release, no artifact.
+#
+# Secrets and variables are named here, never written. The `mobile-release` environment holds:
+#   secrets    ANDROID_KEYSTORE (the upload key's .jks as base64), ANDROID_KEYSTORE_PASSWORD, ANDROID_KEY_ALIAS,
+#              ANDROID_KEY_PASSWORD; EXPO_TOKEN (a robot token of the Expo account), APPLE_API_KEY, APPLE_API_ISSUER,
+#              APPLE_API_KEY_P8 (an App Store Connect key that can submit); NEXUS_MOBILE_EAS_PROJECT_ID,
+#              NEXUS_MOBILE_EAS_OWNER, NEXUS_MOBILE_IOS_BUNDLE_ID, NEXUS_MOBILE_APPLE_TEAM_ID,
+#              NEXUS_MOBILE_ANDROID_PACKAGE and NEXUS_MOBILE_ASC_APP_ID (the store accounts: not secrets, kept as
+#              secrets so this public repository's logs never show them).
+#   variables  GCP_WORKLOAD_IDENTITY_PROVIDER and GCP_SERVICE_ACCOUNT (the Play uploader, through Workload Identity
+#              Federation: no key file), GOOGLE_PLAY_UPLOAD_CERT_SHA256, MOBILE_VERSION_CODE_BASE (added to the run
+#              number for Android's versionCode, which must stay above every code Play has seen),
+#              NEXUS_MOBILE_AGENTS_API_URL, NEXUS_MOBILE_AGENT_VOICE, NEXUS_MOBILE_LEGACY_UI_HOST,
+#              NEXUS_MOBILE_LEGACY_GATEWAY_HOST and NEXUS_MOBILE_DEV_GATEWAY_HOST.
+name: mobile-release
+
+on:
+  push:
+    tags: ["mobile-v*"]
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: mobile-release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  EXPO_NO_TELEMETRY: "1"
+  MOBILE: apps/mobile
+
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    outputs:
+      mode: ${{ steps.plan.outputs.mode }}
+      version: ${{ steps.plan.outputs.version }}
+      base-version: ${{ steps.plan.outputs.base-version }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - name: The mode and the version
+        id: plan
+        run: |
+          base="$(tr -d '[:space:]' < "$MOBILE/VERSION")"
+          if ! [[ "$base" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::$MOBILE/VERSION is \"$base\", not a bare MAJOR.MINOR.PATCH"
+            exit 1
+          fi
+          app="$(jq -r .expo.version "$MOBILE/app.json")"
+          if [ "$app" != "$base" ]; then
+            echo "::error::app.json's version is $app and $MOBILE/VERSION is $base. Change both together."
+            exit 1
+          fi
+          if [ "$GITHUB_EVENT_NAME" = workflow_dispatch ]; then
+            mode=rehearsal
+            version="$base-rehearsal.$GITHUB_RUN_NUMBER"
+          else
+            version="${GITHUB_REF_NAME#mobile-v}"
+            if [[ "$version" =~ ^([0-9]+\.[0-9]+\.[0-9]+)-rehearsal\.[0-9]+$ ]]; then
+              mode=rehearsal
+              tagged="${BASH_REMATCH[1]}"
+            elif [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+              mode=release
+              tagged="$version"
+            else
+              echo "::error::$GITHUB_REF_NAME is not mobile-v<MAJOR.MINOR.PATCH> or mobile-v<MAJOR.MINOR.PATCH>-rehearsal.<n>."
+              exit 1
+            fi
+            if [ "$tagged" != "$base" ]; then
+              echo "::error::$GITHUB_REF_NAME names $tagged, and $MOBILE/VERSION is $base."
+              exit 1
+            fi
+          fi
+          # A store build comes only from a commit on main.
+          if [ "$mode" = release ] && ! git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
+            echo "::error::$GITHUB_REF_NAME points at ${GITHUB_SHA::10}, which is not on main. Nothing was built."
+            exit 1
+          fi
+          { echo "mode=$mode"; echo "version=$version"; echo "base-version=$base"; } | tee -a "$GITHUB_OUTPUT"
+          echo "Nexus for Android and iPhone **$version**: **$mode**." >> "$GITHUB_STEP_SUMMARY"
+
+  android:
+    needs: plan
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    environment: ${{ needs.plan.outputs.mode == 'release' && 'mobile-release' || '' }}
+    permissions:
+      contents: read
+    env:
+      MODE: ${{ needs.plan.outputs.mode }}
+      BASE_VERSION: ${{ needs.plan.outputs.base-version }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: apps/mobile/package-lock.json
+      - uses: actions/setup-java@c5195efecf7bdfc987ee8bae7a71cb8b11521c00 # v4.7.1
+        with:
+          distribution: temurin
+          java-version: "17"
+      - name: The runner has the Android SDK
+        run: |
+          sdk="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-}}"
+          if [ -z "$sdk" ] || [ ! -d "$sdk/platform-tools" ]; then
+            echo "::error::ANDROID_SDK_ROOT and ANDROID_HOME name no SDK with platform-tools."
+            exit 1
+          fi
+      - name: Install the app's dependencies
+        working-directory: apps/mobile
+        run: npm ci --no-audit --no-fund
+      # A release needs every secret and variable it signs and names the app with: a partial set would sign with a key
+      # the build cannot open, or name another app. A rehearsal reads none.
+      - name: Check the release's secrets and variables
+        if: env.MODE == 'release'
+        env:
+          # Whether each is set, never its value.
+          SET_ANDROID_KEYSTORE: ${{ secrets.ANDROID_KEYSTORE != '' }}
+          SET_ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD != '' }}
+          SET_ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS != '' }}
+          SET_ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD != '' }}
+          SET_NEXUS_MOBILE_ANDROID_PACKAGE: ${{ secrets.NEXUS_MOBILE_ANDROID_PACKAGE != '' }}
+          SET_NEXUS_MOBILE_AGENTS_API_URL: ${{ vars.NEXUS_MOBILE_AGENTS_API_URL != '' }}
+          SET_MOBILE_VERSION_CODE_BASE: ${{ vars.MOBILE_VERSION_CODE_BASE != '' }}
+          SET_GOOGLE_PLAY_UPLOAD_CERT_SHA256: ${{ vars.GOOGLE_PLAY_UPLOAD_CERT_SHA256 != '' }}
+        run: |
+          missing=()
+          for set in "${!SET_@}"; do
+            [ "${!set}" = true ] || missing+=("${set#SET_}")
+          done
+          if [ "${#missing[@]}" -ne 0 ]; then
+            echo "::error title=The mobile-release environment is not set up::Not set: ${missing[*]}. Nothing was built."
+            exit 1
+          fi
+      - name: The build's version, versionCode and settings
+        working-directory: apps/mobile
+        env:
+          CODE_BASE: ${{ vars.MOBILE_VERSION_CODE_BASE }}
+          ANDROID_PACKAGE: ${{ secrets.NEXUS_MOBILE_ANDROID_PACKAGE }}
+          AGENTS_API_URL: ${{ vars.NEXUS_MOBILE_AGENTS_API_URL }}
+          AGENT_VOICE: ${{ vars.NEXUS_MOBILE_AGENT_VOICE }}
+          LEGACY_UI_HOST: ${{ vars.NEXUS_MOBILE_LEGACY_UI_HOST }}
+          LEGACY_GATEWAY_HOST: ${{ vars.NEXUS_MOBILE_LEGACY_GATEWAY_HOST }}
+          DEV_GATEWAY_HOST: ${{ vars.NEXUS_MOBILE_DEV_GATEWAY_HOST }}
+        run: |
+          code="$GITHUB_RUN_NUMBER"
+          if [ "$MODE" = release ]; then
+            if ! [[ "$CODE_BASE" =~ ^[0-9]+$ ]]; then
+              echo "::error::MOBILE_VERSION_CODE_BASE is not a whole number."
+              exit 1
+            fi
+            code=$((CODE_BASE + GITHUB_RUN_NUMBER))
+            if [[ "$AGENTS_API_URL" != https://* ]]; then
+              echo "::error::NEXUS_MOBILE_AGENTS_API_URL is not an https:// URL."
+              exit 1
+            fi
+            {
+              echo "NEXUS_MOBILE_ANDROID_PACKAGE=$ANDROID_PACKAGE"
+              echo "EXPO_PUBLIC_NEXUS_AGENTS_API_URL=$AGENTS_API_URL"
+              echo "EXPO_PUBLIC_NEXUS_AGENT_VOICE=$AGENT_VOICE"
+              echo "NEXUS_MOBILE_LEGACY_UI_HOST=$LEGACY_UI_HOST"
+              echo "NEXUS_MOBILE_LEGACY_GATEWAY_HOST=$LEGACY_GATEWAY_HOST"
+              echo "NEXUS_MOBILE_DEV_GATEWAY_HOST=$DEV_GATEWAY_HOST"
+            } >> "$GITHUB_ENV"
+          else
+            # No store account and no Nexus host: what a fork builds.
+            echo "NEXUS_MOBILE_ANDROID_PACKAGE=com.example.nexus" >> "$GITHUB_ENV"
+          fi
+          node scripts/internal-version.mjs --version "$BASE_VERSION" --code "$code"
+          echo "VERSION_CODE=$code" >> "$GITHUB_ENV"
+          echo "Android $BASE_VERSION, versionCode $code." >> "$GITHUB_STEP_SUMMARY"
+      # android/ is generated and never committed. --no-install keeps the lockfile npm ci used.
+      - name: Generate android/
+        working-directory: apps/mobile
+        run: npx --no-install expo prebuild --platform android --no-install
+      # Every secret reaches the shell through `env:`, never through ${{ }} in the script.
+      - name: Unpack the release keystore
+        if: env.MODE == 'release'
+        env:
+          ANDROID_KEYSTORE: ${{ secrets.ANDROID_KEYSTORE }}
+          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+        run: |
+          printf '%s' "$ANDROID_KEYSTORE" | base64 -d > "$RUNNER_TEMP/release.jks"
+          keytool -list -keystore "$RUNNER_TEMP/release.jks" -storepass:env KEYSTORE_PASSWORD > /dev/null
+          keytool -list -v -keystore "$RUNNER_TEMP/release.jks" -storepass:env KEYSTORE_PASSWORD -alias "$KEY_ALIAS" |
+            sed -n 's/.*SHA256: *//p' | head -1 | tr -d ':' | tr 'A-Z' 'a-z' > "$RUNNER_TEMP/expected-signer"
+          if [ ! -s "$RUNNER_TEMP/expected-signer" ]; then
+            echo "::error::Could not read the certificate of the key alias from the keystore."
+            exit 1
+          fi
+      # Injected signing, so the generated build.gradle is never edited. Into gradle.properties, not -P arguments,
+      # which `ps` shows; every character but a letter or a digit is written as \uXXXX.
+      - name: Sign with the release key
+        if: env.MODE == 'release'
+        working-directory: apps/mobile/android
+        env:
+          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          node -e '
+            const esc = (v) => v.replace(/[^A-Za-z0-9]/g, (c) => "\\u" + c.charCodeAt(0).toString(16).padStart(4, "0"));
+            const props = {
+              "android.injected.signing.store.file": process.env.RUNNER_TEMP + "/release.jks",
+              "android.injected.signing.store.password": process.env.KEYSTORE_PASSWORD,
+              "android.injected.signing.key.alias": process.env.KEY_ALIAS,
+              "android.injected.signing.key.password": process.env.KEY_PASSWORD,
+            };
+            const lines = Object.entries(props).map(([k, v]) => k + "=" + esc(v));
+            require("node:fs").appendFileSync("gradle.properties", "\n" + lines.join("\n") + "\n");
+          '
+      # The rehearsal: one ABI, Expo's debug key, nothing kept.
+      - name: Build the release APK (rehearsal)
+        if: env.MODE == 'rehearsal'
+        working-directory: apps/mobile/android
+        run: |
+          ./gradlew assembleRelease --no-daemon -PreactNativeArchitectures=arm64-v8a
+          apk=app/build/outputs/apk/release/app-release.apk
+          {
+            echo "Rehearsal APK, not kept: $(stat -c %s "$apk") bytes, sha256 $(sha256sum "$apk" | cut -d' ' -f1)."
+            echo "Not signed with a release key: Expo's template signs a release build with its debug key."
+          } >> "$GITHUB_STEP_SUMMARY"
+      # The store build: every ABI, signed with the upload key, checked against the key Play registered.
+      - name: Build the Play App Bundle
+        if: env.MODE == 'release'
+        working-directory: apps/mobile/android
+        env:
+          PLAY_UPLOAD_CERT_SHA256: ${{ vars.GOOGLE_PLAY_UPLOAD_CERT_SHA256 }}
+        run: |
+          ./gradlew bundleRelease --no-daemon -PreactNativeArchitectures=armeabi-v7a,arm64-v8a,x86,x86_64
+          aab=app/build/outputs/bundle/release/app-release.aab
+          jarsigner -verify "$aab" > /dev/null
+          actual="$(keytool -printcert -jarfile "$aab" | sed -n 's/.*SHA256: *//p' | head -1 | tr -d ':' | tr '[:upper:]' '[:lower:]')"
+          expected="$(cat "$RUNNER_TEMP/expected-signer")"
+          registered="$(printf '%s' "$PLAY_UPLOAD_CERT_SHA256" | tr -d '[:space:]:' | tr '[:upper:]' '[:lower:]')"
+          if [ -z "$actual" ] || [ "$actual" != "$expected" ] || [ "$actual" != "$registered" ]; then
+            echo "::error::The bundle is not signed with the upload key Play registered. Nothing was uploaded."
+            exit 1
+          fi
+          mkdir -p "$RUNNER_TEMP/play"
+          cp "$aab" "$RUNNER_TEMP/play/nexus-$BASE_VERSION-$VERSION_CODE-android.aab"
+          echo "Play bundle $BASE_VERSION ($VERSION_CODE), signer $actual." >> "$GITHUB_STEP_SUMMARY"
+      # always(): also after a failed build.
+      - name: Remove the signing credentials
+        if: always()
+        run: |
+          rm -f "$RUNNER_TEMP/release.jks" "$RUNNER_TEMP/expected-signer"
+          props="$MOBILE/android/gradle.properties"
+          if [ -f "$props" ]; then
+            sed -i '/^android\.injected\.signing\./d' "$props"
+          fi
+      # To the upload job only. A public repository's artifacts can be downloaded by anyone signed in to GitHub, so the
+      # bundle stays one day: the store build Play already has.
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: env.MODE == 'release'
+        with:
+          name: mobile-play-bundle
+          path: ${{ runner.temp }}/play/*.aab
+          if-no-files-found: error
+          retention-days: 1
+
+  # The Play uploader gets the checked bundle on its own runner, with no signing credential. Workload Identity
+  # Federation trusts this workflow in the `mobile-release` environment only.
+  play-upload:
+    needs: [plan, android]
+    if: needs.plan.outputs.mode == 'release'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: mobile-release
+    permissions:
+      contents: read
+      id-token: write
+    concurrency:
+      group: mobile-release-play-internal
+      cancel-in-progress: false
+    steps:
+      # auth writes its temporary credentials in the workspace, so it needs a checkout first.
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          persist-credentials: false
+          sparse-checkout: apps/mobile/VERSION
+          sparse-checkout-cone-mode: false
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: mobile-play-bundle
+          path: ${{ runner.temp }}/play
+      - name: Authenticate the Play uploader
+        id: auth
+        uses: google-github-actions/auth@c200f3691d83b41bf9bbd8638997a462592937ed # v2
+        with:
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.GCP_SERVICE_ACCOUNT }}
+          create_credentials_file: true
+          cleanup_credentials: true
+      - name: Upload to Google Play internal testing
+        uses: r0adkll/upload-google-play@e738b9dd8f2476ea806d921b64aacd24f34515a5 # v1
+        with:
+          serviceAccountJson: ${{ steps.auth.outputs.credentials_file_path }}
+          packageName: ${{ secrets.NEXUS_MOBILE_ANDROID_PACKAGE }}
+          releaseFiles: ${{ runner.temp }}/play/*.aab
+          releaseName: ${{ needs.plan.outputs.version }} (${{ github.run_number }})
+          tracks: internal
+          status: draft
+      - name: Remove the Play upload credential
+        if: always()
+        env:
+          CREDENTIALS_FILE: ${{ steps.auth.outputs.credentials_file_path }}
+        run: |
+          if [ -n "$CREDENTIALS_FILE" ]; then rm -f "$CREDENTIALS_FILE"; fi
+
+  # iOS. A release builds on EAS (Expo's Mac builders, with the distribution certificate and profile EAS holds), and
+  # EAS Submit uploads the build to TestFlight when it finishes. eas.json, which names the store accounts, is written
+  # here from the environment's secrets and never committed. A rehearsal only generates the iOS project.
+  ios:
+    needs: plan
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: ${{ needs.plan.outputs.mode == 'release' && 'mobile-release' || '' }}
+    permissions:
+      contents: read
+    env:
+      MODE: ${{ needs.plan.outputs.mode }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            apps/mobile/package-lock.json
+            .github/tools/eas-cli/package-lock.json
+      - name: Install the app's dependencies
+        working-directory: apps/mobile
+        run: npm ci --no-audit --no-fund
+      - name: Generate the iOS project (rehearsal)
+        if: env.MODE == 'rehearsal'
+        working-directory: apps/mobile
+        run: |
+          npx --no-install expo prebuild --platform ios --no-install
+          test -s ios/Nexus/PrivacyInfo.xcprivacy
+          echo "iOS project generated; nothing built on EAS." >> "$GITHUB_STEP_SUMMARY"
+      - name: Check the release's secrets
+        if: env.MODE == 'release'
+        env:
+          SET_EXPO_TOKEN: ${{ secrets.EXPO_TOKEN != '' }}
+          SET_APPLE_API_KEY: ${{ secrets.APPLE_API_KEY != '' }}
+          SET_APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER != '' }}
+          SET_APPLE_API_KEY_P8: ${{ secrets.APPLE_API_KEY_P8 != '' }}
+          SET_NEXUS_MOBILE_EAS_PROJECT_ID: ${{ secrets.NEXUS_MOBILE_EAS_PROJECT_ID != '' }}
+          SET_NEXUS_MOBILE_EAS_OWNER: ${{ secrets.NEXUS_MOBILE_EAS_OWNER != '' }}
+          SET_NEXUS_MOBILE_IOS_BUNDLE_ID: ${{ secrets.NEXUS_MOBILE_IOS_BUNDLE_ID != '' }}
+          SET_NEXUS_MOBILE_APPLE_TEAM_ID: ${{ secrets.NEXUS_MOBILE_APPLE_TEAM_ID != '' }}
+          SET_NEXUS_MOBILE_ASC_APP_ID: ${{ secrets.NEXUS_MOBILE_ASC_APP_ID != '' }}
+          SET_NEXUS_MOBILE_AGENTS_API_URL: ${{ vars.NEXUS_MOBILE_AGENTS_API_URL != '' }}
+        run: |
+          missing=()
+          for set in "${!SET_@}"; do
+            [ "${!set}" = true ] || missing+=("${set#SET_}")
+          done
+          if [ "${#missing[@]}" -ne 0 ]; then
+            echo "::error title=The mobile-release environment is not set up::Not set: ${missing[*]}. Nothing was built."
+            exit 1
+          fi
+      # The build profile EAS reads. Its `env` reaches the build on EAS: the store accounts and the build's settings.
+      - name: Write eas.json
+        if: env.MODE == 'release'
+        working-directory: apps/mobile
+        env:
+          NEXUS_MOBILE_EAS_PROJECT_ID: ${{ secrets.NEXUS_MOBILE_EAS_PROJECT_ID }}
+          NEXUS_MOBILE_EAS_OWNER: ${{ secrets.NEXUS_MOBILE_EAS_OWNER }}
+          NEXUS_MOBILE_IOS_BUNDLE_ID: ${{ secrets.NEXUS_MOBILE_IOS_BUNDLE_ID }}
+          NEXUS_MOBILE_APPLE_TEAM_ID: ${{ secrets.NEXUS_MOBILE_APPLE_TEAM_ID }}
+          NEXUS_MOBILE_ANDROID_PACKAGE: ${{ secrets.NEXUS_MOBILE_ANDROID_PACKAGE }}
+          NEXUS_MOBILE_ASC_APP_ID: ${{ secrets.NEXUS_MOBILE_ASC_APP_ID }}
+          AGENTS_API_URL: ${{ vars.NEXUS_MOBILE_AGENTS_API_URL }}
+          AGENT_VOICE: ${{ vars.NEXUS_MOBILE_AGENT_VOICE }}
+          LEGACY_UI_HOST: ${{ vars.NEXUS_MOBILE_LEGACY_UI_HOST }}
+          LEGACY_GATEWAY_HOST: ${{ vars.NEXUS_MOBILE_LEGACY_GATEWAY_HOST }}
+          DEV_GATEWAY_HOST: ${{ vars.NEXUS_MOBILE_DEV_GATEWAY_HOST }}
+        run: |
+          (umask 077 && jq -n '{
+            cli: {version: ">= 27.0.0", appVersionSource: "remote"},
+            build: {production: {autoIncrement: true, env: {
+              EXPO_PUBLIC_NEXUS_AGENTS_API_URL: env.AGENTS_API_URL,
+              EXPO_PUBLIC_NEXUS_AGENT_VOICE: env.AGENT_VOICE,
+              NEXUS_MOBILE_EAS_PROJECT_ID: env.NEXUS_MOBILE_EAS_PROJECT_ID,
+              NEXUS_MOBILE_EAS_OWNER: env.NEXUS_MOBILE_EAS_OWNER,
+              NEXUS_MOBILE_IOS_BUNDLE_ID: env.NEXUS_MOBILE_IOS_BUNDLE_ID,
+              NEXUS_MOBILE_APPLE_TEAM_ID: env.NEXUS_MOBILE_APPLE_TEAM_ID,
+              NEXUS_MOBILE_ANDROID_PACKAGE: env.NEXUS_MOBILE_ANDROID_PACKAGE,
+              NEXUS_MOBILE_LEGACY_UI_HOST: env.LEGACY_UI_HOST,
+              NEXUS_MOBILE_LEGACY_GATEWAY_HOST: env.LEGACY_GATEWAY_HOST,
+              NEXUS_MOBILE_DEV_GATEWAY_HOST: env.DEV_GATEWAY_HOST
+            }}},
+            submit: {production: {ios: {
+              ascAppId: env.NEXUS_MOBILE_ASC_APP_ID,
+              appleTeamId: env.NEXUS_MOBILE_APPLE_TEAM_ID,
+              ascApiKeyPath: "$NEXUS_ASC_KEY_PATH",
+              ascApiKeyIssuerId: "$NEXUS_ASC_ISSUER_ID",
+              ascApiKeyId: "$NEXUS_ASC_KEY_ID"
+            }}}
+          }' > eas.json)
+      # eas-cli from its own lockfile: `npx eas-cli@<version>` would resolve its dependencies again in a job that holds
+      # the Expo token and the App Store Connect key. No install script runs.
+      - name: Install eas-cli from its lockfile
+        if: env.MODE == 'release'
+        run: npm ci --prefix .github/tools/eas-cli --ignore-scripts --no-audit --no-fund
+      - name: Build on EAS and submit to TestFlight
+        if: env.MODE == 'release'
+        working-directory: apps/mobile
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+          APPLE_API_KEY_P8: ${{ secrets.APPLE_API_KEY_P8 }}
+          NEXUS_ASC_KEY_ID: ${{ secrets.APPLE_API_KEY }}
+          NEXUS_ASC_ISSUER_ID: ${{ secrets.APPLE_API_ISSUER }}
+          # Without git, eas-cli copies the tree from the repository root and applies the root .easignore.
+          EAS_NO_VCS: "1"
+        run: |
+          export NEXUS_ASC_KEY_PATH="$RUNNER_TEMP/asc-api-key.p8"
+          (umask 077 && printf '%s\n' "$APPLE_API_KEY_P8" > "$NEXUS_ASC_KEY_PATH")
+          out="$RUNNER_TEMP/eas-ios.json"
+          # --no-wait: EAS keeps the build and its submission; this job does not wait on the queue.
+          "$GITHUB_WORKSPACE/.github/tools/eas-cli/node_modules/.bin/eas" build --platform ios --profile production \
+            --non-interactive --auto-submit --no-wait --json > "$out"
+          jq -r '.[0] | "Nexus for iPhone \(.appVersion) (\(.appBuildVersion)) is queued on EAS, which submits it to TestFlight when it finishes."' \
+            "$out" >> "$GITHUB_STEP_SUMMARY"
+      - name: Remove the App Store Connect key and eas.json
+        if: always()
+        run: rm -f "$RUNNER_TEMP/asc-api-key.p8" "$MOBILE/eas.json"
+
+  # The release's page: notes only. The stores distribute the builds; nothing is attached.
+  github-release:
+    needs: [plan, play-upload, ios]
+    if: needs.plan.outputs.mode == 'release'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - name: Create the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.plan.outputs.version }}
+        run: |
+          notes="$RUNNER_TEMP/notes.md"
+          {
+            echo "Nexus for Android and iPhone $VERSION, built from ${GITHUB_SHA::10}."
+            echo
+            echo "Android: uploaded to Google Play's internal testing track as a draft. iPhone: built on EAS and submitted to TestFlight."
+            echo
+            echo "Built by ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}."
+          } > "$notes"
+          gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --verify-tag --latest=false \
+            --title "Nexus mobile $VERSION" --notes-file "$notes"

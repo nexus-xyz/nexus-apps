@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- What the EMM console shows for the managed key. -->
+<resources>
+  <string name="nexus_managed_org_title">Organization</string>
+  <string name="nexus_managed_org_description">The organization to work in, a slug or an id. The app switches to it after sign-in.</string>
+</resources>

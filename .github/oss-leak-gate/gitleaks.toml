@@ -57,3 +57,31 @@ regexes = ['''const PEM: &str = "-----BEGIN ENCRYPTED PRIVATE KEY-----''']
 description = "Synthetic credential-shaped literals in semgrep.rs and semgrep.ts, the cases semgrep.yml is tested against"
 targetRules = ["generic-api-key"]
 paths = ['''(^|/)oss-leak-gate/semgrep\.(rs|ts)$''']
+
+# The phone app and the kit (2026-11-27). Each value below was compared, by hash only, with the test-vector files
+# (crates/nexus-client/tests/e2e-vectors.json), or is a made-up test token; the values were never printed.
+[[allowlists]]
+description = "The kit's synced fixture mirrors the computer vectors; each value is equal to one in them"
+targetRules = ["generic-api-key"]
+condition = "AND"
+paths = ['''(^|/)kit/src/synced-fixture\.ts$''']
+regexTarget = "line"
+regexes = ['''^\s*(deviceSecret|encryptionKey|signingKey): "''']
+
+[[allowlists]]
+description = "PASSKEY_PRF_LABEL is a protocol label, not a key; its value is also in the test vectors"
+targetRules = ["generic-api-key"]
+condition = "AND"
+paths = ['''(^|/)kit/src/e2e\.ts$''']
+regexTarget = "line"
+regexes = ['''export const PASSKEY_PRF_LABEL = "''']
+
+[[allowlists]]
+description = "Fake tokens and device ids in the kit's and the phone app's TypeScript tests (diagnostics, e2e, pairing)"
+targetRules = ["generic-api-key"]
+paths = [
+  '''(^|/)kit/src/diagnostics\.test\.ts$''',
+  '''(^|/)kit/src/e2e\.test\.ts$''',
+  '''(^|/)kit/src/pairing\.test\.ts$''',
+  '''(^|/)apps/mobile/src/diagnostics\.test\.ts$''',
+]

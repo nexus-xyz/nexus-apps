@@ -1,0 +1,6 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+  <application>
+    <!-- The managed configuration's key, for the EMM console. Merged into the app's manifest. -->
+    <meta-data android:name="android.content.APP_RESTRICTIONS" android:resource="@xml/nexus_app_restrictions" />
+  </application>
+</manifest>

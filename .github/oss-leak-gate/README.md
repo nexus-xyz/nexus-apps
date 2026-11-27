@@ -8,7 +8,7 @@ tracked file:
 | gitleaks 8.30.1 | `gitleaks.toml` (gitleaks' default rules plus the allowlists here) | fails |
 | semgrep 1.186.0 | `semgrep.yml`, tested against `semgrep.rs` and `semgrep.ts` | fails |
 | trufflehog 3.100.0 | none, verified findings only | fails |
-| gitleaks | `blocklist.toml` (internal ticket ids, links, staff addresses) | reports only |
+| gitleaks | `blocklist.toml` (internal ticket ids, links, staff addresses, the phone app's store accounts, app hosts) | reports only |
 
 A finding names the tool, the rule, the file and the line. It never prints the matched value.
 

@@ -1,0 +1,146 @@
+{
+  "purpose": "Public cross-runtime test keys; never credentials for a real Gateway",
+  "now": 1800000000000,
+  "scope": {
+    "gateway": "https://api.nexus.example",
+    "tenantId": "ten_computer_vector",
+    "personId": "usr_computer_vector"
+  },
+  "phoneSecret": "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8gISIjJCUmJygpKissLS4vMDEyMzQ1Njc4OTo7PD0-Pw",
+  "runnerSecret": "QEFCQ0RFRkdISUpLTE1OT1BRUlNUVVZXWFlaW1xdXl9gYWJjZGVmZ2hpamtsbW5vcHFyc3R1dnd4eXp7fH1-fw",
+  "devices": [
+    {
+      "kind": "device",
+      "state": "trusted",
+      "createdAt": "2026-11-01T00:00:00Z",
+      "approvedAt": "2026-11-01T00:01:00Z",
+      "revokedAt": null,
+      "id": "dev_runner",
+      "name": "Computer",
+      "encryptionKey": "eaYx7t4b-cmPEgMs3q3Q56B5OY_HhriMyEbsia-FpRo",
+      "signingKey": "F0VTtFbd38aQjsqxwQH-arIeK6oGF3lbfUOmNIKZP9U",
+      "approvedBy": null,
+      "approvalSignature": null
+    },
+    {
+      "kind": "device",
+      "state": "trusted",
+      "createdAt": "2026-11-01T00:00:00Z",
+      "approvedAt": "2026-11-01T00:01:00Z",
+      "revokedAt": null,
+      "id": "dev_phone",
+      "name": "Phone",
+      "encryptionKey": "j0DFrbaPJWJK5bIU6nZ6bslNgp09e14a0bpvPiE4KF8",
+      "signingKey": "Kay64UG8yvCyLhqU000LxzYeUm0L_hLIl5S8kyKWbdc",
+      "approvedBy": "dev_runner",
+      "approvalSignature": "trI9PWGgzMgTBTBQIkU7c7BDMllE3bbejXVl2CpcodaDYt-C3cNbvMxv_7SggstjmQK9WSjV4t2vw1U8Tj7JCQ"
+    }
+  ],
+  "presence": {
+    "version": 1,
+    "scope": {
+      "gateway": "https://api.nexus.example",
+      "tenantId": "ten_computer_vector",
+      "personId": "usr_computer_vector"
+    },
+    "computerId": "0192f3a4-0000-7000-8000-000000000001",
+    "runnerDeviceId": "dev_runner",
+    "name": "Eduardo’s MacBook 台",
+    "generation": 7,
+    "issuedAt": 1800000000000,
+    "expiresAt": 1800000045000,
+    "enabled": true,
+    "capabilities": [
+      "projects",
+      "start"
+    ],
+    "signature": "fTtX2EYC8qOGRDb0LvANNPqTnVMVwId_v9_Kaas-ghmEfkWkWPrPkL23zAUCu2p4LAQvkbhWRu4XwW1oJa5dDA"
+  },
+  "request": {
+    "version": 1,
+    "scope": {
+      "gateway": "https://api.nexus.example",
+      "tenantId": "ten_computer_vector",
+      "personId": "usr_computer_vector"
+    },
+    "computerId": "0192f3a4-0000-7000-8000-000000000001",
+    "id": "0192f3a4-0000-7000-8000-000000000002",
+    "senderDeviceId": "dev_phone",
+    "runnerDeviceId": "dev_runner",
+    "generation": 7,
+    "issuedAt": 1800000000000,
+    "expiresAt": 1800000015000,
+    "lockedKey": "mD6C6yQEKiDVsD3oYJLoxUapY3ejFcyPbP4Jz5XlJW4maP9LWY7YoUOZyMzGk3HvHN_YAvvS-N5iAoRvKeMWm4kSW1uxf66SJ7VWcmFP98U",
+    "sealed": "Pqm0-jL8J9STjlpd5nHr-jbvpwniHwfOggNLiC0yLqHgPyHLw289w90YKQofLSK0VQtlk9qv1147AcCODUHUGo2wpgDhnPY7i_rCwBF9n7e4HzXPN1EU4bywymUAkkEVgwG_kDzYz2Xqg1jpHCmwRNOsXJmzh315-iCO5CcJclH8-wsQsC0H99-wyhNZdxfX0bZ7X2E3n2DOtMEi4HhPWy0jiU1-G-SwSX51Xs71rNJn7kkzQT1mVSdtF0BC_tSu1AOXVclUDxIBNtkKHc2tRDu_7Zj3SMKAHoiFLhFypjDfNWT45aioBWJONz5b8Mw-Y0bDP6XhJqkRCS1SfLz15RPQkhR0yio9Z90klIziM0JcrdkAndFQ2MS8CrPnGgfB0RyH-LnH7RcHS11j-SEGADQ-ITsTEMzPbfOL6iWpnDWZElS1p389cv4zkaYlyqP10034Jja7jX7Kg396u6-kKnPmQiUSDw286XZXlYxCJreC84HBOB5-8R2woyuBB_LdezQY7rbIUVhXXNA9L7re9JO_D5HfBsfSvjxAbbLwpUssqTuWlD1yDUG1PMAZWLbNjIFm_gsXWGfdTphSB8JP82kazHUfz5svBJUAI4-NynFY1oalDRtVzWn1OSX20nO_p9RvVprns658gKYtL8YdM2AXag40fuqq1_VN9vdEQNe5RRM_nMUMvBbqBO5kTkqRrxPHKLiTGcGimccDMa3LM-LOoixu-G11X5U",
+    "signature": "byQENTMUPgiRviI5uipe19_06o-IRmYPpBtUHlN-rE6d1LtWLEzLJi4Bq1vct8Q7GdlIiBvfNOJlPvsqahWAAQ"
+  },
+  "requestHash": "bTVWaY9RMcoR6aY5muQnJfjspinKui476IYjxcDeEJ8",
+  "reply": {
+    "version": 1,
+    "scope": {
+      "gateway": "https://api.nexus.example",
+      "tenantId": "ten_computer_vector",
+      "personId": "usr_computer_vector"
+    },
+    "computerId": "0192f3a4-0000-7000-8000-000000000001",
+    "requestId": "0192f3a4-0000-7000-8000-000000000002",
+    "requestHash": "bTVWaY9RMcoR6aY5muQnJfjspinKui476IYjxcDeEJ8",
+    "runnerDeviceId": "dev_runner",
+    "recipientDeviceId": "dev_phone",
+    "lockedKey": "3Rnv02NIB62BvJiUBUIpzpIeBBGylgOaoa6u1wWvKHzKm76myWTPbat87sBD6mDrqkstc2sHwlLcT5OZX8-4RRNuuHYC12go_-1JEUT7v0o",
+    "sealed": "-bGjeEPMtysRHNT_jsHxv4FfuXfjbXWiHFWI18qW2Wp_8rAYoeWo8BiwRg_o3GfUAkXDPte9S4109Rhnz-IU9pIjr5_aeDuC-STMlChhJLNDtjrB9Lmf_CnY-f_tShrC3YgX0jYQd0alYxZXiEzp6TAJ479a0JajLQpRLvoLjhJwzYBMGPbYLrIpsxH0c9fZn40kHPD8ZrToc0VxSqTqtU2iCPrbIMSypcfaYLcoGlRSyDhJsSjj6H_6sthdflyY-023vNzrsqHMvIY7nkcZe_LbMlVpmxq1kZUq2cZcqNIQlwmsVjBNhqGa5u1_vXkgzmfVIk4LR6pRtD7Q5JgOisO5qFWnz9eDOJevJQvR-XlOwQX3O8bE7GnsCzMA0-u8pfh5ZdikPM8N1gBIhu9zemSiCK-P5uFhv8uOo0ew_hhJvPeia7TKNLVgQC_TEOMRnTP9EnOvVWDoGBhH1tLPvUh9Ztr3WLKfZHPCfRrcCFqtwSUr5RcHgLYF4z--nWF6nRUb0Uv-uix63wyJ_Q6U_sFE6k9Ql2DOFpyCHQxX8WqQC6SBGEIUzBuuxsfolUu4SaIkz8sinmE7ikVIitv97xZkbz0moBVsr8mOIeFlR1XNVJXnNdtj7qNuKJWr7aWvTvyjhBFukzVqPRqRpuWklaX_jptKv9fXgmBklyUGPe107geSIvqiPz-qSofb6aVXfu_V_FL0uE97aClX01070p7Kcwpg8mQc-WFHHoVZViP4v5ObjW-1pJZsq_Txww2_k7VyF88AU3t3Zrj7BuabkorIvifEaP8KOOeomfyzm1iAW3XgbA8",
+    "signature": "7EdldMoha2RlZ-349FTclVdy-TMMgwI6sbVitdcIUgysRw8eluHMsLilvNTfcyeGx1vet02MsYorlU09Qx2HCg"
+  },
+  "result": {
+    "kind": "created",
+    "threadId": "0192f3a4-0000-7000-8000-000000000003",
+    "origin": {
+      "kind": "computer",
+      "computerId": "0192f3a4-0000-7000-8000-000000000001",
+      "name": "Eduardo’s MacBook 台"
+    },
+    "launch": "running"
+  },
+  "invitation": {
+    "version": 1,
+    "scope": {
+      "gateway": "https://api.nexus.example",
+      "tenantId": "ten_computer_vector",
+      "personId": "usr_computer_vector"
+    },
+    "inviteId": "0192f3a4-0000-7000-8000-000000000004",
+    "computerId": "0192f3a4-0000-7000-8000-000000000001",
+    "computerName": "Eduardo’s MacBook 台",
+    "inviterDeviceId": "dev_runner",
+    "encryptionKey": "eaYx7t4b-cmPEgMs3q3Q56B5OY_HhriMyEbsia-FpRo",
+    "signingKey": "F0VTtFbd38aQjsqxwQH-arIeK6oGF3lbfUOmNIKZP9U",
+    "expiresAt": 1800000300000,
+    "secret": "gIGCg4SFhoeIiYqLjI2Oj5CRkpOUlZaXmJmam5ydnp8",
+    "signature": "xo1hFX6x8qxrsto_wTSIGnsSRLXGCjALok5Rpei_EpnFWaDy7ycyHvkwBTECfpRvTGiANlhr_-VDUU8v-swnAA"
+  },
+  "invitationLink": "xyz.nexus.app://connect#invite=eyJ2ZXJzaW9uIjoxLCJzY29wZSI6eyJnYXRld2F5IjoiaHR0cHM6Ly9hcGkubmV4dXMuZXhhbXBsZSIsInRlbmFudElkIjoidGVuX2NvbXB1dGVyX3ZlY3RvciIsInBlcnNvbklkIjoidXNyX2NvbXB1dGVyX3ZlY3RvciJ9LCJpbnZpdGVJZCI6IjAxOTJmM2E0LTAwMDAtNzAwMC04MDAwLTAwMDAwMDAwMDAwNCIsImNvbXB1dGVySWQiOiIwMTkyZjNhNC0wMDAwLTcwMDAtODAwMC0wMDAwMDAwMDAwMDEiLCJjb21wdXRlck5hbWUiOiJFZHVhcmRv4oCZcyBNYWNCb29rIOWPsCIsImludml0ZXJEZXZpY2VJZCI6ImRldl9ydW5uZXIiLCJlbmNyeXB0aW9uS2V5IjoiZWFZeDd0NGItY21QRWdNczNxM1E1NkI1T1lfSGhyaU15RWJzaWEtRnBSbyIsInNpZ25pbmdLZXkiOiJGMFZUdEZiZDM4YVFqc3F4d1FILWFySWVLNm9HRjNsYmZVT21OSUtaUDlVIiwiZXhwaXJlc0F0IjoxODAwMDAwMzAwMDAwLCJzZWNyZXQiOiJnSUdDZzRTRmhvZUlpWXFMakkyT2o1Q1JrcE9VbFphWG1KbWFtNXlkbnA4Iiwic2lnbmF0dXJlIjoieG8xaEZYNng4cXhyc3RvX3dUU0lHbnNTUkxYR0NqQUxvazVScGVpX0VwbkZXYUR5N3ljeUh2a3dCVEVDZnBSdlRHaUFObGhyXy1WRFVVOHYtc3duQUEifQ",
+  "pairing": {
+    "version": 1,
+    "scope": {
+      "gateway": "https://api.nexus.example",
+      "tenantId": "ten_computer_vector",
+      "personId": "usr_computer_vector"
+    },
+    "id": "0192f3a4-0000-7000-8000-000000000005",
+    "inviteId": "0192f3a4-0000-7000-8000-000000000004",
+    "inviterDeviceId": "dev_runner",
+    "senderDeviceId": "dev_phone",
+    "expiresAt": 1800000300000,
+    "lockedKey": "ryAWWy80cxpigKtY9hpxxiSVEDGljQ1_HPeHJSmRo2P0SiwSlrXoY3g7ctyMc7riYgobC6DaK-KtsEVjYpHSEOe61Pbuh7COtPpTvq3tWyQ",
+    "sealed": "dvDrfFmStMoL8KFX_i1zN-__2-p2wqxb2QpRlpYuX2uAgO3RSOwRMOAJNg2Jyr9qtxxWL7idAONBADwqvpHqYQIseCk2VtxbscUuXEisbvX-YU1ULfsM2fyobH5AHermFsMNMO1Jn_oe5SC9lYwoTFqbrS_uYnuQ4a8XeyIu7D7oBDYpj6XIhWL7ZdX1nwjGLln4IBgViw9TQ04V_zGg_MPblf4AZaeilm7riIakHnSWzXAFE2fFw3zcwYW3orhI_pSlaw4Zxfw8yzjZgKSBKk9enpzRPAKGZyl7YL3ZCqoYyRlwNakgYt48xjzgypGcCR38IYuIeKMk2L0XxWJTuoY8SO1AqDwufkKUDPSfpvqot0eKEkLmWKqakHfGxvoCA2B5ooZgk0g7ntF8qhy0m38vnPuQExil2w_qb1KWAZjpE5R8wdikSW_MOmkxK5qUVbnVvvxqAqOPHOBPaB7MNvz3dj4scg3bqxhui8GMaG6g2Nh1r14g0Y8Uq8YR2Zr_L1c4Y8sBKeFYa22jRkn0u73hBIDm4kuNmEXjpPVEoWL8pB5Ra_R_oCkmTcl6w-8qf6ibS22B3CTJVgYmt1FC5yoR8HwgfgmAUl5hMT9t8amItmYNTSjtsw1QO2ON1aoD-8BeUMAQgRp1bOk_LIXZtOCg6T4L_ZOckf8ptbxns8JC0oMbP70clCtPpDTVrnBIqwUYtX0yLePQUx13vfptloJI4UOFlIM4qUGGJi-JutK6ZVTd1ADTFV8Lzwf_fj8VY3JIrKfDfCU2",
+    "signature": "M9s4cxjey_-qq1qpfa8VNb3PXIvb5_3vA3lfWOAzAQHxsFPUO3XCCv1B_O_hzyFPTPa6KpmxgQiNnM3BTfz-Ag"
+  },
+  "messages": {
+    "presence": "nexus-computer-presence-v1\n25:https://api.nexus.example19:ten_computer_vector19:usr_computer_vector36:0192f3a4-0000-7000-8000-00000000000110:dev_runner23:Eduardo’s MacBook 台1:713:180000000000013:18000000450004:true14:projects,start",
+    "request": "nexus-computer-request-v1\n25:https://api.nexus.example19:ten_computer_vector19:usr_computer_vector36:0192f3a4-0000-7000-8000-00000000000136:0192f3a4-0000-7000-8000-0000000000029:dev_phone10:dev_runner1:713:180000000000013:1800000015000107:mD6C6yQEKiDVsD3oYJLoxUapY3ejFcyPbP4Jz5XlJW4maP9LWY7YoUOZyMzGk3HvHN_YAvvS-N5iAoRvKeMWm4kSW1uxf66SJ7VWcmFP98U739:Pqm0-jL8J9STjlpd5nHr-jbvpwniHwfOggNLiC0yLqHgPyHLw289w90YKQofLSK0VQtlk9qv1147AcCODUHUGo2wpgDhnPY7i_rCwBF9n7e4HzXPN1EU4bywymUAkkEVgwG_kDzYz2Xqg1jpHCmwRNOsXJmzh315-iCO5CcJclH8-wsQsC0H99-wyhNZdxfX0bZ7X2E3n2DOtMEi4HhPWy0jiU1-G-SwSX51Xs71rNJn7kkzQT1mVSdtF0BC_tSu1AOXVclUDxIBNtkKHc2tRDu_7Zj3SMKAHoiFLhFypjDfNWT45aioBWJONz5b8Mw-Y0bDP6XhJqkRCS1SfLz15RPQkhR0yio9Z90klIziM0JcrdkAndFQ2MS8CrPnGgfB0RyH-LnH7RcHS11j-SEGADQ-ITsTEMzPbfOL6iWpnDWZElS1p389cv4zkaYlyqP10034Jja7jX7Kg396u6-kKnPmQiUSDw286XZXlYxCJreC84HBOB5-8R2woyuBB_LdezQY7rbIUVhXXNA9L7re9JO_D5HfBsfSvjxAbbLwpUssqTuWlD1yDUG1PMAZWLbNjIFm_gsXWGfdTphSB8JP82kazHUfz5svBJUAI4-NynFY1oalDRtVzWn1OSX20nO_p9RvVprns658gKYtL8YdM2AXag40fuqq1_VN9vdEQNe5RRM_nMUMvBbqBO5kTkqRrxPHKLiTGcGimccDMa3LM-LOoixu-G11X5U",
+    "claim": "nexus-computer-claim-v1\n25:https://api.nexus.example19:ten_computer_vector19:usr_computer_vector36:0192f3a4-0000-7000-8000-00000000000136:0192f3a4-0000-7000-8000-00000000000243:bTVWaY9RMcoR6aY5muQnJfjspinKui476IYjxcDeEJ810:dev_runner",
+    "reply": "nexus-computer-reply-v1\n25:https://api.nexus.example19:ten_computer_vector19:usr_computer_vector36:0192f3a4-0000-7000-8000-00000000000136:0192f3a4-0000-7000-8000-00000000000243:bTVWaY9RMcoR6aY5muQnJfjspinKui476IYjxcDeEJ810:dev_runner9:dev_phone107:3Rnv02NIB62BvJiUBUIpzpIeBBGylgOaoa6u1wWvKHzKm76myWTPbat87sBD6mDrqkstc2sHwlLcT5OZX8-4RRNuuHYC12go_-1JEUT7v0o819:-bGjeEPMtysRHNT_jsHxv4FfuXfjbXWiHFWI18qW2Wp_8rAYoeWo8BiwRg_o3GfUAkXDPte9S4109Rhnz-IU9pIjr5_aeDuC-STMlChhJLNDtjrB9Lmf_CnY-f_tShrC3YgX0jYQd0alYxZXiEzp6TAJ479a0JajLQpRLvoLjhJwzYBMGPbYLrIpsxH0c9fZn40kHPD8ZrToc0VxSqTqtU2iCPrbIMSypcfaYLcoGlRSyDhJsSjj6H_6sthdflyY-023vNzrsqHMvIY7nkcZe_LbMlVpmxq1kZUq2cZcqNIQlwmsVjBNhqGa5u1_vXkgzmfVIk4LR6pRtD7Q5JgOisO5qFWnz9eDOJevJQvR-XlOwQX3O8bE7GnsCzMA0-u8pfh5ZdikPM8N1gBIhu9zemSiCK-P5uFhv8uOo0ew_hhJvPeia7TKNLVgQC_TEOMRnTP9EnOvVWDoGBhH1tLPvUh9Ztr3WLKfZHPCfRrcCFqtwSUr5RcHgLYF4z--nWF6nRUb0Uv-uix63wyJ_Q6U_sFE6k9Ql2DOFpyCHQxX8WqQC6SBGEIUzBuuxsfolUu4SaIkz8sinmE7ikVIitv97xZkbz0moBVsr8mOIeFlR1XNVJXnNdtj7qNuKJWr7aWvTvyjhBFukzVqPRqRpuWklaX_jptKv9fXgmBklyUGPe107geSIvqiPz-qSofb6aVXfu_V_FL0uE97aClX01070p7Kcwpg8mQc-WFHHoVZViP4v5ObjW-1pJZsq_Txww2_k7VyF88AU3t3Zrj7BuabkorIvifEaP8KOOeomfyzm1iAW3XgbA8",
+    "invitation": "nexus-phone-invitation-v1\n25:https://api.nexus.example19:ten_computer_vector19:usr_computer_vector36:0192f3a4-0000-7000-8000-00000000000436:0192f3a4-0000-7000-8000-00000000000123:Eduardo’s MacBook 台10:dev_runner43:eaYx7t4b-cmPEgMs3q3Q56B5OY_HhriMyEbsia-FpRo43:F0VTtFbd38aQjsqxwQH-arIeK6oGF3lbfUOmNIKZP9U13:180000030000043:gthkCFMLdl5G6_R4BwlQJ-gHvAhnSw3nfuXvL659BJI",
+    "pairing": "nexus-phone-pairing-v1\n25:https://api.nexus.example19:ten_computer_vector19:usr_computer_vector36:0192f3a4-0000-7000-8000-00000000000536:0192f3a4-0000-7000-8000-00000000000410:dev_runner9:dev_phone13:1800000300000107:ryAWWy80cxpigKtY9hpxxiSVEDGljQ1_HPeHJSmRo2P0SiwSlrXoY3g7ctyMc7riYgobC6DaK-KtsEVjYpHSEOe61Pbuh7COtPpTvq3tWyQ780:dvDrfFmStMoL8KFX_i1zN-__2-p2wqxb2QpRlpYuX2uAgO3RSOwRMOAJNg2Jyr9qtxxWL7idAONBADwqvpHqYQIseCk2VtxbscUuXEisbvX-YU1ULfsM2fyobH5AHermFsMNMO1Jn_oe5SC9lYwoTFqbrS_uYnuQ4a8XeyIu7D7oBDYpj6XIhWL7ZdX1nwjGLln4IBgViw9TQ04V_zGg_MPblf4AZaeilm7riIakHnSWzXAFE2fFw3zcwYW3orhI_pSlaw4Zxfw8yzjZgKSBKk9enpzRPAKGZyl7YL3ZCqoYyRlwNakgYt48xjzgypGcCR38IYuIeKMk2L0XxWJTuoY8SO1AqDwufkKUDPSfpvqot0eKEkLmWKqakHfGxvoCA2B5ooZgk0g7ntF8qhy0m38vnPuQExil2w_qb1KWAZjpE5R8wdikSW_MOmkxK5qUVbnVvvxqAqOPHOBPaB7MNvz3dj4scg3bqxhui8GMaG6g2Nh1r14g0Y8Uq8YR2Zr_L1c4Y8sBKeFYa22jRkn0u73hBIDm4kuNmEXjpPVEoWL8pB5Ra_R_oCkmTcl6w-8qf6ibS22B3CTJVgYmt1FC5yoR8HwgfgmAUl5hMT9t8amItmYNTSjtsw1QO2ON1aoD-8BeUMAQgRp1bOk_LIXZtOCg6T4L_ZOckf8ptbxns8JC0oMbP70clCtPpDTVrnBIqwUYtX0yLePQUx13vfptloJI4UOFlIM4qUGGJi-JutK6ZVTd1ADTFV8Lzwf_fj8VY3JIrKfDfCU2"
+  }
+}
