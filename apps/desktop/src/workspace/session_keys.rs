@@ -461,6 +461,7 @@ pub(super) mod tests {
             compact: false,
             orchestration: false,
             at_depth_limit: false,
+            handoff_from: None,
             agent_started: false,
             pending: None,
             source: None,

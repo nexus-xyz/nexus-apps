@@ -44,22 +44,22 @@ No `nexus` command does this yet.
 
 ## Connect a computer from the phone
 
+Sign in to the same Nexus account on the phone and the computer. Each signed-in device is trusted at once.
+The phone lists the computer under Settings › Connections › Computers.
+Remote control is on for your own devices. A computer turns it off with its Remote control switch.
+Revoking a device in Settings › Devices ends its access at once.
+A computer that approved devices before asks once, on Settings › Devices, to follow Gateway's trust.
+The phone controls the session. The computer runs the agent and keeps its files.
+
+A Gateway with `NEXUS_DEVICE_TRUST=approvals` keeps the older steps:
 On Nexus Desktop, open Settings › Devices and choose Show connection code.
-On the phone, open Settings › Connections › Computers › Connect a computer.
-You can also open Connect a computer from Run on.
+On the phone, open Settings › Connections › Computers › Connect a computer, or Run on.
 Scan the QR code or paste the connection link from the computer.
 Choose Approve phone on the computer. The preview shows Approve device.
 If the computer is new and your account has trusted devices, use a phone you already trust.
 Choose Open computer when the phone shows that it is ready.
-
-A trusted phone lists each computer that waits for approval under Computers › Waiting for approval.
+A trusted phone lists each computer that waits under Computers › Waiting for approval.
 Tap it, check that its code matches the computer's screen, and tap Approve computer.
-The phone controls the session. The computer runs the agent and keeps its files.
-
-Gateway's `NEXUS_DEVICE_TRUST` setting picks the mode. The default, `approvals`, needs the steps above.
-With `gateway`, signing in on a device trusts it at once, with no code or approval.
-Remote control is then on for the person's own devices. A computer turns it off with its Remote control switch.
-Revoking a device in Settings › Devices ends its access at once.
 
 ## Provider keys
 

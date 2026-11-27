@@ -117,6 +117,12 @@ package_linux() {
   fi
   cp "$(app_icon 128x128@2x.png app-icon.png)" "$stage/$bin.png"
   cp packaging/linux/nexus-desktop-gpui.desktop "$stage/"
+  # The public tree keeps the license at its repository root.
+  local license_file="$crate/oss/community/LICENSE"
+  if [ ! -f "$license_file" ]; then
+    license_file="$crate/../../LICENSE"
+  fi
+  cp "$license_file" "$stage/LICENSE"
   cp packaging/linux/install.sh "$stage/"
   chmod +x "$stage/install.sh"
   if [[ -n "${NO_ARCHIVE:-}" ]]; then

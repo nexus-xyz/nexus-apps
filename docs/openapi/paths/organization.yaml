@@ -1,0 +1,3108 @@
+# Path items. The root openapi.yaml references each one.
+/v1/keys/providers:
+  get:
+    tags:
+      - Organization
+    operationId: listProviderKeys
+    summary: List the tenant's own provider keys (last four characters only).
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                providers:
+                  type: array
+                  items:
+                    $ref: ../components/schemas.yaml#/ProviderKey
+                  description: The organization's own keys.
+                scopedKeys:
+                  type: array
+                  items:
+                    $ref: ../components/schemas.yaml#/ProviderKey
+                  description: >-
+                    The keys the organization's teams and people hold. An owner or admin reads every one; anyone else
+                    reads the teams' keys and their own. Absent when there is none. A call takes the caller's own key,
+                    then its team's, then each parent team's, then the organization's: the first one that is not
+                    disabled.
+            example:
+              providers:
+                - provider: anthropic
+                  last4: x7Qa
+                  createdAt: "2026-10-28T09:15:00.000Z"
+                  state: valid
+                  checkedAt: "2026-10-28T09:15:00.000Z"
+                  lastUsedOn: "2026-10-30"
+              scopedKeys:
+                - provider: openai
+                  scope: team
+                  scopeId: team_x7Ka2LmPq9Rd
+                  last4: c2Vn
+                  createdAt: "2026-10-29T11:00:00.000Z"
+                  state: valid
+                  checkedAt: "2026-10-29T11:00:00.000Z"
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: org.read
+  post:
+    tags:
+      - Organization
+    operationId: addProviderKey
+    summary: Store a provider key (BYOK), encrypted at rest. Used for this tenant's calls only.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required:
+              - provider
+              - key
+            properties:
+              provider:
+                type: string
+                enum:
+                  - anthropic
+                  - openai
+              key:
+                type: string
+              team:
+                type: string
+                description: "A team's key: the team's slug or id. Leave out `team` and `user` for the organization's own key."
+              user:
+                type: string
+                description: >-
+                  A person's key: `me` or a member's id. Name a team or a user, not both: both are a 400, and one the
+                  organization lacks is a 404.
+    responses:
+      "201":
+        description: Created
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/ProviderKey
+            example:
+              provider: anthropic
+              last4: x7Qa
+              createdAt: "2026-10-28T09:15:00.000Z"
+              state: valid
+              checkedAt: "2026-10-28T09:15:00.000Z"
+      "400":
+        description: >-
+          Not valid: a provider not in the list (`provider_retired` for a retired one), a key not 8 to 512 characters
+          once surrounding whitespace is trimmed, or both `team` and `user`. `provider_key_invalid_character`: the
+          trimmed key holds a character outside visible ASCII, such as a space, a line break, a terminal's paste marker
+          or an invisible mark, so it is never sent or stored. A NUL is refused before that as `nul_in_string`.
+          `provider_key_rejected`: the provider refused the key when it was checked, and nothing is stored.
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+            example:
+              error:
+                message: anthropic rejected this key, so nothing was stored; check the key and add it again
+                type: invalid_request_error
+                code: provider_key_rejected
+      "428":
+        $ref: ../components/common.yaml#/responses/PreconditionRequired
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: provider_keys.manage
+    parameters:
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKeyRequired
+    x-idempotency: required
+/v1/keys/providers/{provider}:
+  get:
+    tags:
+      - Organization
+    operationId: getProviderKey
+    summary: >-
+      One provider key, in any state, with its versions: who added each, when, and its last four characters, never the
+      value. 404 `provider_key_not_found` when none was ever stored.
+    parameters:
+      - name: provider
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[a-z]+$
+        description: The key's provider (`anthropic`, `openai`)
+      - name: team
+        in: query
+        required: false
+        schema:
+          type: string
+        description: "A team's key: the team's slug or id. Leave out `team` and `user` for the organization's own key."
+      - name: user
+        in: query
+        required: false
+        schema:
+          type: string
+        description: >-
+          A person's key: `me` or a member's id. Another person's key is an owner's or admin's to read: anyone else gets
+          a 403.
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/ProviderKey
+            example:
+              provider: anthropic
+              last4: m4Rt
+              createdAt: "2026-10-28T09:15:00.000Z"
+              state: valid
+              checkedAt: "2026-10-30T14:00:00.000Z"
+              lastUsedOn: "2026-10-31"
+              versions:
+                - version: 1
+                  last4: x7Qa
+                  addedAt: "2026-10-28T09:15:00.000Z"
+                  addedBy: usr_3Kd9TqW2bNxe
+                - version: 2
+                  last4: m4Rt
+                  addedAt: "2026-10-30T14:00:00.000Z"
+                  addedBy: usr_3Kd9TqW2bNxe
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: org.read
+/v1/keys/providers/{provider}/disable:
+  post:
+    tags:
+      - Organization
+    operationId: disableProviderKey
+    summary: >-
+      Disable the stored provider key: it stays sealed, and no call opens it until it is enabled. Disabling a disabled
+      key answers `changed: false`. 404 `provider_key_not_found` when none is stored. With `dryRun: true`, nothing
+      changes. Audited as `provider_key.disabled`.
+    parameters:
+      - name: provider
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[a-z]+$
+        description: The key's provider (`anthropic`, `openai`)
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKeyRequired
+    requestBody:
+      required: false
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              dryRun:
+                type: boolean
+                default: false
+                description: Check and change nothing.
+              team:
+                type: string
+                description: "A team's key: the team's slug or id. Leave out `team` and `user` for the organization's own key."
+              user:
+                type: string
+                description: >-
+                  A person's key: `me` or a member's id. Name a team or a user, not both: both are a 400, and one the
+                  organization lacks is a 404.
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/ProviderKeyChange
+            example:
+              dryRun: false
+              changed: true
+              providerKey:
+                provider: anthropic
+                last4: m4Rt
+                createdAt: "2026-10-28T09:15:00.000Z"
+                state: disabled
+                checkedAt: "2026-10-30T14:00:00.000Z"
+                lastUsedOn: "2026-10-30"
+      "428":
+        $ref: ../components/common.yaml#/responses/PreconditionRequired
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: provider_keys.manage
+    x-idempotency: required
+/v1/keys/providers/{provider}/enable:
+  post:
+    tags:
+      - Organization
+    operationId: enableProviderKey
+    summary: >-
+      Enable a disabled provider key, or check a rejected one again, after checking it against its provider: its state
+      is what the provider answers. 400 `provider_key_rejected` when the provider still refuses it, and it stays as it
+      was. 400 `provider_key_invalid_character` when the stored key holds a character outside visible ASCII: it is not
+      sent, and only a replacement mends it. Enabling a key that is neither disabled nor rejected answers `changed:
+      false`. 409 `provider_key_changed` when the key was replaced while it was checked. With `dryRun: true`, the key is
+      checked and nothing changes. Audited as `provider_key.enabled`.
+    parameters:
+      - name: provider
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[a-z]+$
+        description: The key's provider (`anthropic`, `openai`)
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKeyRequired
+    requestBody:
+      required: false
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              dryRun:
+                type: boolean
+                default: false
+                description: Check and change nothing.
+              team:
+                type: string
+                description: "A team's key: the team's slug or id. Leave out `team` and `user` for the organization's own key."
+              user:
+                type: string
+                description: >-
+                  A person's key: `me` or a member's id. Name a team or a user, not both: both are a 400, and one the
+                  organization lacks is a 404.
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/ProviderKeyChange
+            example:
+              dryRun: false
+              changed: true
+              providerKey:
+                provider: anthropic
+                last4: m4Rt
+                createdAt: "2026-10-28T09:15:00.000Z"
+                state: valid
+                checkedAt: "2026-10-31T10:00:00.000Z"
+                lastUsedOn: "2026-10-30"
+      "428":
+        $ref: ../components/common.yaml#/responses/PreconditionRequired
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: provider_keys.manage
+    x-idempotency: required
+/v1/keys/providers/{provider}/remove:
+  post:
+    tags:
+      - Organization
+    operationId: removeProviderKey
+    summary: >-
+      Remove the stored provider key: its sealed value is deleted, its state is `removed`, and its versions stay. 404
+      `provider_key_not_found` when none is stored. With `dryRun: true`, nothing changes. Audited as
+      `provider_key.removed`.
+    parameters:
+      - name: provider
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[a-z]+$
+        description: The key's provider (`anthropic`, `openai`)
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKeyRequired
+    requestBody:
+      required: false
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              dryRun:
+                type: boolean
+                default: false
+                description: Check and change nothing.
+              team:
+                type: string
+                description: "A team's key: the team's slug or id. Leave out `team` and `user` for the organization's own key."
+              user:
+                type: string
+                description: >-
+                  A person's key: `me` or a member's id. Name a team or a user, not both: both are a 400, and one the
+                  organization lacks is a 404.
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/ProviderKeyChange
+            example:
+              dryRun: false
+              changed: true
+              providerKey:
+                provider: anthropic
+                last4: m4Rt
+                createdAt: "2026-10-28T09:15:00.000Z"
+                state: removed
+                checkedAt: "2026-10-31T10:00:00.000Z"
+                lastUsedOn: "2026-10-31"
+      "428":
+        $ref: ../components/common.yaml#/responses/PreconditionRequired
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: provider_keys.manage
+    x-idempotency: required
+/v1/keys/providers/{provider}/replace:
+  post:
+    tags:
+      - Organization
+    operationId: replaceProviderKey
+    summary: >-
+      Replace the stored provider key with `key`, checked against its provider first, as its next version. A disabled
+      key stays disabled. 404 `provider_key_not_found` when none is stored, before the key is sent anywhere; 400
+      `provider_key_invalid_character` when the trimmed key holds a character outside visible ASCII, and nothing is
+      sent; 400 `provider_key_rejected` when the provider refuses it, and the stored key stays. With `dryRun: true`, the
+      key is checked and nothing is stored. Audited as `provider_key.replaced`.
+    parameters:
+      - name: provider
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[a-z]+$
+        description: The key's provider (`anthropic`, `openai`)
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKeyRequired
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required:
+              - key
+            properties:
+              key:
+                type: string
+              dryRun:
+                type: boolean
+                default: false
+                description: Check and change nothing.
+              team:
+                type: string
+                description: "A team's key: the team's slug or id. Leave out `team` and `user` for the organization's own key."
+              user:
+                type: string
+                description: >-
+                  A person's key: `me` or a member's id. Name a team or a user, not both: both are a 400, and one the
+                  organization lacks is a 404.
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/ProviderKeyChange
+            example:
+              dryRun: false
+              changed: true
+              providerKey:
+                provider: anthropic
+                last4: m4Rt
+                createdAt: "2026-10-28T09:15:00.000Z"
+                state: valid
+                checkedAt: "2026-10-30T14:00:00.000Z"
+                lastUsedOn: "2026-10-30"
+      "428":
+        $ref: ../components/common.yaml#/responses/PreconditionRequired
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: provider_keys.manage
+    x-idempotency: required
+/v1/orgs:
+  get:
+    tags:
+      - Organization
+    operationId: listOrgs
+    summary: >-
+      Your organizations: your personal organization first, then each company organization, with your role in each and
+      which one this request is in.
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/OrgList
+            example:
+              orgs:
+                - id: ten_Pv3nW7kQ2sYb
+                  name: Personal
+                  kind: personal
+                  role: owner
+                  current: false
+                - id: ten_8Hq2LmP4xRtK
+                  name: Acme
+                  slug: acme
+                  clerkOrgId: org_2pXk7RmQ9wLsT4vN8bYc3dFh1aZ
+                  kind: company
+                  role: owner
+                  current: true
+                  imageUrl: https://img.clerk.com/EXAMPLEacmeLogo
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: org.read
+  post:
+    tags:
+      - Organization
+    operationId: createOrg
+    summary: >-
+      Create a company organization that Nexus Gateway alone holds. You become its owner. Without a slug, the first free
+      one made from the name is used. Only once the Gateway holds organizations; before that, 409 `use_nexus_ui`.
+      Audited as org.created and member.joined.
+    parameters:
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKeyRequired
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required:
+              - name
+            properties:
+              name:
+                type: string
+                description: 1 to 120 characters after trimming
+              slug:
+                type: string
+                pattern: ^[a-z0-9][a-z0-9-]{0,62}$
+                description: A lowercase DNS label that is not a Nexus UI page (`settings`, `invite`, ...)
+          example:
+            name: Acme
+            slug: acme
+    responses:
+      "201":
+        description: Created
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/OrgSummary
+            example:
+              id: ten_8Hq2LmP4xRtK
+              name: Acme
+              slug: acme
+              kind: company
+              role: owner
+              current: false
+      "400":
+        $ref: ../components/common.yaml#/responses/BadRequest
+      "409":
+        description: >-
+          Another company organization has the slug (`slug_taken`), or the Gateway does not hold organizations yet
+          (`use_nexus_ui`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+            example:
+              error:
+                message: another organization has this slug
+                type: invalid_request_error
+                code: slug_taken
+      "428":
+        $ref: ../components/common.yaml#/responses/PreconditionRequired
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      "503":
+        description: >-
+          `cutover_paused`: only while the operator pauses sign-in for the auth cutover; nothing changed. Retry after
+          `Retry-After` seconds.
+        headers:
+          Retry-After:
+            description: "Whole seconds to wait: 600."
+            schema:
+              type: integer
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+            example:
+              error:
+                message: >-
+                  sign-in, account deletion and organization changes are paused while Nexus moves to its new sign-in;
+                  try again after the maintenance window
+                type: server_error
+                code: cutover_paused
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: org.create
+    x-idempotency: required
+/v1/orgs/budget:
+  post:
+    tags:
+      - Organization
+    operationId: setBudget
+    summary: >-
+      Set the organization's budget in USD, a cap per UTC day, ISO week or calendar month (owners and admins); never
+      below what the period spent and what is reserved.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              budgetUsd:
+                type:
+                  - number
+                  - string
+                description: >-
+                  The organization's budget per period in US dollars: a JSON number (deprecated) or a decimal string
+                  with at most 6 decimals (`"12.245"`), read exactly. Send `budgetUsdDecimal` instead to send only a
+                  string.
+              budgetUsdDecimal:
+                type: string
+                pattern: ^[0-9]+(\.[0-9]{1,6})?$
+                examples:
+                  - "12.245"
+                description: >-
+                  The organization's budget per period as a decimal string in US dollars, at most 6 decimals, never
+                  below 0; read exactly into micro-dollars, never through a float. With `budgetUsd` too, both must name
+                  the same amount (400 `amount_mismatch`).
+              period:
+                type: string
+                enum:
+                  - day
+                  - week
+                  - month
+                description: The cap's period. Absent keeps the current one, a month unless set
+              dryRun:
+                type: boolean
+                description: >-
+                  Make the same checks and write nothing; the answer is { dryRun, before, after }, each { budgetUsd,
+                  budgetUsdDecimal, period }
+            anyOf:
+              - required:
+                  - budgetUsd
+              - required:
+                  - budgetUsdDecimal
+          example:
+            budgetUsdDecimal: "5000.00"
+            period: month
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              description: "The budget after the change; with `dryRun: true`, `{ dryRun, before, after }`, each a budget."
+              oneOf:
+                - type: object
+                  properties:
+                    budgetUsd:
+                      type: number
+                      deprecated: true
+                      description: "Deprecated: read `budgetUsdDecimal`, the exact decimal string (root rule 9)."
+                    budgetUsdDecimal:
+                      type: string
+                      description: >-
+                        `budgetUsd` as an exact decimal string in US dollars with six decimals (`"12.245000"`), from the
+                        micro-dollars. Prefer it to `budgetUsd`.
+                    period:
+                      type: string
+                      enum:
+                        - day
+                        - week
+                        - month
+                  required:
+                    - budgetUsd
+                    - period
+                - type: object
+                  properties:
+                    dryRun:
+                      type: boolean
+                    before:
+                      type: object
+                      properties:
+                        budgetUsd:
+                          type: number
+                          deprecated: true
+                          description: "Deprecated: read `budgetUsdDecimal`, the exact decimal string (root rule 9)."
+                        budgetUsdDecimal:
+                          type: string
+                          description: >-
+                            `budgetUsd` as an exact decimal string in US dollars with six decimals (`"12.245000"`), from
+                            the micro-dollars. Prefer it to `budgetUsd`.
+                        period:
+                          type: string
+                          enum:
+                            - day
+                            - week
+                            - month
+                      required:
+                        - budgetUsd
+                        - period
+                    after:
+                      type: object
+                      properties:
+                        budgetUsd:
+                          type: number
+                          deprecated: true
+                          description: "Deprecated: read `budgetUsdDecimal`, the exact decimal string (root rule 9)."
+                        budgetUsdDecimal:
+                          type: string
+                          description: >-
+                            `budgetUsd` as an exact decimal string in US dollars with six decimals (`"12.245000"`), from
+                            the micro-dollars. Prefer it to `budgetUsd`.
+                        period:
+                          type: string
+                          enum:
+                            - day
+                            - week
+                            - month
+                      required:
+                        - budgetUsd
+                        - period
+                  required:
+                    - dryRun
+                    - before
+                    - after
+            example:
+              budgetUsd: 5000
+              budgetUsdDecimal: "5000.000000"
+              period: month
+      "400":
+        description: >-
+          `budgetUsd` and `budgetUsdDecimal` both missing, `dryRun` not true or false (`invalid_request`), a decimal
+          string with more than 6 decimals (`too_many_decimals`), an amount that is not one or is below 0
+          (`invalid_amount`), or a number and its `Decimal` twin that name different amounts (`amount_mismatch`), or a
+          period other than day, week or month (`invalid_period`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+            example:
+              error:
+                message: period must be day, week or month
+                type: invalid_request_error
+                code: invalid_period
+      "403":
+        description: "Only owners and admins set the organization's budget (`role_required`): a member without `budgets.manage`"
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+            example:
+              error:
+                message: only the org's owner or admins can set the budget (budgets.manage)
+                type: permission_error
+                code: role_required
+      "409":
+        description: The new budget is below what the period has already spent and reserved (`conflict`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+            example:
+              error:
+                message: the budget may not drop below what is spent and reserved ($2214.250000)
+                type: invalid_request_error
+                code: conflict
+      "428":
+        $ref: ../components/common.yaml#/responses/PreconditionRequired
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: budgets.manage
+    parameters:
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKeyRequired
+    x-idempotency: required
+/v1/orgs/directory/export.csv:
+  get:
+    tags:
+      - Organization
+    operationId: exportDirectoryCsv
+    summary: >-
+      Every person and team of the organization with its name: the one file that maps ids to names, as CSV (owners and
+      admins). The people are its members and the people its calls and kept agent sessions name (former members too),
+      then its teams and the teams those name, each by id. Names are read when the file is asked for. An erased person
+      reads `erased: true` with no name; a person with no record reads with no name, and a deleted team with its id
+      alone. It takes no parameter and has no row limit, range or cursor. The data files name people and teams by id
+      only. Each request is an audit event (`observability.directory_exported`) with the file's manifest, never its
+      rows, and counts toward the 60 exports an hour.
+    responses:
+      "200":
+        description: "CSV with a header row: one column per field of `DirectoryEntry`, in its order."
+        headers:
+          x-nexus-export-id:
+            $ref: ../components/common.yaml#/headers/x-nexus-export-id
+        content:
+          text/csv:
+            schema:
+              type: string
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: spend.export
+/v1/orgs/directory/export.jsonl:
+  get:
+    tags:
+      - Organization
+    operationId: exportDirectoryJsonl
+    summary: >-
+      Every person and team of the organization with its name: the one file that maps ids to names, as JSON Lines
+      (owners and admins). The people are its members and the people its calls and kept agent sessions name (former
+      members too), then its teams and the teams those name, each by id. Names are read when the file is asked for. An
+      erased person reads `erased: true` with no name; a person with no record reads with no name, and a deleted team
+      with its id alone. It takes no parameter and has no row limit, range or cursor. The data files name people and
+      teams by id only. Each request is an audit event (`observability.directory_exported`) with the file's manifest,
+      never its rows, and counts toward the 60 exports an hour.
+    responses:
+      "200":
+        description: "JSON Lines: one `DirectoryEntry` per line, then one line `{\"manifest\": ExportManifest}`."
+        headers:
+          x-nexus-export-id:
+            $ref: ../components/common.yaml#/headers/x-nexus-export-id
+        content:
+          application/jsonl:
+            schema:
+              type: string
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: spend.export
+/v1/orgs/domain-suggestions:
+  get:
+    tags:
+      - Organization
+    operationId: listDomainSuggestions
+    summary: >-
+      The company organizations you may join by domain, with the domain of each. A suggestion needs your own Google
+      sign-in: its `hd` is a domain a Nexus operator assigned to the organization, and Google verified your email on
+      that domain. An email-code sign-in, an unverified email or the email on your account never counts. An organization
+      you belong to, or were removed from, is left out. Only once Core holds organizations; before that, 409
+      `use_nexus_ui`.
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/DomainSuggestionList
+            example:
+              suggestions:
+                - domain: acme.com
+                  org:
+                    id: ten_8Hq2LmP4xRtK
+                    name: Acme
+                    slug: acme
+                    kind: company
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: authenticated
+/v1/orgs/domain-suggestions/join:
+  post:
+    tags:
+      - Organization
+    operationId: joinByDomain
+    summary: >-
+      Join an organization of listDomainSuggestions: you become a member, never an admin. 404 `no_domain_match` when
+      none of your Google sign-ins is on a domain of that organization; the answer does not say whether it exists. 409
+      `member_removed` while an admin's removal of you can still be undone. A member already keeps their role. Only once
+      Core holds organizations; before that, 409 `use_nexus_ui`. Audited as `member.joined` with `via: domain`.
+    parameters:
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKeyRequired
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required:
+              - org
+            properties:
+              org:
+                type: string
+                description: The organization's id, from listDomainSuggestions.
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/OrgSummary
+            example:
+              id: ten_8Hq2LmP4xRtK
+              name: Acme
+              slug: acme
+              kind: company
+              role: member
+              current: false
+      "428":
+        $ref: ../components/common.yaml#/responses/PreconditionRequired
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      "503":
+        description: >-
+          `cutover_paused`: only while the operator pauses sign-in for the auth cutover; nothing changed. Retry after
+          `Retry-After` seconds.
+        headers:
+          Retry-After:
+            description: "Whole seconds to wait: 600."
+            schema:
+              type: integer
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+            example:
+              error:
+                message: >-
+                  sign-in, account deletion and organization changes are paused while Nexus moves to its new sign-in;
+                  try again after the maintenance window
+                type: server_error
+                code: cutover_paused
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: authenticated
+    x-idempotency: required
+/v1/orgs/domains:
+  get:
+    tags:
+      - Organization
+    operationId: listOrgDomains
+    summary: >-
+      The organization's verified email domains (owners and admins). While the identity provider holds organizations
+      (the default), they are the identity provider's: people with a verified email on a domain join through the
+      identity provider as its `enrollmentMode` says; 409 `not_a_clerk_org` for an organization that does not sign in
+      with the identity provider; 503 `not_configured` without the identity provider's secret key on Gateway. Once Core
+      holds organizations, they are the domains a Nexus operator assigned: each one's `id` is the domain, its
+      `enrollmentMode` is `automatic_suggestion`, and a person whose Google sign-in is on it sees the organization in
+      listDomainSuggestions. 409 `personal_org` for a personal organization.
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/DomainList
+            example:
+              domains:
+                - id: orgdmn_2pZm3TqW8xLkN5vC7bYd4fGj1aR
+                  domain: acme.com
+                  enrollmentMode: automatic_invitation
+                  verified: true
+                  pendingInvitations: 2
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: members.invite
+  post:
+    tags:
+      - Organization
+    operationId: addOrgDomain
+    summary: >-
+      Add a verified email domain (owners and admins). While the identity provider holds organizations: you must have a
+      verified email on it in the identity provider (403 `domain_not_yours`), so an admin cannot add another company's
+      domain and pull its people into their organization; a public mail provider such as gmail.com is refused (400
+      `public_mail_domain`), and so is a personal organization (409 `personal_org`). The identity provider's refusal,
+      such as a domain another organization has, is a 409 `clerk_refused` with the identity provider's message. Audited
+      as `domain.added`. Once Core holds organizations, a Nexus operator assigns domains after a review, so this is 409
+      `operator_assigns_domains` (400 `public_mail_domain` for a public mail provider's).
+    parameters:
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKeyRequired
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required:
+              - domain
+            properties:
+              domain:
+                type: string
+                description: A host name, as acme.com.
+              enrollmentMode:
+                type: string
+                enum:
+                  - automatic_invitation
+                  - automatic_suggestion
+                  - manual_invitation
+                default: automatic_invitation
+                description: >-
+                  automatic_invitation: the sign-in provider invites everyone with a verified email on the domain.
+                  automatic_suggestion: the provider suggests the organization and an admin accepts each request.
+                  manual_invitation: nobody joins without an invitation.
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/OrgDomain
+            example:
+              id: orgdmn_2pZm3TqW8xLkN5vC7bYd4fGj1aR
+              domain: acme.com
+              enrollmentMode: automatic_invitation
+              verified: true
+              pendingInvitations: 0
+      "428":
+        $ref: ../components/common.yaml#/responses/PreconditionRequired
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      "503":
+        description: >-
+          `cutover_paused`: only while the operator pauses sign-in for the auth cutover; nothing changed. Retry after
+          `Retry-After` seconds.
+        headers:
+          Retry-After:
+            description: "Whole seconds to wait: 600."
+            schema:
+              type: integer
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+            example:
+              error:
+                message: >-
+                  sign-in, account deletion and organization changes are paused while Nexus moves to its new sign-in;
+                  try again after the maintenance window
+                type: server_error
+                code: cutover_paused
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: members.invite
+    x-idempotency: required
+/v1/orgs/domains/{id}:
+  delete:
+    tags:
+      - Organization
+    operationId: removeOrgDomain
+    summary: >-
+      Remove a verified email domain by its id from listOrgDomains (owners and admins). New people stop joining by it;
+      who already joined stays. Another organization's domain is a 404. Audited as `domain.removed`.
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[A-Za-z0-9._-]{1,253}$
+        description: >-
+          The domain's id, from listOrgDomains: the sign-in provider's id, or the domain itself once Core holds
+          organizations.
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKey
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - removed
+              properties:
+                removed:
+                  type: boolean
+            example:
+              removed: true
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      "503":
+        description: >-
+          `cutover_paused`: only while the operator pauses sign-in for the auth cutover; nothing changed. Retry after
+          `Retry-After` seconds.
+        headers:
+          Retry-After:
+            description: "Whole seconds to wait: 600."
+            schema:
+              type: integer
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+            example:
+              error:
+                message: >-
+                  sign-in, account deletion and organization changes are paused while Nexus moves to its new sign-in;
+                  try again after the maintenance window
+                type: server_error
+                code: cutover_paused
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: members.invite
+    x-idempotency: optional
+/v1/orgs/invitations:
+  post:
+    tags:
+      - Organization
+    operationId: inviteMembers
+    summary: >-
+      Invite people to the organization (owners and admins); the identity provider emails each invitation. Name
+      `emails`, or `pending: true` for everyone in a team by email who has not joined. Emails already in the
+      organization or already invited are skipped. `dryRun` sends nothing. Sending more than one needs `expect`, the
+      number you confirmed (409 `count_changed` if it differs). 501 without the identity provider's secret key on
+      Gateway (dry runs still work, checking Gateway only). Once the Gateway holds organizations, it writes each
+      invitation and emails its one-time link itself; an expired invitation of the email is sent again.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              emails:
+                type: array
+                items:
+                  type: string
+                  format: email
+                maxItems: 500
+              pending:
+                type: boolean
+                description: Everyone with a pending team membership.
+              role:
+                type: string
+                enum:
+                  - member
+                  - admin
+                default: member
+              dryRun:
+                type: boolean
+                default: false
+              expect:
+                type: integer
+                description: "Required to send more than one invitation: how many you confirmed."
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/InvitationsResponse
+            example:
+              dryRun: false
+              role: member
+              checkedClerk: true
+              toSend: 1
+              results:
+                - email: carla@acme.com
+                  status: sent
+                  invitationId: orginv_2pYk8SnR4wMtU6vB9cXd1eGh3bQ
+                - email: bruno@acme.com
+                  status: already_member
+              counts:
+                sent: 1
+                already_member: 1
+      "428":
+        $ref: ../components/common.yaml#/responses/PreconditionRequired
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      "503":
+        description: >-
+          `cutover_paused`: only while the operator pauses sign-in for the auth cutover; nothing changed. Retry after
+          `Retry-After` seconds.
+        headers:
+          Retry-After:
+            description: "Whole seconds to wait: 600."
+            schema:
+              type: integer
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+            example:
+              error:
+                message: >-
+                  sign-in, account deletion and organization changes are paused while Nexus moves to its new sign-in;
+                  try again after the maintenance window
+                type: server_error
+                code: cutover_paused
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: members.invite
+    parameters:
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKeyRequired
+    x-idempotency: required
+  get:
+    tags:
+      - Organization
+    operationId: listInvitations
+    summary: >-
+      The organization's pending invitations, oldest first, expired ones included (owners and admins). Only once the
+      Gateway holds organizations; before that, 409 `use_nexus_ui`.
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - invitations
+              properties:
+                invitations:
+                  type: array
+                  items:
+                    type: object
+                    required:
+                      - id
+                      - email
+                      - role
+                      - createdAt
+                      - expiresAt
+                      - expired
+                    properties:
+                      id:
+                        type: string
+                      email:
+                        type: string
+                      role:
+                        type: string
+                        enum:
+                          - member
+                          - admin
+                      invitedBy:
+                        type:
+                          - string
+                          - "null"
+                        description: The person who invited them, when a person did.
+                      createdAt:
+                        type: string
+                        format: date-time
+                      expiresAt:
+                        type: string
+                        format: date-time
+                      sentAt:
+                        type:
+                          - string
+                          - "null"
+                        description: The last send.
+                        format: date-time
+                      expired:
+                        type: boolean
+                        description: "Past expiresAt: its link no longer works; resend it."
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: members.invite
+/v1/orgs/invitations/accept:
+  post:
+    tags:
+      - Organization
+    operationId: acceptInvitation
+    summary: >-
+      Accept an invitation: you join its organization with its role. Name the `token` in its link or the `id` from `GET
+      /v1/orgs/invitations/mine`: exactly one. A body with neither or both is 400 `invalid_request`. For a token, Nexus
+      UI's server must vouch that you verified the invited email (403 `email_mismatch`). For an id, one of your sign-ins
+      must have verified the invited email; any other id is a 404. A used, revoked or replaced link is a 404; an expired
+      invitation is 409 `invitation_expired`. Only once the Gateway holds organizations; before that, 409
+      `use_nexus_ui`. Audited as member.joined with `via: invitation`.
+    parameters:
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKeyRequired
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            description: Exactly one of `token` and `id`.
+            oneOf:
+              - type: object
+                required:
+                  - token
+                properties:
+                  token:
+                    type: string
+                    description: The token from the invitation's link.
+              - type: object
+                required:
+                  - id
+                properties:
+                  id:
+                    type: string
+                    description: The invitation's id, from `GET /v1/orgs/invitations/mine`.
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/OrgSummary
+            example:
+              id: ten_8Hq2LmP4xRtK
+              name: Acme
+              slug: acme
+              kind: company
+              role: member
+              current: false
+      "428":
+        $ref: ../components/common.yaml#/responses/PreconditionRequired
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      "503":
+        description: >-
+          `cutover_paused`: only while the operator pauses sign-in for the auth cutover; nothing changed. Retry after
+          `Retry-After` seconds.
+        headers:
+          Retry-After:
+            description: "Whole seconds to wait: 600."
+            schema:
+              type: integer
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+            example:
+              error:
+                message: >-
+                  sign-in, account deletion and organization changes are paused while Nexus moves to its new sign-in;
+                  try again after the maintenance window
+                type: server_error
+                code: cutover_paused
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: authenticated
+    x-idempotency: required
+/v1/orgs/invitations/mine:
+  get:
+    tags:
+      - Organization
+    operationId: listMyInvitations
+    summary: >-
+      Your own pending invitations, across organizations, oldest first: those sent to an email one of your sign-ins
+      verified. An unverified email matches none. Expired invitations and organizations you are already in are left out.
+      Accept one with `POST /v1/orgs/invitations/accept` and its `id`. Only once the Gateway holds organizations; before
+      that, 409 `use_nexus_ui`. A person only (403 `person_required`).
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - invitations
+              properties:
+                invitations:
+                  type: array
+                  items:
+                    type: object
+                    required:
+                      - id
+                      - email
+                      - orgName
+                      - role
+                      - expiresAt
+                    properties:
+                      id:
+                        type: string
+                        description: Accept it with this id.
+                      email:
+                        type: string
+                        description: Your email it was sent to.
+                      orgName:
+                        type: string
+                      orgSlug:
+                        type:
+                          - string
+                          - "null"
+                      role:
+                        type: string
+                        enum:
+                          - member
+                          - admin
+                      invitedBy:
+                        type:
+                          - string
+                          - "null"
+                        description: The inviter's name, else their email; null when no person invited you or that person is gone.
+                      expiresAt:
+                        type: string
+                        format: date-time
+            example:
+              invitations:
+                - id: inv_8Hq2LmP4xRtK
+                  email: bob@acme.com
+                  orgName: Acme
+                  orgSlug: acme
+                  role: member
+                  invitedBy: Ada Lovelace
+                  expiresAt: "2026-11-28T12:00:00.000Z"
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: authenticated
+/v1/orgs/invitations/{id}:
+  delete:
+    tags:
+      - Organization
+    operationId: revokeInvitation
+    summary: >-
+      Revoke a pending invitation (owners and admins), so its link stops working. While the sign-in provider holds
+      organizations the id is the provider's and the provider cancels it; once Core holds them the id is Core's. Audited
+      as `invitation.revoked`.
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[A-Za-z0-9_-]+$
+        description: >-
+          The invitation's id: the sign-in provider's while it holds organizations, else Core's from `GET
+          /v1/orgs/invitations`.
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKey
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - revoked
+              properties:
+                revoked:
+                  type: boolean
+            example:
+              revoked: true
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      "503":
+        description: >-
+          `cutover_paused`: only while the operator pauses sign-in for the auth cutover; nothing changed. Retry after
+          `Retry-After` seconds.
+        headers:
+          Retry-After:
+            description: "Whole seconds to wait: 600."
+            schema:
+              type: integer
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+            example:
+              error:
+                message: >-
+                  sign-in, account deletion and organization changes are paused while Nexus moves to its new sign-in;
+                  try again after the maintenance window
+                type: server_error
+                code: cutover_paused
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: members.invite
+    x-idempotency: optional
+/v1/orgs/invitations/{id}/resend:
+  post:
+    tags:
+      - Organization
+    operationId: resendInvitation
+    summary: >-
+      Email a pending invitation again with a new link and a new expiry, 7 days from now; the old link stops working
+      (owners and admins). At most once per 10 minutes per invitation: 429 `resend_too_soon`. Only once the Gateway
+      holds organizations; before that, 409 `use_nexus_ui`. Audited as invitation.sent with `via: resend`.
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[A-Za-z0-9_-]+$
+        description: The invitation's id, from `GET /v1/orgs/invitations`.
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKeyRequired
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - email
+                - status
+              properties:
+                email:
+                  type: string
+                status:
+                  type: string
+                invitationId:
+                  type:
+                    - string
+                    - "null"
+                message:
+                  type:
+                    - string
+                    - "null"
+      "428":
+        $ref: ../components/common.yaml#/responses/PreconditionRequired
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      "503":
+        description: >-
+          `cutover_paused`: only while the operator pauses sign-in for the auth cutover; nothing changed. Retry after
+          `Retry-After` seconds.
+        headers:
+          Retry-After:
+            description: "Whole seconds to wait: 600."
+            schema:
+              type: integer
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+            example:
+              error:
+                message: >-
+                  sign-in, account deletion and organization changes are paused while Nexus moves to its new sign-in;
+                  try again after the maintenance window
+                type: server_error
+                code: cutover_paused
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: members.invite
+    x-idempotency: required
+/v1/orgs/logo:
+  post:
+    tags:
+      - Organization
+    operationId: setOrgLogo
+    summary: >-
+      Upload your company organization's logo (owners and admins): the body is the image's bytes, a PNG, JPEG or WebP of
+      1 MB at most, typed by its first bytes. The Gateway stores it in Nexus's bucket and sets the organization's
+      imageUrl to it. Only once the Gateway holds organizations; before that, 409 `use_nexus_ui`. Audited as
+      org.settings_changed.
+    requestBody:
+      required: true
+      content:
+        image/png:
+          schema:
+            type: string
+            format: binary
+        image/jpeg:
+          schema:
+            type: string
+            format: binary
+        image/webp:
+          schema:
+            type: string
+            format: binary
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/OrgSummary
+            example:
+              id: ten_8Hq2LmP4xRtK
+              name: Acme Inc
+              slug: acme-inc
+              kind: company
+              role: owner
+              current: true
+              imageUrl: https://storage.googleapis.com/nexus-org-logos/org-logos/ten_8Hq2LmP4xRtK/3f2a9c1d8e7b6a50
+      "400":
+        $ref: ../components/common.yaml#/responses/BadRequest
+      "409":
+        description: >-
+          A personal organization has no logo to change (`personal_org`), or the Gateway does not hold organizations yet
+          (`use_nexus_ui`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+            example:
+              error:
+                message: the Gateway does not hold organizations yet; change the logo in Nexus UI
+                type: invalid_request_error
+                code: use_nexus_ui
+      "413":
+        description: The image is over 1 MB (`request_too_large`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+            example:
+              error:
+                message: the logo must be 1 MB or smaller
+                type: invalid_request_error
+                code: request_too_large
+      "415":
+        description: The image is not a PNG, JPEG or WebP by its first bytes (`unsupported_logo_type`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+            example:
+              error:
+                message: the logo must be a PNG, JPEG or WebP image
+                type: invalid_request_error
+                code: unsupported_logo_type
+      "428":
+        $ref: ../components/common.yaml#/responses/PreconditionRequired
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      "502":
+        description: The bucket refused the image (`logo_storage_failed`); nothing changed
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+            example:
+              error:
+                message: the logo could not be stored; try again
+                type: api_error
+                code: logo_storage_failed
+      "503":
+        description: >-
+          `logo_storage_unconfigured`: the Gateway has no bucket for logos. `cutover_paused`: only while the operator
+          pauses sign-in for the auth cutover; retry after `Retry-After` seconds. Nothing changed.
+        headers:
+          Retry-After:
+            description: "Whole seconds to wait: 600."
+            schema:
+              type: integer
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+            example:
+              error:
+                message: >-
+                  sign-in, account deletion and organization changes are paused while Nexus moves to its new sign-in;
+                  try again after the maintenance window
+                type: server_error
+                code: cutover_paused
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: org.settings
+    parameters:
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKeyRequired
+    x-idempotency: required
+/v1/orgs/members:
+  get:
+    tags:
+      - Organization
+    operationId: listMembers
+    summary: >-
+      The organization's members and roles; spend per person for owners and admins (and each person's own). `limit` and
+      `cursor` page it.
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                members:
+                  type: array
+                  items:
+                    $ref: ../components/schemas.yaml#/Member
+                nextCursor:
+                  type: string
+                  description: The next page's cursor, while more items follow. Only when limit or cursor was sent.
+            example:
+              members:
+                - userId: usr_3Kd9TqW2bNxe
+                  email: ana@acme.com
+                  name: Ana Souza
+                  role: owner
+                  joinedAt: "2026-10-01T09:00:00.000Z"
+                  spentUsd: 42.18
+                  calls: 1310
+                - userId: usr_7Lm2RxV9cQta
+                  email: bruno@acme.com
+                  name: Bruno Lima
+                  role: admin
+                  joinedAt: "2026-10-03T15:20:00.000Z"
+                  spentUsd: 7.5
+                  calls: 214
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: members.read
+    parameters:
+      - name: limit
+        in: query
+        required: false
+        description: Items per page, 1 to 500 (default 100). Without limit or cursor the answer holds the whole list.
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 500
+      - name: cursor
+        in: query
+        required: false
+        description: nextCursor from the previous page. A cursor whose item left the list answers 400 `invalid_cursor`.
+        schema:
+          type: string
+/v1/orgs/members/removed:
+  get:
+    tags:
+      - Organization
+    operationId: listRemovedMembers
+    summary: Removed members (owners and admins), newest removal first, each with the end of its 30-day recovery window.
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/RemovedMemberList
+            example:
+              members:
+                - userId: usr_9Wc4Hn2Tq7Lp
+                  email: eva@acme.com
+                  name: Eva Costa
+                  role: member
+                  removedAt: "2026-10-29T16:00:00.000Z"
+                  removedBy: usr_3Kd9TqW2bNxe
+                  recoverableUntil: "2026-11-28T16:00:00.000Z"
+                  recoverable: true
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: members.manage
+/v1/orgs/members/{userId}:
+  delete:
+    tags:
+      - Organization
+    operationId: removeMember
+    summary: >-
+      Remove a member (owners and admins). The membership is flagged, not deleted, so an owner or admin can recover them
+      for 30 days; their tokens and keys are revoked at once. The owner must transfer ownership first.
+    parameters:
+      - name: userId
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[A-Za-z0-9_-]+$
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKey
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              type: object
+            example:
+              removed: true
+      "404":
+        description: No such member (`not_found`).
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+            example:
+              error:
+                message: no such member
+                type: not_found
+                code: not_found
+      "409":
+        description: >-
+          They are the owner (`owner_role`): transfer ownership first. Or a token removes its own person
+          (`self_removal`).
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+            example:
+              error:
+                message: the owner cannot be removed; transfer ownership first
+                type: invalid_request_error
+                code: owner_role
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      "502":
+        description: >-
+          A token's removal: the identity provider did not take them out of its organization (`clerk_unavailable`);
+          nothing changed.
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+            example:
+              error:
+                message: "Clerk did not take them out of the organization: service unavailable"
+                type: clerk_unavailable
+                code: clerk_unavailable
+      "503":
+        description: >-
+          A token's removal: the organization signs in with the sign-in provider and this Gateway has no secret key for
+          it (`not_configured`); nothing changed. Also `cutover_paused`, only while the operator pauses sign-in for the
+          auth cutover; nothing changed. Retry after `Retry-After` seconds.
+        headers:
+          Retry-After:
+            description: "Whole seconds to wait on `cutover_paused`: 600."
+            schema:
+              type: integer
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+            example:
+              error:
+                message: >-
+                  Nexus Gateway has no CLERK_SECRET_KEY, so it cannot take them out of the Clerk organization; remove
+                  them in Nexus UI (Members)
+                type: not_configured
+                code: not_configured
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: members.manage
+    x-idempotency: optional
+/v1/orgs/members/{userId}/holders:
+  get:
+    tags:
+      - Organization
+    operationId: listMemberKeyHolders
+    summary: A member's trusted and revoked holders, with public keys and approvals. Clients remember revocations.
+    description: >-
+      A member's device that holds the team key reads this to hand it over. Trusted and revoked holders are listed.
+      Remember revocations and verify each trusted holder's approval chain from the member's pinned root. Seal a copy
+      only to a trusted, unrevoked holder with `hasCurrentTeamKey` false. With no current epoch, every holder has it
+      false.
+    parameters:
+      - name: userId
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[A-Za-z0-9_-]+$
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/TeamKeyHolderList
+      "403":
+        description: Not a person (`person_required`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "404":
+        description: Not a member of this organization (`member_not_found`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: members.read
+/v1/orgs/members/{userId}/recover:
+  post:
+    tags:
+      - Organization
+    operationId: recoverMember
+    summary: >-
+      Recover a removed member inside the 30-day window (owners and admins): their role, teams, default team and person
+      spend limit come back; their tokens and keys do not. In an org that signs in with the identity provider, Gateway
+      adds them back to the identity provider's organization. dryRun checks and changes nothing. A 409 removal_final
+      after the window; 503 `not_configured` without the identity provider's secret key on Gateway, in an org that signs
+      in with the identity provider.
+    parameters:
+      - name: userId
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[A-Za-z0-9_-]+$
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKeyRequired
+    requestBody:
+      required: false
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              dryRun:
+                type: boolean
+            additionalProperties: false
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/MemberRecovered
+            example:
+              userId: usr_bo
+              email: bo@acme.test
+              role: member
+              teams:
+                - eng
+              dryRun: false
+              recovered: true
+      "404":
+        description: No such member (`not_found`).
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+            example:
+              error:
+                message: no such member
+                type: not_found
+                code: not_found
+      "409":
+        description: They are a member (`not_removed`), or the 30-day window ended (`removal_final`).
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+            example:
+              error:
+                message: they are a member; there is nothing to recover
+                type: invalid_request_error
+                code: not_removed
+      "428":
+        $ref: ../components/common.yaml#/responses/PreconditionRequired
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      "502":
+        description: The identity provider did not add them back to its organization (`clerk_unavailable`); nothing changed.
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+            example:
+              error:
+                message: "Clerk did not add them back to the organization: service unavailable"
+                type: clerk_unavailable
+                code: clerk_unavailable
+      "503":
+        description: >-
+          The organization signs in with the sign-in provider and this Gateway has no secret key for it
+          (`not_configured`); nothing changed. Also `cutover_paused`, only while the operator pauses sign-in for the
+          auth cutover; nothing changed. Retry after `Retry-After` seconds.
+        headers:
+          Retry-After:
+            description: "Whole seconds to wait on `cutover_paused`: 600."
+            schema:
+              type: integer
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+            example:
+              error:
+                message: Nexus Gateway has no CLERK_SECRET_KEY, so it cannot add them back to the Clerk organization
+                type: not_configured
+                code: not_configured
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: members.manage
+    x-idempotency: required
+/v1/orgs/members/{userId}/role:
+  post:
+    tags:
+      - Organization
+    operationId: setMemberRole
+    summary: Make a member an admin or a member (owners and admins). The owner's role changes only by transfer.
+    parameters:
+      - name: userId
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[A-Za-z0-9_-]+$
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKeyRequired
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              role:
+                type: string
+                enum:
+                  - admin
+                  - member
+            required:
+              - role
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              type: object
+            example:
+              userId: usr_7Lm2RxV9cQta
+              role: admin
+      "428":
+        $ref: ../components/common.yaml#/responses/PreconditionRequired
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      "503":
+        description: >-
+          `cutover_paused`: only while the operator pauses sign-in for the auth cutover; nothing changed. Retry after
+          `Retry-After` seconds.
+        headers:
+          Retry-After:
+            description: "Whole seconds to wait: 600."
+            schema:
+              type: integer
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+            example:
+              error:
+                message: >-
+                  sign-in, account deletion and organization changes are paused while Nexus moves to its new sign-in;
+                  try again after the maintenance window
+                type: server_error
+                code: cutover_paused
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: members.manage
+    x-idempotency: required
+/v1/orgs/owner:
+  post:
+    tags:
+      - Organization
+    operationId: transferOwnership
+    summary: Transfer ownership to another member (the owner only); the previous owner becomes an admin.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              userId:
+                type: string
+            required:
+              - userId
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              type: object
+            example:
+              previousOwner: usr_3Kd9TqW2bNxe
+              owner: usr_7Lm2RxV9cQta
+      "428":
+        $ref: ../components/common.yaml#/responses/PreconditionRequired
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      "503":
+        description: >-
+          `cutover_paused`: only while the operator pauses sign-in for the auth cutover; nothing changed. Retry after
+          `Retry-After` seconds.
+        headers:
+          Retry-After:
+            description: "Whole seconds to wait: 600."
+            schema:
+              type: integer
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+            example:
+              error:
+                message: >-
+                  sign-in, account deletion and organization changes are paused while Nexus moves to its new sign-in;
+                  try again after the maintenance window
+                type: server_error
+                code: cutover_paused
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: org.transfer
+    parameters:
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKeyRequired
+    x-idempotency: required
+/v1/orgs/profile:
+  patch:
+    tags:
+      - Organization
+    operationId: setOrgProfile
+    summary: >-
+      Rename your company organization, change its slug, or remove its logo (owners and admins). A personal organization
+      that holds the slug moves to a free one. An organization made in the old sign-in service changes here only once
+      the Gateway holds organizations; before that, 409 `use_nexus_ui`. Audited as org.settings_changed.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              name:
+                type: string
+                description: 1 to 120 characters after trimming
+              slug:
+                type: string
+                pattern: ^[a-z0-9][a-z0-9-]{0,62}$
+                description: A lowercase DNS label that is not a Nexus UI page
+              imageUrl:
+                type: "null"
+                description: null removes the logo. A new logo is uploaded with setOrgLogo (POST /v1/orgs/logo)
+          example:
+            name: Acme Inc
+            slug: acme-inc
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/OrgSummary
+            example:
+              id: ten_8Hq2LmP4xRtK
+              name: Acme Inc
+              slug: acme-inc
+              kind: company
+              role: owner
+              current: true
+      "400":
+        $ref: ../components/common.yaml#/responses/BadRequest
+      "409":
+        description: >-
+          Another company organization has the slug (`slug_taken`), a personal organization's name and slug are its
+          person's (`personal_org`), or the Gateway does not hold this organization yet (`use_nexus_ui`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+            example:
+              error:
+                message: another organization has this slug
+                type: invalid_request_error
+                code: slug_taken
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      "503":
+        description: >-
+          `cutover_paused`: only while the operator pauses sign-in for the auth cutover; nothing changed. Retry after
+          `Retry-After` seconds.
+        headers:
+          Retry-After:
+            description: "Whole seconds to wait: 600."
+            schema:
+              type: integer
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+            example:
+              error:
+                message: >-
+                  sign-in, account deletion and organization changes are paused while Nexus moves to its new sign-in;
+                  try again after the maintenance window
+                type: server_error
+                code: cutover_paused
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: org.settings
+    parameters:
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKey
+    x-idempotency: optional
+/v1/orgs/recovery-key:
+  get:
+    tags:
+      - Organization
+    operationId: getOrgRecoveryKey
+    summary: >-
+      The organization's current recovery key: the public half runners lock thread content keys to under the
+      user_and_org content policy, with its fingerprint. key is null until one is registered.
+    description: >-
+      Every member reads it, so runners fetch it here. Gateway's copy is not the source of trust: before a member's
+      clients lock for this key, the member confirms its fingerprint once against one the organization publishes from
+      its vault (an admin's screen, its wiki or chat), and again after each replacement.
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/OrgRecoveryKeyState
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: org.read
+/v1/orgs/settings:
+  get:
+    tags:
+      - Organization
+    operationId: getOrgSettings
+    summary: "The organization's settings: how many days chat messages are kept (90 by default)."
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/OrgSettings
+        headers:
+          ETag:
+            $ref: ../components/common.yaml#/headers/ETag
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: org.read
+  put:
+    tags:
+      - Organization
+    operationId: setOrgSettings
+    summary: >-
+      Change the organization's settings (owners and admins). chatRetentionDays: 1 to 3650, or null for the default; a
+      shorter window deletes expired messages at once. Audited as org.settings_changed.
+    parameters:
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKey
+      - $ref: ../components/common.yaml#/parameters/IfMatch
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              hiddenMobilePlaces:
+                type:
+                  - array
+                  - "null"
+                items:
+                  type: string
+                  enum:
+                    - assistant
+                    - artifacts
+                    - customize
+                uniqueItems: true
+                description: >-
+                  Places an owner hides from members in the mobile drawer. Only an owner can change this setting. Null
+                  makes all places visible.
+              chatRetentionDays:
+                type:
+                  - integer
+                  - "null"
+                minimum: 1
+                maximum: 3650
+              agentSubscriptions:
+                type:
+                  - boolean
+                  - "null"
+                description: >-
+                  Whether `nexus claude --subscription` may run (people's own Claude logins, outside Gateway's checks);
+                  null for the default, true
+              growthEvents:
+                type:
+                  - boolean
+                  - "null"
+                description: >-
+                  Whether the Gateway records the organization's growth events in its own store; null for the default,
+                  true. No safety control depends on it
+              chatSuggestions:
+                type:
+                  - boolean
+                  - "null"
+                description: >-
+                  Whether chat sessions suggest the person's next message after an answer, a call the organization pays
+                  for; null for the default, true
+              webSearch.engine:
+                type:
+                  - string
+                  - "null"
+                enum:
+                  - "off"
+                  - borrowed
+                  - null
+                description: >-
+                  Gates hosted web search in chat and in Code (`nexus claude --api`, `nexus codex --api`): off or
+                  borrowed; null for the default, borrowed. An unknown engine is a 400 that names the allowed values
+              webSearch.model:
+                type:
+                  - string
+                  - "null"
+                description: >-
+                  The model that runs a chat's search, whatever the chat's model is: cheapest, or the catalog id of a
+                  model that can search (`GET /v1/models` lists it with `web_search_usd`); null or default for the
+                  default, the chat's own model (the cheapest on nexus/auto). It is stored as the model's catalog id.
+                  Chat only: in Code an agent searches on its own model. Anything else is a 400 that lists the models
+              webSearch.domains:
+                type:
+                  - object
+                  - "null"
+                properties:
+                  allow:
+                    type: array
+                    items:
+                      type: string
+                  deny:
+                    type: array
+                    items:
+                      type: string
+                description: >-
+                  Domains a search result may (allow, when set) or may not (deny) come from; null for the default, both
+                  empty. While any is set, no web search runs, in chat or in Code, until the engine applies them
+              webSearch.maxPerTurn:
+                type:
+                  - integer
+                  - "null"
+                minimum: 1
+                maximum: 10
+                description: Most searches in one chat turn; null for the default, 3. Applies to Gateway-run engines (chat) only
+              webSearch.requireZdr:
+                type:
+                  - boolean
+                  - "null"
+                description: >-
+                  Whether only engines with zero data retention may run; null for the default, false. While set, no web
+                  search runs, in chat or in Code, until the engine applies it
+              artifacts.external:
+                type:
+                  - string
+                  - "null"
+                enum:
+                  - "off"
+                  - named
+                  - public
+                  - null
+                description: >-
+                  Sharing an artifact outside the organization: off, named (named people by verified email) or public
+                  (also anyone with an unguessable link); null for the default, public. Another value is a 400
+              artifacts.external.code:
+                type:
+                  - boolean
+                  - "null"
+                description: >-
+                  Whether an artifact shared outside the organization may include Ask your code's sources; null for the
+                  default, false
+              artifacts.external.domains:
+                type:
+                  - object
+                  - "null"
+                properties:
+                  allow:
+                    type: array
+                    items:
+                      type: string
+                  deny:
+                    type: array
+                    items:
+                      type: string
+                description: >-
+                  Email domains a named share outside the organization may (allow, when set) or may not (deny) go to;
+                  null for the default, both empty
+              artifacts.external.expiry:
+                type:
+                  - object
+                  - "null"
+                properties:
+                  maxDays:
+                    type:
+                      - integer
+                      - "null"
+                    minimum: 1
+                    maximum: 3650
+                  required:
+                    type: boolean
+                description: >-
+                  Limits on how long a public link stays open: maxDays (1-3650, or null for no limit) and whether an
+                  expiry is required; null for the default, no limit and not required
+              artifacts.external.continue:
+                type:
+                  - boolean
+                  - "null"
+                description: >-
+                  Whether people outside the organization may continue or remix what it shares; null for the default,
+                  true
+              artifacts.external.who:
+                type:
+                  - string
+                  - "null"
+                enum:
+                  - everyone
+                  - admins
+                  - null
+                description: "Who may share outside the organization: everyone or admins; null for the default, everyone"
+              artifacts.pages:
+                type:
+                  - boolean
+                  - "null"
+                description: Pages on or off; null for the default, true
+              artifacts.pages.public:
+                type:
+                  - boolean
+                  - "null"
+                description: Public links to pages; null for the default (false in a company organization, true in a personal one)
+              artifacts.pages.queries:
+                type:
+                  - boolean
+                  - "null"
+                description: >-
+                  Page queries (Nexus Data): a page's owner may approve read-only queries on a connection for its
+                  readers; null for the default, false
+              sessionContent:
+                type:
+                  - string
+                  - "null"
+                enum:
+                  - never
+                  - user
+                  - user_and_org
+                  - null
+                description: >-
+                  What leaves a person's machine when coding sessions sync, end-to-end encrypted: never (only usage
+                  numbers), user (only the person's own devices can read it) or user_and_org (also the organization's
+                  recovery key); null for the default. Needs synced_sessions.manage_policy. user_and_org answers 409
+                  org_recovery_key_required until the organization registers a recovery key (putOrgRecoveryKey)
+              multiplayerSessions:
+                type:
+                  - boolean
+                  - "null"
+                description: >-
+                  Whether members read each other's team-visible synced sessions; null for the default, false. A
+                  personal organization answers 403 personal_organization
+              cloudHistory:
+                type:
+                  - boolean
+                  - "null"
+                description: >-
+                  Whether Gateway stores the organization's cloud session history, readable by Nexus's systems and
+                  encrypted at rest; null for the default, true. Off, Gateway stores none and deletes what it holds
+              webSessionViewer:
+                type:
+                  - boolean
+                  - "null"
+                description: >-
+                  Whether Nexus UI in a browser opens the organization's synced sessions; null for the default, true.
+                  Needs synced_sessions.manage_policy. Off, Nexus UI's credential gets 403 web_session_viewer_off for
+                  sealed events, key copies and a new device; the desktop, the phone and the CLI read as before
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/OrgSettings
+        headers:
+          ETag:
+            $ref: ../components/common.yaml#/headers/ETag
+      "412":
+        $ref: ../components/common.yaml#/responses/VersionMismatch
+      "428":
+        $ref: ../components/common.yaml#/responses/PreconditionRequired
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: org.settings
+    x-idempotency: optional
+    x-if-match: required
+/v1/orgs/subscription:
+  get:
+    tags:
+      - Organization
+    operationId: getOrgSubscription
+    summary: >-
+      The organization's subscription (anyone in it): the plan, the member who pays, the member who receives billing
+      mail, the paid term, the status and the seats (one per human member). An organization nobody changed yet reads as
+      `active` since it was created, with everything else `null` and `updatedAt: null`.
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/OrgSubscription
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: org.read
+  patch:
+    tags:
+      - Organization
+    operationId: changeOrgSubscription
+    summary: >-
+      Name the payer and the billing contact (owners only). A field changes when present and clears when `null`; an
+      absent field stays. Both must be members (400 `not_a_member`). `plan`, `periodStart`, `periodEnd` and `status` are
+      refused (400 `written_by_billing`): Billing writes them from what the organization pays for. `effectiveAt`
+      (default now) is when the change took effect: never in the future and never before the newest change (400
+      `invalid_effective_at`). `dryRun: true` answers with the result and writes nothing. Audited as
+      `subscription.changed`, with the changed fields before and after and `metadata.effectiveAt`; a body that changes
+      nothing writes nothing.
+    parameters:
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKey
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            additionalProperties: false
+            properties:
+              payerUserId:
+                type:
+                  - string
+                  - "null"
+                description: "The member who pays: a user id from `GET /v1/orgs/members`."
+              billingContactUserId:
+                type:
+                  - string
+                  - "null"
+                description: The member who receives billing mail.
+              effectiveAt:
+                type: string
+                format: date-time
+                description: When the change took effect; default now.
+              dryRun:
+                type: boolean
+                default: false
+                description: Check the change and answer with the result; write nothing.
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/OrgSubscriptionChange
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: org.billing
+    x-idempotency: optional
+/v1/orgs/switch:
+  post:
+    tags:
+      - Organization
+    operationId: switchOrg
+    summary: >-
+      A new token for another of your organizations (by slug, id, or `personal`), of your credential's kind (`cli` or
+      `ui`; an API key gets a `cli` token that is still an API key to the Gateway), and who you are there. Your current
+      credential stays valid.
+    parameters:
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKeyRequired
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required:
+              - org
+            properties:
+              org:
+                type: string
+                description: A slug, an id, or personal
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/SwitchedOrg
+            example:
+              tenant:
+                id: ten_8Hq2LmP4xRtK
+                name: Acme
+                createdAt: "2026-10-01T09:00:00.000Z"
+                slug: acme
+                kind: company
+              user:
+                id: usr_3Kd9TqW2bNxe
+                email: ana@acme.com
+                name: Ana Souza
+              teams:
+                - id: team_x7Ka2LmPq9Rd
+                  slug: platform
+                  name: Platform
+                  role: lead
+              team:
+                id: team_x7Ka2LmPq9Rd
+                slug: platform
+                name: Platform
+              token: nx_EXAMPLEdoNotUseThisTokenValue000
+              tokenKind: cli
+              expiresAt: "2027-01-28T13:00:00.000Z"
+      "428":
+        $ref: ../components/common.yaml#/responses/PreconditionRequired
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: keys.manage_own
+    x-idempotency: required
+/v1/orgs/team-key:
+  get:
+    tags:
+      - Organization
+    operationId: getTeamKey
+    summary: The team key's newest epoch, current or retired, and your holder's copies of every epoch when `holder` names one.
+    description: >-
+      The team key is the X25519 pair every member's trusted holders hold, so a teammate's device opens a team-visible
+      session. It is not the organization's recovery key. Gateway holds its public half and copies sealed to each
+      holder, and opens neither. `retiredAt` set means a removal or a revoke retired the epoch: make the next one (`POST
+      /v1/orgs/team-key`).
+    parameters:
+      - name: holder
+        in: query
+        required: false
+        schema:
+          type: string
+        description: "One of your trusted holders: its copies come back"
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/TeamKeyState
+      "403":
+        description: >-
+          `holder` named and not a person (`person_required`), or named by Nexus UI while the organization's
+          `webSessionViewer` is off (`web_session_viewer_off`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "404":
+        description: "`holder` is not your device (`device_not_found`)"
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "409":
+        description: "`holder` is pending or revoked (`device_not_trusted`)"
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: org.read
+  post:
+    tags:
+      - Organization
+    operationId: createTeamKey
+    summary: >-
+      Make the team key's next epoch, with its first copies for members' trusted holders. One epoch at a time; audited
+      as org.team_key_rotated.
+    description: >-
+      Your trusted device makes the X25519 pair and sends its public half and copies of its private half, each sealed to
+      a member's trusted holder and signed. Gateway takes one new epoch at a time, under a lock on the organization: of
+      two devices that race, one makes the epoch and the other gets 409 `team_key_epoch_taken`. A new epoch follows a
+      removal or a revoke: while the newest is current, 409 `team_key_current`. A removed member's holder gets no copy.
+      The audit event names the reason the previous epoch retired, or `first`.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas.yaml#/CreateTeamKeyRequest
+    responses:
+      "201":
+        description: Created
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/TeamKey
+      "400":
+        description: A malformed key, copy or signature, or an epoch after a gap (`team_key_epoch_gap`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "403":
+        description: >-
+          Not a person (`person_required`), or the signature does not verify with the sender's signing key
+          (`invalid_signature`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "404":
+        description: The sender is not your device (`device_not_found`), or a holder is no member's (`holder_not_found`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "409":
+        description: >-
+          The epoch is taken (`team_key_epoch_taken`); the newest epoch is current (`team_key_current`); or the sender
+          or a holder is pending or revoked (`device_not_trusted`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "428":
+        $ref: ../components/common.yaml#/responses/PreconditionRequired
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: chat.use
+    parameters:
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKeyRequired
+    x-idempotency: required
+/v1/orgs/team-key/copies:
+  put:
+    tags:
+      - Organization
+    operationId: putTeamKeyCopies
+    summary: Hand team-key epochs your device holds to members' trusted holders. A copy already stored is kept.
+    description: >-
+      A member's trusted device that holds the key reads each member's holders (`GET
+      /v1/orgs/members/{userId}/holders`), verifies their chain, and seals every epoch it holds to each. Each holder
+      must be trusted and belong to a member of this organization now: a removed member gets no copy. Any refusal stores
+      nothing.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas.yaml#/PutTeamKeyCopiesRequest
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/TeamKeyCopiesStored
+      "400":
+        description: A malformed copy or signature
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "403":
+        description: >-
+          Not a person (`person_required`), or the signature does not verify with the sender's signing key
+          (`invalid_signature`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "404":
+        description: >-
+          No such epoch (`team_key_not_found`), the sender is not your device (`device_not_found`), or a holder is no
+          member's (`holder_not_found`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "409":
+        description: >-
+          The sender holds no copy of an epoch it hands over (`team_key_not_held`), or the sender or a holder is pending
+          or revoked (`device_not_trusted`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: chat.use
+    parameters:
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKey
+    x-idempotency: optional
+/v1/service-accounts:
+  get:
+    tags:
+      - Organization
+    operationId: listServiceAccounts
+    summary: >-
+      The organization's service accounts (owners and admins: `service_accounts.manage`), newest first. Each has every
+      key it held, live or not, newest first. Never a token or its hash. `limit` and `cursor` page it.
+    parameters:
+      - name: limit
+        in: query
+        required: false
+        description: Items per page, 1 to 500 (default 100). Without limit or cursor the answer holds the whole list.
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 500
+      - name: cursor
+        in: query
+        required: false
+        description: nextCursor from the previous page. A cursor whose item left the list answers 400 `invalid_cursor`.
+        schema:
+          type: string
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/ServiceAccountList
+            example:
+              serviceAccounts:
+                - id: sva_Q4mT8wLx2Rkz
+                  name: ci-deploy
+                  ownerUserId: usr_7Lm2RxV9cQta
+                  teamId: team_x7Ka2LmPq9Rd
+                  createdBy: usr_3Kd9TqW2bNxe
+                  createdAt: "2026-10-30T13:00:00.000Z"
+                  expiresAt: "2027-10-30T13:00:00.000Z"
+                  keys:
+                    - id: sak_N6pR3tW8yLqa
+                      serviceAccountId: sva_Q4mT8wLx2Rkz
+                      ownerUserId: usr_7Lm2RxV9cQta
+                      scope:
+                        teamId: team_x7Ka2LmPq9Rd
+                      prefix: nxsa_r7Tq
+                      label: github-actions
+                      createdBy: usr_3Kd9TqW2bNxe
+                      createdAt: "2026-10-30T13:01:00.000Z"
+                      expiresAt: "2027-10-30T13:00:00.000Z"
+                      lastUsedAt: "2026-10-31T08:00:00.000Z"
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: service_accounts.manage
+  post:
+    tags:
+      - Organization
+    operationId: createServiceAccount
+    summary: >-
+      Make a service account, a caller for CI and scripts (owners and admins: `service_accounts.manage`). A member
+      answers for it (`ownerUserId`, the caller by default) and a team owns it (`team`, its slug or id). It expires at
+      `expiresAt`, at most 365 days from now. An organization holds at most 100 live accounts: the 101st is a 409
+      `service_account_limit`. It is no member and holds no seat. Its keys (`nxsa_…`) reach the public endpoints only,
+      until a Policy Engine statement admits them to more: every other route answers 403. It has no key until one is
+      issued. Audited as `service_account.created`. With `dryRun: true` everything is checked and nothing is written:
+      the answer is a 200 with the account as it would be made, and its id is never used.
+    parameters:
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKeyRequired
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas.yaml#/CreateServiceAccount
+    responses:
+      "200":
+        description: "A dry run: the account as it would be made"
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/CreatedServiceAccount
+            example:
+              id: sva_Q4mT8wLx2Rkz
+              name: ci-deploy
+              ownerUserId: usr_7Lm2RxV9cQta
+              teamId: team_x7Ka2LmPq9Rd
+              createdBy: usr_3Kd9TqW2bNxe
+              createdAt: "2026-10-30T13:00:00.000Z"
+              expiresAt: "2027-10-30T13:00:00.000Z"
+              keys: []
+              dryRun: true
+      "201":
+        description: Created
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/CreatedServiceAccount
+            example:
+              id: sva_Q4mT8wLx2Rkz
+              name: ci-deploy
+              ownerUserId: usr_7Lm2RxV9cQta
+              teamId: team_x7Ka2LmPq9Rd
+              createdBy: usr_3Kd9TqW2bNxe
+              createdAt: "2026-10-30T13:00:00.000Z"
+              expiresAt: "2027-10-30T13:00:00.000Z"
+              keys: []
+              dryRun: false
+      "400":
+        description: >-
+          Not valid: no name (1 to 64 characters), an `expiresAt` that is not a future time within 365 days
+          (`invalid_expiry`), an owner who is not a member (`owner_not_a_member`) or a team that is not the
+          organization's (`unknown_team`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "428":
+        $ref: ../components/common.yaml#/responses/PreconditionRequired
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: service_accounts.manage
+    x-idempotency: required
+/v1/service-accounts/{id}:
+  delete:
+    tags:
+      - Organization
+    operationId: revokeServiceAccount
+    summary: >-
+      Revoke a service account and every live key it holds, in one change (owners and admins:
+      `service_accounts.manage`). Its keys answer as an unknown token from then on. Revoking a revoked account answers
+      `already: true` and changes nothing. With `?dryRun=1` nothing changes: the answer counts the keys it would stop.
+      Audited as `service_account.revoked`, with the ids of the keys it stopped. Another organization's account is a
+      404.
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[A-Za-z0-9_-]+$
+        description: The service account's id (`sva_…`)
+      - name: dryRun
+        in: query
+        required: false
+        description: >-
+          `1` or `true`: check and change nothing. `0` or `false`: the same as none. Any other value is a 400, so a
+          mistyped flag never revokes.
+        schema:
+          type: string
+          enum:
+            - "1"
+            - "true"
+            - "0"
+            - "false"
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKey
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/ServiceAccountRevoked
+            example:
+              id: sva_Q4mT8wLx2Rkz
+              already: false
+              dryRun: false
+              revokedAt: "2026-11-15T10:00:00.000Z"
+              keysRevoked: 1
+      "400":
+        description: "`dryRun` is not `1`, `true`, `0` or `false`"
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "404":
+        description: No such service account in this organization (`unknown_service_account`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: service_accounts.manage
+    x-idempotency: optional

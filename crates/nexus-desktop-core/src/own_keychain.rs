@@ -207,13 +207,15 @@ impl OwnKeychain {
         Ok(())
     }
 
-    /// Delete the account. The old item stays, and is never read again.
+    /// Delete the account. The old item stays, and is never read again. A failed delete changes nothing, not even the
+    /// held answer: holding "no key" for an item the store still has would make a caller write a second key over it.
     pub fn delete(&self, account: &str) -> Result<(), String> {
         let slot = self.slot(account);
         let mut slot = lock(&slot);
+        self.store.delete(&self.service, account)?;
         *slot = Some(Ok(None));
         self.mark(account, Tried::Replaced);
-        self.store.delete(&self.service, account)
+        Ok(())
     }
 
     /// The person asked to try again: a denied account is read from the old service once more, at the next read.

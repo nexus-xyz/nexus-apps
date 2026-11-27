@@ -1,0 +1,532 @@
+# Path items. The root openapi.yaml references each one.
+/v1/diagnostics/errors:
+  post:
+    tags:
+      - Account
+    operationId: sendClientErrors
+    summary: >-
+      Report errors the caller's app caught, with no content: the app, its version and OS, a kind from a fixed list, and
+      a component and a code the app names from its own code. Never a message, a stack, a path or a URL: the pattern
+      refuses spaces, '/', ':' and '@', and the app must not put content in a name. The Gateway counts them per UTC day,
+      organization, person, app, version, OS, kind, component and code, and keeps each person's last 50 per
+      organization.
+    description: >-
+      `errors` holds 1 to 20 errors. A value outside its list or pattern refuses the whole request with 400
+      `invalid_client_error`. `occurredAt` more than 5 minutes ahead of the Gateway or more than 7 days old is replaced
+      by the Gateway's now. Stored only with a server setting`; off, a valid body answers `recorded: 0` and nothing is
+      stored. Unknown fields are ignored. A person only: a key with no person is refused. Thirty errors a minute per
+      person on each Gateway copy; past that, 429 and nothing of the request is stored.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas.yaml#/ClientErrors
+    responses:
+      "200":
+        description: Checked; `recorded` says how many were stored
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/ClientErrorsRecorded
+      "400":
+        description: A value outside its list or pattern (`invalid_client_error`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "403":
+        description: "Not a person: a service account, a module, an agent link or an operator (`role_required`)"
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "428":
+        $ref: ../components/common.yaml#/responses/PreconditionRequired
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+    x-nexus-permission: diagnostics.report
+    parameters:
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKeyRequired
+    x-idempotency: required
+/v1/diagnostics/feedback:
+  post:
+    tags:
+      - Account
+    operationId: sendFeedback
+    summary: >-
+      Send feedback, a crash report the person chose to send, or a report on a model's answer (App Review 1.2), to
+      Nexus's team. The Gateway posts one message to the feedback channel in Slack and keeps no copy. The message names
+      the person (name and email) and the organization, so the team can answer, with the app, its version, the OS and
+      the screen. What the person wrote is shown as plain text, so it cannot mention a channel or a person, hide a link,
+      or pass for the Gateway's own lines; names are code spans, and Slack previews no link. A crash shows its redacted
+      name and message and its top frames, as `POST /v1/diagnostics/reports` logs them, and is logged as one
+      `nexus::client_report` line too. A reported answer shows its reason and model, then the answer as plain text, as
+      the app showed it.
+    description: >-
+      Only a person sends it: at most 5 a person, 30 an organization and 300 in all in ten minutes on each Gateway copy;
+      past that, 429 `feedback_limit`. A message Slack refused uses up no limit, unless Slack refused it for its own
+      rate limit (429). Without a server setting, 503 `not_configured`. When Slack refuses the message or cannot be
+      reached in 5 seconds, 502 `upstream_error`, and the app keeps the person's words so they can try again.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas.yaml#/Feedback
+    responses:
+      "200":
+        description: Posted to the channel
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/FeedbackSent
+      "400":
+        description: Feedback that breaks the contract (`invalid_feedback`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "403":
+        description: "Not one of the organization's people: a service account, a module or a sandbox (`permission_error`)"
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "428":
+        $ref: ../components/common.yaml#/responses/PreconditionRequired
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      "502":
+        description: Slack did not take the message (`upstream_error`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "503":
+        description: No feedback channel on this Gateway (`not_configured`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: feedback.send
+    parameters:
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKeyRequired
+    x-idempotency: required
+/v1/diagnostics/heartbeat:
+  post:
+    tags:
+      - Account
+    operationId: sendActivityHeartbeat
+    summary: >-
+      Report one active minute of the caller on an app: the app's window has focus and the person acted in the last
+      minute. The Gateway keeps active minutes per UTC day, organization, person, surface, app, app version and OS, and
+      the last minute per app. Labels come from fixed lists and versions are bounded: no content, path or address is
+      kept.
+    description: >-
+      Send about once a minute. One heartbeat counts the Gateway's clock minute it arrives in, at most once per
+      organization, person and app, so two windows or a retry count once. Stored only where activity collection is on;
+      off, a valid body answers `recorded: false` and nothing is stored. Unknown fields are ignored. A person only: a
+      key with no person is refused. Six heartbeats a minute per person on each Gateway copy; past that, 429.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas.yaml#/Heartbeat
+    responses:
+      "200":
+        description: Checked; `recorded` says whether a minute counted
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/HeartbeatRecorded
+      "400":
+        description: A value outside its list or pattern (`invalid_heartbeat`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "403":
+        description: "Not a person: a service account, a module, an agent link or an operator (`role_required`)"
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "428":
+        $ref: ../components/common.yaml#/responses/PreconditionRequired
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+    x-nexus-permission: diagnostics.report
+    parameters:
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKeyRequired
+    x-idempotency: required
+/v1/diagnostics/reports:
+  post:
+    tags:
+      - Account
+    operationId: sendDiagnosticReports
+    summary: >-
+      Send the app's own error and crash reports to the observability store. Each report becomes one
+      `nexus::client_report` line in the Gateway's log, which reaches Cloud Logging with the Gateway's other lines; the
+      Gateway keeps no copy. A report names what failed and where, never content: its fields are a closed set, each one
+      bounded, and its free text (`name`, `message`) is logged redacted, with quoted text, URL paths and queries, emails
+      and anything shaped like a key or token taken out. A stack frame is logged only as a code location (`at <function>
+      (<file>:<line>:<column>)` or `<binary> +0x<offset>`), with every key or token shape taken out; any other frame is
+      logged as `[redacted]`.
+    description: >-
+      `reports` holds 1 to 20 reports. A report that breaks a bound or carries an unknown field or a control character
+      refuses the whole request with 400 `invalid_report`, so the app drops it rather than sending it again. The line
+      names the organization by its id and never the person.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas.yaml#/DiagnosticReports
+    responses:
+      "202":
+        description: Logged
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/DiagnosticReportsAccepted
+      "400":
+        description: A report breaks the contract (`invalid_report`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "403":
+        description: "Not one of the organization's people: a service account, a module or a sandbox (`permission_error`)"
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "428":
+        $ref: ../components/common.yaml#/responses/PreconditionRequired
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+    x-nexus-permission: diagnostics.report
+    parameters:
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKeyRequired
+    x-idempotency: required
+/v1/modules:
+  get:
+    tags:
+      - Account
+    operationId: modules
+    summary: Manifests of the registered capability modules.
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                modules:
+                  type: array
+                  items:
+                    $ref: ../components/schemas.yaml#/ModuleManifest
+                unavailable:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      url:
+                        type: string
+                      error:
+                        type: string
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: org.read
+/v1/openapi.json:
+  get:
+    tags:
+      - Account
+    operationId: openapi
+    summary: This document, merged with every registered module's operations.
+    security: []
+    responses:
+      "200":
+        description: OpenAPI 3.1 document
+    x-nexus-permission: public
+/v1/referrals:
+  get:
+    tags:
+      - Account
+    operationId: listReferrals
+    summary: >-
+      Your referral code and the people whose sign-up carried it, oldest first, each with when they joined and their
+      email masked. The code is made on the first read: ten random characters of lowercase base 32, with no name in it,
+      and it never changes after. A code made earlier from your name gets a random one on its next read, and the old
+      code still works. It is a person's, whichever organization you call from. The people always page: the first 100
+      without `limit` or `cursor`.
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/ReferralList
+      "400":
+        description: A bad `limit` or `cursor` (`invalid_request_error`, `invalid_cursor`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "403":
+        description: "Not a person: a module, a service account, an agent or an operator (`person_required`)"
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+    x-nexus-permission: referrals.read
+    parameters:
+      - name: limit
+        in: query
+        required: false
+        description: People per page, 1 to 500 (default 100).
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 500
+      - name: cursor
+        in: query
+        required: false
+        description: nextCursor from the previous page. A cursor whose person left the list answers 400 `invalid_cursor`.
+        schema:
+          type: string
+/v1/search:
+  get:
+    tags:
+      - Account
+    operationId: search
+    summary: >-
+      Search what you may read, grouped by type and ranked: your own chat sessions (titles and message text), artifacts
+      shared with or by you, people, teams, models and model policies.
+    description: >-
+      Nexus UI's ⌘K palette and `nexus search`. Every group is filtered on the server by the permission matrix and your
+      role before it is ranked: chats are only ever your own (owners and admins included); people who have not joined
+      yet need `teams.manage`; model policies need `policy.read`; models are those you may use (and coming soon ones).
+      Artifacts follow their audience (`artifacts.read`), and a revoked one is found by its author only. Not searched:
+      the docs and the audit log.
+
+
+      Ranking: the whole query equal to a field scores 1.0, a prefix 0.9 to 0.95, every word starting a word 0.75 to
+      0.85, the query inside 0.65, every word inside 0.5, scaled by the field's weight (a name 1.0, an email 0.9, teams
+      0.6). A chat adds recency (15 %) and counts a message match at 0.45 to 0.6. Groups come in the order of their best
+      result. Match ranges are [start, end) in UTF-16 code units.
+    parameters:
+      - name: q
+        in: query
+        required: true
+        description: What to search for, 1 to 200 characters. Words match as prefixes (`depl` finds deploy)
+        schema:
+          type: string
+          minLength: 1
+          maxLength: 200
+      - name: types
+        in: query
+        required: false
+        description: >-
+          Comma-separated: chats, artifacts, people, teams, models (default: all you may read). `actions` and `pages`
+          are accepted and ignored: the palette answers them itself
+        schema:
+          type: string
+      - name: limit
+        in: query
+        required: false
+        description: Results per group, 1 to 20 (default 5)
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 20
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/SearchResponse
+            example:
+              query: deploy
+              types:
+                - chats
+                - artifacts
+                - people
+                - teams
+                - models
+              groups:
+                - type: chats
+                  label: Chats
+                  more: false
+                  results:
+                    - type: chats
+                      entity: session
+                      id: chs_Q2h4dE9pUmV0
+                      title: Why did the deploy fail?
+                      titleMatches:
+                        - - 12
+                          - 18
+                      url: /app/acme/sessions/chs_Q2h4dE9pUmV0
+                      score: 0.72
+              tookMs: 18.42
+      "400":
+        description: >-
+          A query parameter is not valid (`invalid_search`): `q` empty or over 200 characters, an unknown type in
+          `types`, or `limit` not 1 to 20.
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+            example:
+              error:
+                message: q is at most 200 characters
+                type: invalid_request_error
+                code: invalid_search
+      "401":
+        description: No credential (`missing_credential`), or a credential Gateway does not accept (`invalid_credential`).
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+            example:
+              error:
+                message: the credential is not valid
+                type: authentication_error
+                code: invalid_credential
+      "403":
+        description: >-
+          The key does not hold `search.use` (`role_required`: a service account, a sandbox, or an agent not granted
+          it), or the caller is not a person, such as a module key (`person_required`).
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+            example:
+              error:
+                message: search is for people; sign in as one
+                type: permission_error
+                code: person_required
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: search.use
+/v1/tenants:
+  post:
+    tags:
+      - Account
+    operationId: createTenant
+    summary: >-
+      Sign up: create a tenant, its first user and an API key (shown once). The person's personal organization is made
+      too (`personal` in the answer); `personal: true` without a name makes only the personal organization and returns
+      its key.
+    security: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              name:
+                type: string
+                maxLength: 80
+              email:
+                type: string
+              personal:
+                type: boolean
+                description: Make only your personal organization (no name needed)
+            description: "`name` is required unless `personal` is true."
+    responses:
+      "201":
+        description: Created
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/CreateTenantResponse
+            example:
+              tenant:
+                id: ten_8Hq2LmP4xRtK
+                name: Acme
+                budgetUsd: 5
+                kind: company
+              user:
+                id: usr_3Kd9TqW2bNxe
+                email: ana@acme.com
+              apiKey: nx_EXAMPLEdoNotUseThisTokenValue000
+              personal:
+                id: ten_Pv3nW7kQ2sYb
+                name: Personal
+                kind: personal
+                role: owner
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: public
+    parameters:
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKey
+    x-idempotency: optional
+    description: "Exempt: a public route. It takes no credential, so the Gateway has no caller to tie a key to."
+/v1/tenants/me:
+  get:
+    tags:
+      - Account
+    operationId: currentTenant
+    summary: The calling token's organization (id, name, slug), the person and their role and permissions.
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/CurrentTenantResponse
+            example:
+              tenant:
+                id: ten_8Hq2LmP4xRtK
+                name: Acme
+                createdAt: "2026-10-01T09:00:00.000Z"
+                slug: acme
+                kind: company
+              user:
+                id: usr_3Kd9TqW2bNxe
+                email: ana@acme.com
+                name: Ana Souza
+              teams:
+                - id: team_x7Ka2LmPq9Rd
+                  slug: platform
+                  name: Platform
+                  role: lead
+              team:
+                id: team_x7Ka2LmPq9Rd
+                slug: platform
+                name: Platform
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: org.read

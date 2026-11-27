@@ -70,7 +70,7 @@ pub fn load_or_create(vault: &Vault, gateway: &str) -> Result<DeviceKey, String>
     let device = DeviceKey::generate();
     vault
         .set(&account(gateway), &text(&device))
-        .map_err(|_| "The keychain did not save this computer's device key.".to_string())?;
+        .map_err(|error| format!("The keychain did not save this computer's device key: {error}"))?;
     Ok(device)
 }
 
