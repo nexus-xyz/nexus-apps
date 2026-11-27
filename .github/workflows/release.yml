@@ -1,0 +1,433 @@
+# A release of the desktop app: a `v<x.y.z>-beta.<N>` tag builds the app for Linux, macOS and Windows and the Nexus
+# host for Linux, signs them, and publishes the beta feed that installed betas update from.
+#
+# Who can release: a tag ruleset limits who pushes `v*` tags, and the `release` environment holds every secret and
+# waits for a reviewer who is not the person who pushed the tag. The `plan`, `build` and `host` jobs read no secret,
+# so a pushed tag builds nothing signed until a second person approves `release`.
+#
+# What a release publishes, in this order:
+#   1. `desktop-oss/beta/<version>/` on the downloads bucket: the packages, the hosts, each file's `.sig`,
+#      `SHA256SUMS`, and that version's own `latest.json`. Written once; a second write is refused.
+#   2. A GitHub prerelease with the same files.
+#   3. `desktop-oss/beta/latest.json`, the feed. It moves last, so an installed beta never sees a version whose
+#      files are not there yet.
+#
+# A rehearsal: a `v0.0.0-test.<N>` tag runs every step but those three, and keeps the signed files as a workflow
+# artifact for three days. Use it to test the environment, the keys and the signing after a change here.
+#
+# Cost: three desktop builds with thin LTO and two host builds, with no cache (a release does not trust one).
+# Configuration: apps/desktop/packaging/RELEASE.md lists the environment's secrets and variables.
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions: {}
+
+# One run per tag, and a second push of the same tag waits: a release is never cancelled halfway.
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  # Refuses a tag that is not a release, before any runner builds.
+  plan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    outputs:
+      version: ${{ steps.plan.outputs.version }}
+      publish: ${{ steps.plan.outputs.publish }}
+      pubkey: ${{ steps.plan.outputs.pubkey }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Check the tag
+        id: plan
+        env:
+          TAG: ${{ github.ref_name }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          stop() { echo "::error::$1"; exit 1; }
+          if [[ "$TAG" =~ ^v([0-9]+\.[0-9]+\.[0-9]+-beta\.[0-9]+)$ ]]; then
+            publish=true
+          elif [[ "$TAG" =~ ^v(0\.0\.0-test\.[0-9]+)$ ]]; then
+            publish=false
+          else
+            stop "$TAG is not a release tag. A beta is v<x.y.z>-beta.<N>, and a rehearsal is v0.0.0-test.<N>."
+          fi
+          version="${BASH_REMATCH[1]}"
+
+          # Only main releases: a tag on another branch would ship code that no pull request merged.
+          git merge-base --is-ancestor "$GITHUB_SHA" origin/main ||
+            stop "$TAG is at $GITHUB_SHA, which is not on main."
+
+          if found="$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" 2>&1)"; then
+            stop "A GitHub release for $TAG exists. Tag the next number: a published version never changes."
+          elif ! grep -qi 'not found' <<< "$found"; then
+            stop "Could not check for a GitHub release of $TAG: $found"
+          fi
+
+          # The keys a build trusts for updates. A build with none never updates, so a release needs one.
+          keys="$({ grep -Ev '^[[:space:]]*(#|$)' apps/desktop/packaging/updater-keys.txt || true; } | tr -s '[:space:]' ' ' | sed 's/ $//')"
+          [[ -n "$keys" ]] || stop "apps/desktop/packaging/updater-keys.txt lists no key."
+          for key in $keys; do
+            { printf '%s' "$key" | base64 --decode 2> /dev/null || true; } | grep -q '^untrusted comment: ' ||
+              stop "A line of updater-keys.txt is not the base64 of a minisign public key file."
+          done
+
+          {
+            echo "version=$version"
+            echo "publish=$publish"
+            echo "pubkey=$keys"
+          } >> "$GITHUB_OUTPUT"
+          echo "Version $version, publish: $publish, $(wc -w <<< "$keys") update key(s)." >> "$GITHUB_STEP_SUMMARY"
+
+  # The app, unsigned. Linux and Windows leave here as packages. macOS leaves as binaries: its package is signed
+  # while it is built, so `release` makes it.
+  build:
+    needs: plan
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          # Ubuntu 22.04 for its glibc: a package built on a newer one does not start on older distributions.
+          - platform: linux
+            runner: ubuntu-22.04
+          - platform: macos
+            runner: macos-26
+          - platform: windows
+            runner: windows-2022
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 120
+    permissions:
+      contents: read
+    env:
+      # The version the build carries. It picks the update channel and names the packages.
+      NEXUS_DESKTOP_BUILD_VERSION: ${{ needs.plan.outputs.version }}
+      NEXUS_UPDATER_PUBKEY: ${{ needs.plan.outputs.pubkey }}
+      # Nexus's own OAuth client. Without it the build signs in as the shared client of builds from source.
+      NEXUS_DESKTOP_CLIENT_ID: ${{ vars.NEXUS_DESKTOP_CLIENT_ID }}
+      # The packaging scripts read the binaries and CEF from the app's own folder, not from the workspace's.
+      CARGO_TARGET_DIR: ${{ github.workspace }}/apps/desktop/target
+      CEF_PATH: ${{ github.workspace }}/apps/desktop/target/cef
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          persist-credentials: false
+      - name: Install Rust
+        shell: bash
+        run: |
+          rustup toolchain install 1.94 --profile minimal --no-self-update
+          rustup default 1.94
+      - name: Linux packages GPUI needs
+        if: matrix.platform == 'linux'
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends build-essential clang cmake ninja-build pkg-config \
+            libfontconfig-dev libfreetype-dev libwayland-dev libxkbcommon-dev libxkbcommon-x11-dev libxcb1-dev \
+            libvulkan1 libasound2-dev libgtk-3-dev libayatana-appindicator3-dev xz-utils
+      - name: Package (Linux)
+        if: matrix.platform == 'linux'
+        run: |
+          apps/desktop/packaging/package.sh
+          mkdir -p "$RUNNER_TEMP/out"
+          mv "apps/desktop/target/package/nexus-desktop-$NEXUS_DESKTOP_BUILD_VERSION-linux-x86_64.tar.xz" "$RUNNER_TEMP/out/"
+      - name: Package (Windows)
+        if: matrix.platform == 'windows'
+        shell: pwsh
+        run: |
+          ./apps/desktop/packaging/package.ps1
+          New-Item -ItemType Directory -Force -Path "$env:RUNNER_TEMP\out" | Out-Null
+          Move-Item "apps\desktop\target\package\nexus-desktop-$env:NEXUS_DESKTOP_BUILD_VERSION-windows-x86_64.exe" "$env:RUNNER_TEMP\out\"
+      # tar keeps the framework's symbolic links and the binaries' modes. An artifact alone drops both.
+      - name: Build (macOS)
+        if: matrix.platform == 'macos'
+        working-directory: apps/desktop
+        run: |
+          cargo build --profile dist --locked --bins
+          mkdir -p "$RUNNER_TEMP/out"
+          tar -C target -cf "$RUNNER_TEMP/out/macos-unsigned.tar" dist/nexus-desktop-gpui dist/nexus-desktop-gpui-helper cef
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: ${{ matrix.platform == 'macos' && 'unsigned-macos' || format('package-{0}', matrix.platform) }}
+          path: ${{ runner.temp }}/out/*
+          if-no-files-found: error
+          retention-days: 3
+          compression-level: 0
+
+  # The Nexus host: one static binary for each Linux architecture, for the servers the app connects to.
+  host:
+    needs: plan
+    runs-on: ubuntu-22.04
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    env:
+      NEXUS_DESKTOP_BUILD_VERSION: ${{ needs.plan.outputs.version }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          persist-credentials: false
+      - name: Install Rust, zig and cargo-zigbuild
+        run: |
+          rustup toolchain install 1.94 --profile minimal --no-self-update \
+            --target x86_64-unknown-linux-musl --target aarch64-unknown-linux-musl
+          rustup default 1.94
+          python3 -m pip install --quiet ziglang==0.15.2 cargo-zigbuild==0.24.0
+      - name: Build, check and compress
+        run: |
+          mkdir -p "$RUNNER_TEMP/out"
+          for arch in x86_64 aarch64; do
+            target="$arch-unknown-linux-musl"
+            cargo zigbuild --locked --profile host -p nexus-host --bin nexus-host --target "$target"
+            binary="target/$target/host/nexus-host"
+            # Static, so it runs on any distribution: no interpreter and no shared library.
+            if readelf -l "$binary" | grep -q 'INTERP' || readelf -d "$binary" | grep -q 'NEEDED'; then
+              echo "::error::nexus-host for $arch is not a static binary."
+              exit 1
+            fi
+            gzip -9 -n -c "$binary" > "$RUNNER_TEMP/out/nexus-host_${NEXUS_DESKTOP_BUILD_VERSION}_linux-$arch.gz"
+          done
+          # The app asks a server for a host of exactly its own version.
+          said="$(target/x86_64-unknown-linux-musl/host/nexus-host --version)"
+          if [[ "$said" != "nexus-host $NEXUS_DESKTOP_BUILD_VERSION"* ]]; then
+            echo "::error::nexus-host says '$said', not version $NEXUS_DESKTOP_BUILD_VERSION."
+            exit 1
+          fi
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: package-host
+          path: ${{ runner.temp }}/out/*
+          if-no-files-found: error
+          retention-days: 3
+          compression-level: 0
+
+  # Signs and publishes. The only job that reads a secret, and it waits for the `release` environment's reviewer.
+  # It runs on macOS because Apple's signing tools do. Each step gets only the secrets it names.
+  release:
+    needs: [plan, build, host]
+    runs-on: macos-26
+    timeout-minutes: 60
+    environment: release
+    permissions:
+      contents: write # the GitHub release
+      id-token: write # the downloads bucket's identity, and provenance
+      attestations: write
+    env:
+      VERSION: ${{ needs.plan.outputs.version }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          persist-credentials: false
+      # OUT holds exactly the files a release publishes. KEYCHAIN is this run's own, deleted in the last step.
+      - name: Set the paths
+        run: |
+          echo "OUT=$RUNNER_TEMP/out" >> "$GITHUB_ENV"
+          echo "KEYCHAIN=$RUNNER_TEMP/release.keychain-db" >> "$GITHUB_ENV"
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: package-*
+          path: ${{ runner.temp }}/out
+          merge-multiple: true
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: unsigned-macos
+          path: ${{ runner.temp }}/macos
+
+      # A release without a secret would publish an ad hoc signed app or stop halfway. Stop before the first step.
+      - name: Check the environment
+        env:
+          HAS_APPLE: ${{ secrets.APPLE_CERTIFICATE != '' && secrets.APPLE_CERTIFICATE_PASSWORD != '' && secrets.APPLE_SIGNING_IDENTITY != '' }}
+          HAS_NOTARY: ${{ secrets.APPLE_API_KEY != '' && secrets.APPLE_API_ISSUER != '' && secrets.APPLE_API_KEY_P8 != '' }}
+          HAS_UPDATER: ${{ secrets.UPDATER_PRIVATE_KEY != '' }}
+          HAS_BUCKET: ${{ vars.DOWNLOADS_BUCKET != '' && vars.GCP_WORKLOAD_IDENTITY_PROVIDER != '' && vars.GCP_SERVICE_ACCOUNT != '' }}
+          PUBLISH: ${{ needs.plan.outputs.publish }}
+        run: |
+          missing=()
+          [[ "$HAS_APPLE" == true ]] || missing+=("the Developer ID certificate (APPLE_CERTIFICATE, APPLE_CERTIFICATE_PASSWORD, APPLE_SIGNING_IDENTITY)")
+          [[ "$HAS_NOTARY" == true ]] || missing+=("the notarization key (APPLE_API_KEY, APPLE_API_ISSUER, APPLE_API_KEY_P8)")
+          [[ "$HAS_UPDATER" == true ]] || missing+=("the updater key (UPDATER_PRIVATE_KEY)")
+          [[ "$PUBLISH" != true || "$HAS_BUCKET" == true ]] || missing+=("the bucket variables (DOWNLOADS_BUCKET, GCP_WORKLOAD_IDENTITY_PROVIDER, GCP_SERVICE_ACCOUNT)")
+          if (( ${#missing[@]} )); then
+            printf '::error::The release environment lacks %s.\n' "${missing[@]}"
+            exit 1
+          fi
+
+      - name: Import the Developer ID certificate
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+        run: |
+          # A keychain of this run only, with a password nobody keeps. The last step deletes it.
+          password="$(openssl rand -base64 24)"
+          security create-keychain -p "$password" "$KEYCHAIN"
+          security set-keychain-settings -lut 3600 "$KEYCHAIN"
+          security unlock-keychain -p "$password" "$KEYCHAIN"
+          (umask 077 && printf '%s' "$APPLE_CERTIFICATE" | base64 --decode > "$RUNNER_TEMP/certificate.p12")
+          security import "$RUNNER_TEMP/certificate.p12" -P "$APPLE_CERTIFICATE_PASSWORD" -f pkcs12 \
+            -k "$KEYCHAIN" -T /usr/bin/codesign
+          rm "$RUNNER_TEMP/certificate.p12"
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$password" "$KEYCHAIN" > /dev/null
+          security list-keychains -d user -s "$KEYCHAIN" login.keychain-db
+
+      - name: Sign, notarize and package the macOS app
+        env:
+          NEXUS_DESKTOP_BUILD_VERSION: ${{ needs.plan.outputs.version }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+          APPLE_API_KEY_P8: ${{ secrets.APPLE_API_KEY_P8 }}
+          APPLE_API_KEY_PATH: ${{ runner.temp }}/notary.p8
+          NO_BUILD: "1"
+        run: |
+          mkdir -p apps/desktop/target
+          tar -C apps/desktop/target -xf "$RUNNER_TEMP/macos/macos-unsigned.tar"
+          (umask 077 && printf '%s\n' "$APPLE_API_KEY_P8" > "$APPLE_API_KEY_PATH")
+          apps/desktop/packaging/package.sh
+          rm "$APPLE_API_KEY_PATH"
+          mv "apps/desktop/target/package/nexus-desktop-$VERSION-macos-arm64.dmg" "$OUT/"
+
+      # The updater's signature: a minisign signature whose trusted comment names the file and the version, so one
+      # signed file cannot pass as another file or another version. `<file>.sig` is its base64, as the app reads it.
+      - name: Sign every file for the updater
+        env:
+          UPDATER_PRIVATE_KEY: ${{ secrets.UPDATER_PRIVATE_KEY }}
+          UPDATER_KEY_PASSWORD: ${{ secrets.UPDATER_KEY_PASSWORD }}
+          PUBKEY: ${{ needs.plan.outputs.pubkey }}
+        run: |
+          brew install minisign
+          minisign -v
+          key="$RUNNER_TEMP/updater.key"
+          (umask 077 && printf '%s' "$UPDATER_PRIVATE_KEY" | base64 --decode > "$key")
+          n=0
+          for trusted in $PUBKEY; do
+            n=$((n + 1))
+            printf '%s' "$trusted" | base64 --decode > "$RUNNER_TEMP/trusted-$n.pub"
+          done
+          for file in "$OUT"/*; do
+            name="$(basename "$file")"
+            comment="$(printf 'timestamp:%s\tfile:%s\tversion:%s' "$(date +%s)" "$name" "$VERSION")"
+            # minisign reads the key's password from its input. A key without one reads nothing.
+            printf '%s\n' "$UPDATER_KEY_PASSWORD" | minisign -S -s "$key" -m "$file" -x "$file.minisig" -t "$comment"
+            # The signature must verify with a key this very build trusts, or no installed app would take the file.
+            verified=
+            for trusted in "$RUNNER_TEMP"/trusted-*.pub; do
+              if minisign -V -q -p "$trusted" -m "$file" -x "$file.minisig"; then verified=1; break; fi
+            done
+            if [[ -z "$verified" ]]; then
+              echo "::error::$name: its signature does not verify with a key in updater-keys.txt."
+              exit 1
+            fi
+            base64 < "$file.minisig" | tr -d '\n' > "$file.sig"
+            rm "$file.minisig"
+          done
+          rm "$key"
+
+      - name: Write latest.json and SHA256SUMS
+        env:
+          BASE: https://downloads.nexus.inc/desktop-oss/beta/${{ needs.plan.outputs.version }}
+        run: |
+          python3 -I apps/desktop/packaging/feed.py --dir "$OUT" --version "$VERSION" --channel beta \
+            --base "$BASE" --commit "$GITHUB_SHA" --date "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          cat "$OUT/SHA256SUMS" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Keep a rehearsal's files
+        if: needs.plan.outputs.publish != 'true'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: rehearsal
+          path: ${{ runner.temp }}/out/*
+          if-no-files-found: error
+          retention-days: 3
+          compression-level: 0
+
+      # Provenance: which workflow run built each file, from which commit. A private repository cannot attest.
+      - name: Attest the files
+        if: needs.plan.outputs.publish == 'true' && !github.event.repository.private
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: |
+            ${{ runner.temp }}/out/nexus-desktop-*.tar.xz
+            ${{ runner.temp }}/out/nexus-desktop-*.dmg
+            ${{ runner.temp }}/out/nexus-desktop-*.exe
+            ${{ runner.temp }}/out/nexus-host_*.gz
+
+      - name: Sign in to the downloads bucket
+        if: needs.plan.outputs.publish == 'true'
+        uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3
+        with:
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.GCP_SERVICE_ACCOUNT }}
+      - uses: google-github-actions/setup-gcloud@aa5489c8933f4cc7a4f7d45035b3b1440c9c10db # v3.0.1
+        if: needs.plan.outputs.publish == 'true'
+
+      - name: Upload the version's folder
+        if: needs.plan.outputs.publish == 'true'
+        env:
+          DEST: gs://${{ vars.DOWNLOADS_BUCKET }}/desktop-oss/beta/${{ needs.plan.outputs.version }}
+          FEED: gs://${{ vars.DOWNLOADS_BUCKET }}/desktop-oss/beta/latest.json
+        run: |
+          # The feed only moves forward: a run for an older tag must not take installed betas back.
+          if current="$(gcloud storage cat "$FEED" 2>&1)"; then
+            current="$(jq -r '.version // empty' <<< "$current")"
+            python3 -I - "$VERSION" "$current" << 'PY'
+          import re, sys
+          def key(version): return tuple(int(n) for n in re.findall(r"\d+", version))
+          new, current = sys.argv[1], sys.argv[2]
+          if key(new) <= key(current):
+              print(f"::error::The feed is at {current}. {new} is not newer. Nothing was uploaded.")
+              sys.exit(1)
+          PY
+          elif ! grep -q 'matched no objects' <<< "$current"; then
+            echo "::error::Could not read $FEED: $current"
+            exit 1
+          fi
+          # A version's folder is written once. If it holds anything, an earlier run stopped halfway or the version
+          # is published: stop, and let a person clear the folder or tag the next number.
+          if listing="$(gcloud storage ls "$DEST/" 2>&1)"; then
+            echo "::error::$DEST already holds files. Nothing was uploaded."
+            exit 1
+          elif ! grep -q 'matched no objects' <<< "$listing"; then
+            echo "::error::Could not list $DEST: $listing"
+            exit 1
+          fi
+          immutable="public, max-age=31536000, immutable"
+          gcloud storage cp --no-clobber --cache-control="$immutable" --content-type=application/json \
+            "$OUT/latest.json" "$DEST/latest.json"
+          gcloud storage cp --no-clobber --cache-control="$immutable" --content-type="text/plain; charset=utf-8" \
+            "$OUT"/*.sig "$OUT/SHA256SUMS" "$DEST/"
+          gcloud storage cp --no-clobber --cache-control="$immutable" --content-type=application/octet-stream \
+            "$OUT"/nexus-desktop-*.tar.xz "$OUT"/nexus-desktop-*.dmg "$OUT"/nexus-desktop-*.exe \
+            "$OUT"/nexus-host_*.gz "$DEST/"
+
+      - name: Create the GitHub prerelease
+        if: needs.plan.outputs.publish == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --verify-tag --prerelease \
+            --title "Nexus $VERSION" --generate-notes "$OUT"/*
+
+      - name: Move the beta feed to this version
+        if: needs.plan.outputs.publish == 'true'
+        env:
+          FEED: gs://${{ vars.DOWNLOADS_BUCKET }}/desktop-oss/beta/latest.json
+        run: |
+          gcloud storage cp --cache-control="public, max-age=60" --content-type=application/json \
+            "$OUT/latest.json" "$FEED"
+          echo "The beta feed is at $VERSION." >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Remove the keychain and the keys
+        if: always()
+        run: |
+          security delete-keychain "$KEYCHAIN" || true
+          rm -f "$RUNNER_TEMP/certificate.p12" "$RUNNER_TEMP/notary.p8" "$RUNNER_TEMP/updater.key"
