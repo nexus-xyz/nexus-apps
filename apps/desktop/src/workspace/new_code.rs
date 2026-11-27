@@ -7,6 +7,7 @@
 //! empty state draws this same head. Each pick is remembered per organization, as the Nexus app's
 //! `session-defaults.ts` does, in this build's own settings file.
 
+use crate::workspace::FloatingGround;
 use crate::workspace::MenuTrigger;
 use crate::workspace::menu_item_hover;
 use crate::workspace::overlay::{Overlay, OverlaySlot};
@@ -2635,7 +2636,9 @@ impl Workspace {
             .w(px(PANEL_WIDTH))
             .h(px(LAUNCH_BODY))
             .rounded(px(12.))
-            .bg(palette.menu)
+            .when(!self.frosted(), |menu| {
+                menu.floating_ground(12., palette.menu, false, &palette)
+            })
             // Over the art, the panel is frosted glass, as the other menus.
             .when(self.frosted(), |menu| {
                 menu.relative().bg(transparent_black()).child(super::backdrop::frost(

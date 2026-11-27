@@ -12,6 +12,7 @@
 //! - Otherwise the composer, with the messages queued behind the running turn above it (`queued-chips.tsx`), and the
 //!   session's model, effort and permission mode as chips in its toolbar (`effort-menu.tsx`).
 
+use crate::workspace::FloatingGround;
 use std::collections::{HashMap, HashSet};
 
 use gpui_kit::assets::IconName as Lucide;
@@ -2490,7 +2491,7 @@ pub(crate) fn menu_box(id: impl Into<ElementId>, width: f32, palette: Palette) -
         .p(px(4.))
         .gap(px(1.))
         .rounded(px(crate::tokens::radius::CARD))
-        .bg(palette.menu)
+        .floating_scroll_ground(crate::tokens::radius::CARD, palette.menu, &palette)
         // The outline sits inside the box, so a 240 menu is 240 with it.
         .border_1()
         .border_color(palette.menu_ring())
@@ -2706,7 +2707,7 @@ fn render_todo_bar(todos: &[Todo], open: bool, palette: Palette, cx: &mut Contex
                             .overflow_y_scroll()
                             .p(px(4.))
                             .rounded(px(10.))
-                            .bg(palette.menu)
+                            .floating_scroll_ground(10., palette.menu, &palette)
                             .border_1()
                             .border_color(palette.border)
                             .shadow(palette.pop_shadow(palette.pop_ring()))

@@ -5,6 +5,7 @@
 //! shut and open (Cmd+B, or Ctrl+B). A hairline sets the groups off from the places only while the groups are
 //! scrolled, as Finder and Notes do, so no row is cut against "Artifacts".
 
+use crate::workspace::FloatingGround;
 use crate::workspace::MenuTrigger;
 use crate::workspace::menu_item_hover;
 use crate::workspace::overlay::{Overlay, OverlaySlot};
@@ -1191,7 +1192,7 @@ impl Workspace {
             .p(px(4.))
             .gap(px(1.))
             .rounded(px(14.))
-            .bg(palette.pop)
+            .floating_ground(14.0, palette.pop, true, &palette)
             .border_1()
             .border_color(palette.border)
             .shadow_lg()

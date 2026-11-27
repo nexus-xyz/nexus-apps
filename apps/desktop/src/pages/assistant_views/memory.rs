@@ -7,6 +7,7 @@
 //! A note is the agent's own text: its Markdown markers are stripped (`note_lines`), and it is drawn as plain text.
 //! The words, the files and the export are `nexus_desktop_core::agent_memory`'s.
 
+use crate::workspace::FloatingGround;
 use gpui_kit::component::input::{Textarea, TextareaState};
 use gpui_kit::component::{h_flex, v_flex};
 use gpui_kit::prelude::*;
@@ -902,7 +903,7 @@ impl MemoryPage {
             .gap(px(8.))
             .p(px(14.))
             .rounded(px(12.))
-            .bg(palette.menu)
+            .floating_ground(12.0, palette.menu, true, &palette)
             .border_1()
             .border_color(palette.border)
             .shadow(ui::lift(palette))

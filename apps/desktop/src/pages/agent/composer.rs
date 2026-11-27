@@ -6,6 +6,7 @@
 //! (`AgentPage::new`'s keystroke hook). Enter still sends when no menu is open. Each read is quiet: while the agent API
 //! has no route for it, or on any failure, the chip is not drawn and `@` lists nothing. The chat still sends.
 
+use crate::workspace::FloatingGround;
 use gpui_kit::component::{h_flex, v_flex};
 use gpui_kit::prelude::*;
 use gpui_kit::*;
@@ -423,7 +424,7 @@ fn popover(id: &'static str, content: impl IntoElement, palette: Palette) -> Sta
         div()
             .p(px(6.))
             .rounded(px(12.))
-            .bg(palette.menu)
+            .floating_ground(12.0, palette.menu, true, &palette)
             .border_1()
             .border_color(palette.border)
             .child(content),

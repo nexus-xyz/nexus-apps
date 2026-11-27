@@ -264,6 +264,7 @@ use crate::palette::{Palette, ThemeChoice};
 pub(crate) use code_dock::MODES;
 pub(crate) use code_dock::{menu_box, menu_label, menu_row};
 use code_view::CodeView;
+pub(crate) use glass::FloatingGround;
 use mic::MicState;
 use model_menu::MenuRow;
 use settings_view::SettingsSection;

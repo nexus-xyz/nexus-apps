@@ -7,6 +7,7 @@
 //!
 //! Every packaged platform offers Restart once the update's signature has been verified.
 
+use crate::workspace::FloatingGround;
 use gpui_kit::component::{h_flex, v_flex};
 use gpui_kit::prelude::*;
 use gpui_kit::*;
@@ -189,7 +190,7 @@ impl Workspace {
             .pl(px(16.))
             .pr(px(12.))
             .rounded(px(12.))
-            .bg(palette.pop)
+            .floating_ground(12.0, palette.pop, true, &palette)
             .border_1()
             .border_color(palette.border)
             .shadow(palette.pop_shadow(palette.border))

@@ -12,6 +12,7 @@
 //! and `/name` alone shows it. `/rename` is the same command: it replaces Claude Code's own `/rename`, which the menu
 //! no longer lists (`REPLACED`).
 
+use crate::workspace::FloatingGround;
 use crate::workspace::menu_item_hover;
 use crate::workspace::overlay::OverlaySlot;
 use std::cell::RefCell;
@@ -709,7 +710,7 @@ pub(super) fn render_menu(
         .overflow_y_scroll()
         .p(px(5.))
         .rounded(px(12.))
-        .bg(palette.menu)
+        .floating_scroll_ground(12., palette.menu, &palette)
         .shadow(palette.pop_shadow(palette.border))
         .text_size(px(13.));
     let mut group = None;

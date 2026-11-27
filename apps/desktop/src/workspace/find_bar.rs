@@ -6,6 +6,7 @@
 //! (an answer's rendered Markdown), only when the query or the transcript changes: a per-message cache keeps a
 //! streaming answer from rescanning the rest of the chat.
 
+use crate::workspace::FloatingGround;
 use std::collections::HashMap;
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
@@ -420,7 +421,7 @@ pub(crate) fn find_bar<V: 'static>(bar: Bar<V>, palette: Palette, cx: &mut Conte
             .right(px(24.))
             .w(px(380.))
             .rounded(px(12.))
-            .bg(palette.pop)
+            .floating_ground(12.0, palette.pop, false, &palette)
             .shadow_md()
             .on_key_down(cx.listener(move |this, event: &KeyDownEvent, window, cx| {
                 if event.keystroke.key == "escape" {

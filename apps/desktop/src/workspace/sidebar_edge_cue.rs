@@ -7,6 +7,7 @@
 //! asks for an update only when they changed. The rule ([`out_of_view`]) is a plain function. The cue is a view of its
 //! own, so its entrance redraws only itself.
 
+use crate::workspace::FloatingGround;
 use std::cell::RefCell;
 use std::collections::HashSet;
 use std::rc::Rc;
@@ -313,7 +314,7 @@ impl EdgeCue {
             .px(px(10.))
             .gap(px(8.))
             .rounded(px(8.))
-            .bg(palette.pop)
+            .floating_ground(8.0, palette.pop, false, &palette)
             .shadow(palette.pop_shadow(palette.pop_ring()))
             .text_size(px(ROW_TEXT))
             .cursor_pointer()

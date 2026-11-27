@@ -25,6 +25,7 @@ pub mod tabs;
 pub(crate) use retention::RetainedBrowser;
 pub mod width;
 
+use crate::workspace::FloatingGround;
 use std::collections::{HashMap, HashSet};
 use std::time::{Duration, Instant};
 
@@ -648,7 +649,7 @@ impl Browser {
             .pr(px(4.))
             .gap(px(6.))
             .rounded(px(16.))
-            .bg(palette.menu)
+            .floating_ground(16.0, palette.menu, true, &palette)
             .border_1()
             .border_color(palette.border)
             .shadow_md()

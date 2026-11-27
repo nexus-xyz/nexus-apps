@@ -2,6 +2,7 @@
 mod model;
 use super::{View, Workspace};
 use crate::palette::Palette;
+use crate::workspace::FloatingGround;
 use gpui_kit::component::input::Position;
 use gpui_kit::component::{h_flex, v_flex};
 use gpui_kit::prelude::*;
@@ -262,7 +263,7 @@ impl Workspace {
             .p_2()
             .gap_1()
             .rounded_md()
-            .bg(p.menu)
+            .floating_scroll_ground(6., p.menu, &p)
             .shadow_sm()
             .text_size(px(13.))
             .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation());

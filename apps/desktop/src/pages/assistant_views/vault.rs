@@ -21,6 +21,7 @@
 
 mod local;
 
+use crate::workspace::FloatingGround;
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -970,7 +971,7 @@ impl VaultPage {
             .w(px(240.))
             .p(px(4.))
             .rounded(px(10.))
-            .bg(palette.menu)
+            .floating_ground(10.0, palette.menu, true, &palette)
             .border_1()
             .border_color(palette.border)
             .child(

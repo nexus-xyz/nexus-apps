@@ -1,3 +1,4 @@
+use crate::workspace::FloatingGround;
 use crate::workspace::MenuTrigger;
 use crate::workspace::menu_item_hover;
 
@@ -56,7 +57,7 @@ impl PolicyPage {
                                     .p(px(4.))
                                     .gap(px(1.))
                                     .rounded(px(12.))
-                                    .bg(palette.menu)
+                                    .floating_ground(12.0, palette.menu, false, &palette)
                                     .shadow(palette.pop_shadow(palette.border))
                                     .text_size(px(13.))
                                     .text_color(palette.foreground)

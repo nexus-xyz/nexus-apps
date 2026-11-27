@@ -3,6 +3,7 @@
 //! its older ones folded under "Older models"; a line on what the policy turns off at the foot. Typing searches every
 //! maker. Up and Down move, Enter picks, Esc closes.
 
+use crate::workspace::FloatingGround;
 use crate::workspace::menu_item_hover;
 use crate::workspace::overlay::OverlaySlot;
 
@@ -299,7 +300,7 @@ impl Workspace {
             .occlude()
             .w(px(WIDTH))
             .rounded(px(12.))
-            .bg(palette.menu)
+            .floating_ground(12.0, palette.menu, false, &palette)
             .shadow(palette.pop_shadow(palette.pop_ring()))
             .overflow_hidden()
             .text_color(palette.foreground)
@@ -424,7 +425,8 @@ pub(super) fn listed_models(
 }
 
 /// A 16px fade into the menu's fill at the foot of a scrolling list, so a row the edge cuts reads as "more below"
-/// rather than as clipped.
+/// rather than as clipped. Its bottom right corner is the menu's (12px): a menu's clip is square, so a square fade drew
+/// a square corner over the menu's round one.
 pub(super) fn bottom_fade(color: Hsla) -> impl IntoElement {
     div()
         .absolute()
@@ -432,6 +434,7 @@ pub(super) fn bottom_fade(color: Hsla) -> impl IntoElement {
         .left_0()
         .right_0()
         .h(px(16.))
+        .rounded_br(px(12.))
         .bg(linear_gradient(
             180.,
             linear_color_stop(color.opacity(0.), 0.),

@@ -2,6 +2,7 @@
 //! thumbnail, or why the file has no preview. The hover card builds it only when it opens, and it reads the file off
 //! the UI thread, from this computer or the session's server, as the Files tool does (`side/file_view.rs`).
 
+use crate::workspace::FloatingGround;
 use std::sync::Arc;
 
 use gpui_kit::assets::IconName as Lucide;
@@ -232,7 +233,7 @@ impl Render for FilePeek {
             .rounded(px(10.))
             .border_1()
             .border_color(palette.border)
-            .bg(palette.pop)
+            .floating_ground(10.0, palette.pop, true, &palette)
             .shadow_lg()
             .child(head)
             .child(body)

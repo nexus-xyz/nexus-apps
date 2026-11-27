@@ -2,6 +2,7 @@
 //! that fills its column, a figure row, a person's initials, a status dot, and a chart day's tooltip.
 
 use super::*;
+use crate::workspace::FloatingGround;
 
 /// The green of a call that went through (brand v5 `--nx-live`).
 pub(super) fn live() -> Hsla {
@@ -259,7 +260,7 @@ impl Render for DayTip {
             .rounded(px(10.))
             .border_1()
             .border_color(palette.border)
-            .bg(palette.menu)
+            .floating_ground(10.0, palette.menu, true, &palette)
             .shadow_lg()
             .text_size(px(12.))
             .child(

@@ -7,6 +7,7 @@
 //! `src/side/`.
 
 use crate::motion::TweenExt as _;
+use crate::workspace::FloatingGround;
 use crate::workspace::MenuTrigger;
 use crate::workspace::menu_item_hover;
 use std::cell::{Cell, RefCell};
@@ -2946,7 +2947,7 @@ impl Workspace {
             .p(px(4.))
             .gap(px(1.))
             .rounded(px(10.))
-            .bg(palette.menu)
+            .floating_ground(10.0, palette.menu, false, &palette)
             .shadow(palette.pop_shadow(palette.pop_ring()))
             .on_mouse_down_out(cx.listener(|this, _, _, cx| {
                 if this.side.plus_menu {

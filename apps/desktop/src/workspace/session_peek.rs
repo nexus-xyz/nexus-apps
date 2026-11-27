@@ -5,6 +5,7 @@
 //! The first card waits out [`DELAY`], so passing over the list opens nothing. Once one shows, the next row's card
 //! replaces it at once, with no entrance, as a toolbar's tooltips do after the first.
 
+use crate::workspace::FloatingGround;
 use std::time::{Duration, Instant};
 
 use gpui_kit::assets::IconName as Lucide;
@@ -319,7 +320,7 @@ pub(super) fn frame(content: Div, has_pull: bool, palette: Palette, window: &Win
         .text_size(px(12.))
         .line_height(px(18.))
         .rounded(px(12.))
-        .bg(palette.menu)
+        .floating_scroll_ground(12., palette.menu, &palette)
         .shadow(palette.pop_shadow(palette.border))
         .debug_selector(|| "session-peek-card".into())
         .child(content)

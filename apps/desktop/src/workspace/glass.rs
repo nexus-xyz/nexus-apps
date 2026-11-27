@@ -15,10 +15,22 @@ use gpui_kit::{
 /// Glass under a surface with corners of `radius`: put it first in a `.relative()` box, in place of the box's `bg`.
 /// `tint` is laid over the blur; `ring`, when given, is a 1px edge.
 pub(super) fn glass(radius: f32, tint: Hsla, ring: Option<Hsla>) -> impl IntoElement {
+    pane(radius, tint, ring, false)
+}
+
+/// The glass of a box that scrolls. A child of a scrolling box moves with its content, so this glass paints over the
+/// box's own clip (the content mask the scroll box sets) instead of its own scrolled bounds: it stays still while the
+/// rows move.
+fn pinned_glass(radius: f32, tint: Hsla) -> impl IntoElement {
+    pane(radius, tint, None, true)
+}
+
+fn pane(radius: f32, tint: Hsla, ring: Option<Hsla>, pinned: bool) -> impl IntoElement {
     let blur = crate::frost::shown().glass_px();
     canvas(
         |_, _, _| {},
         move |bounds, _, window, _| {
+            let bounds = if pinned { window.content_mask().bounds } else { bounds };
             let corners = Corners::all(px(radius));
             if blur > 0. {
                 window.paint_backdrop_blur(bounds, corners, px(blur));
@@ -62,6 +74,22 @@ pub(crate) trait FloatingGround: ParentElement + Styled + Sized {
                 .absolute()
                 .inset(px(inset))
                 .child(glass(radius, fill, None)),
+        )
+    }
+
+    /// [`FloatingGround::floating_ground`] for a box that scrolls (`overflow_y_scroll`): menus with a long list, the
+    /// share and library dialogs. Its glass stays on the box's frame while the content scrolls over it. The box clips
+    /// its children, so the glass lies inside its border, and the border paints the edge.
+    fn floating_scroll_ground(self, radius: f32, fill: Hsla, palette: &Palette) -> Self {
+        if !palette.frosted {
+            return self.bg(fill);
+        }
+        self.child(
+            div()
+                .debug_selector(|| "floating-glass".into())
+                .absolute()
+                .inset_0()
+                .child(pinned_glass(radius, fill)),
         )
     }
 }
@@ -121,6 +149,48 @@ mod tests {
             }
             let solid = Palette::solid_for(dark);
             assert!(draw(cx, solid, true).is_none(), "an opaque window blurs nothing");
+        }
+    }
+
+    struct List {
+        palette: Palette,
+    }
+
+    impl Render for List {
+        fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
+            div().p(px(20.)).child(
+                div()
+                    .id("list")
+                    .debug_selector(|| "list".into())
+                    .w(px(200.))
+                    .h(px(80.))
+                    .overflow_y_scroll()
+                    .rounded(px(12.))
+                    .floating_scroll_ground(12., self.palette.menu, &self.palette)
+                    .children((0..20).map(|n| div().h(px(20.)).child(format!("row {n}")))),
+            )
+        }
+    }
+
+    #[gpui_kit::test]
+    fn a_scrolling_box_lies_on_glass_only_on_a_see_through_window(cx: &mut TestAppContext) {
+        cx.update(gpui_kit::init);
+        for dark in [false, true] {
+            for (palette, glassy) in [
+                (Palette::solid_for(dark).frosted(Transparency::Frost), true),
+                (Palette::solid_for(dark), false),
+            ] {
+                let (_, cx) = cx.add_window_view(|_, _| List { palette });
+                cx.run_until_parked();
+                let list = cx.debug_bounds("list").expect("the list is drawn");
+                match cx.debug_bounds("floating-glass") {
+                    Some(glass) => {
+                        assert!(glassy, "an opaque window blurs nothing");
+                        assert_eq!(glass, list, "the glass covers the box");
+                    }
+                    None => assert!(!glassy, "no glass under the scrolling box"),
+                }
+            }
         }
     }
 }

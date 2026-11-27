@@ -404,8 +404,9 @@ pub struct Tiers {
     /// A card in the window: tool cards, settings groups, a page's cards (`palette.raised`). The board's Card fill.
     pub card: Hsla,
     /// Anything that floats over the page: menus, pickers, popovers, dialogs, toasts, tooltips (`palette.menu`,
-    /// `palette.pop`). It covers text, not only the wallpaper, and nothing blurs under it inside the window, so it is the
-    /// heaviest tier; the pop shadow sets it off.
+    /// `palette.pop`). It covers text, not only the wallpaper. It lies on glass (`workspace::glass::FloatingGround`), so
+    /// the text under it blurs; a renderer that cannot blur shows the tint alone, so it stays the heaviest tier. The pop
+    /// shadow sets it off.
     pub floating: Hsla,
     /// A small control's fill: round buttons, chips (`palette.control`). The board's Chip fill.
     pub chip: Hsla,
@@ -938,6 +939,8 @@ mod tests {
                 (tiers.page, tiers.card, tiers.floating),
                 (solid.background, solid.raised, solid.menu)
             );
+            // Nothing blurs under a floating thing on an opaque window: it is solid.
+            assert_eq!(tiers.floating.a, 1.);
             for level in [Transparency::Frost, Transparency::Glass] {
                 let tiers = Tiers::at(level, dark);
                 let frosted = solid.frosted(level);

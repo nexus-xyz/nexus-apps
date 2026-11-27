@@ -50,7 +50,9 @@ pub struct Palette {
     /// The person's messages (`.msg-user`): the board's soft fill, since a raised white is invisible on the near-white
     /// page.
     pub bubble: Hsla,
-    /// Menus (`--v5-menu`) and their highlighted row (`--v5-menu-hover`).
+    /// Menus (`--v5-menu`) and their highlighted row (`--v5-menu-hover`). Opaque: solid, since nothing blurs under
+    /// it (the web's 97% fill sits on a backdrop blur; here the 3% showed the text behind, sharp). See-through: the
+    /// floating tier, on glass (`workspace::glass::FloatingGround`).
     pub menu: Hsla,
     pub menu_hover: Hsla,
     /// A floating surface that is not a menu: dialogs, toasts, confirmations, the jump-to-latest button. Opaque: the
@@ -176,7 +178,7 @@ impl Palette {
             live: rgb(0x30D158).into(),
             strong: rgb(0x111113).into(),
             bubble: rgba(0x0000000D).into(),
-            menu: rgba(0xFAFAFBF7).into(),
+            menu: rgb(0xFAFAFB).into(),
             menu_hover: rgba(0x0000000D).into(),
             pop: rgb(0xFFFFFF).into(),
             thumb: rgb(0xDCDCE0).into(),
@@ -213,7 +215,7 @@ impl Palette {
             live: rgb(0x30D158).into(),
             strong: rgb(0xFFFFFF).into(),
             bubble: rgba(0xFFFFFF14).into(),
-            menu: rgba(0x28282CF7).into(),
+            menu: rgb(0x28282C).into(),
             menu_hover: rgba(0xFFFFFF14).into(),
             pop: rgb(0x323236).into(),
             thumb: rgb(0x3A3A3D).into(),
@@ -401,5 +403,15 @@ mod tests {
         let ring = Palette::light().focus_ring();
         assert_eq!(ring.spread_radius, px(2.));
         assert_eq!(ring.blur_radius, px(0.));
+    }
+
+    #[test]
+    fn opaque_menus_and_pops_are_solid() {
+        // Nothing blurs under a menu on an opaque window, so any see-through fill shows the text behind it, sharp.
+        for dark in [false, true] {
+            let palette = Palette::solid_for(dark);
+            assert_eq!(palette.menu.a, 1., "dark {dark}: the menu fill is see-through");
+            assert_eq!(palette.pop.a, 1., "dark {dark}: the pop fill is see-through");
+        }
     }
 }

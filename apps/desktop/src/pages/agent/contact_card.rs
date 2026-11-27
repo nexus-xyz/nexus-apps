@@ -9,6 +9,7 @@
 //! "See what I can do" (A15). Settings opens Account › Assistant, as the settings sidebar's row does.
 //! Esc, a click outside or a row closes it.
 
+use crate::workspace::FloatingGround;
 use gpui_kit::assets::IconName as Lucide;
 use gpui_kit::component::{Icon, h_flex, v_flex};
 use gpui_kit::prelude::*;
@@ -207,7 +208,7 @@ impl AgentPage {
             .px(px(20.))
             .pb(px(14.))
             .rounded(px(14.))
-            .bg(palette.pop)
+            .floating_ground(14.0, palette.pop, true, &palette)
             .border_1()
             .border_color(palette.border)
             .shadow(vec![BoxShadow {

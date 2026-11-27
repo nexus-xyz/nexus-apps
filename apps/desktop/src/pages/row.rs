@@ -5,6 +5,7 @@
 //!
 //! Use it on a `ui::row` that has `.relative()`, `.group(group)` and a hover fill of `palette.hover`.
 
+use crate::workspace::FloatingGround;
 use crate::workspace::menu_item_hover;
 use gpui_kit::assets::IconName as Lucide;
 use gpui_kit::component::tooltip::Tooltip;
@@ -125,7 +126,7 @@ pub fn popover(body: impl IntoElement, palette: Palette) -> Div {
                         .min_w(px(220.))
                         .p(px(4.))
                         .rounded(px(12.))
-                        .bg(palette.menu)
+                        .floating_ground(12.0, palette.menu, false, &palette)
                         .shadow(ui::lift(palette))
                         .text_size(px(13.))
                         .child(body),

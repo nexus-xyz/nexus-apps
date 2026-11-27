@@ -11,6 +11,7 @@ mod server_shell;
 pub use run_once::TerminalEvent;
 pub use server_shell::{MachineShells, ServerTarget, ShellHost};
 
+use crate::workspace::FloatingGround;
 use crate::workspace::menu_item_hover;
 use std::cell::Cell;
 use std::io::{Read, Write};
@@ -780,7 +781,7 @@ impl Terminal {
                     .w(px(200.))
                     .p(px(4.))
                     .rounded(px(10.))
-                    .bg(palette.menu)
+                    .floating_ground(10.0, palette.menu, false, &palette)
                     .shadow(palette.pop_shadow(palette.pop_ring()))
                     .occlude()
                     .on_mouse_down_out(cx.listener(|this, _, _, cx| {

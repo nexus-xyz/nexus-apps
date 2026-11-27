@@ -31,6 +31,7 @@
 //! Voice mode (A18, A25) is `crate::voice`: a voice button before the send circle opens its pane beside the thread.
 //! When the call ends, its card lands here, then the writes it asked for as approval cards. macOS only for now.
 
+use crate::workspace::FloatingGround;
 use std::collections::HashMap;
 use std::time::{Duration, Instant};
 
@@ -1581,7 +1582,7 @@ impl AgentPage {
             .px(px(4.))
             .gap(px(2.))
             .rounded_full()
-            .bg(palette.menu)
+            .floating_ground(18.0, palette.menu, true, &palette)
             .border_1()
             .border_color(palette.border)
             .shadow_md()

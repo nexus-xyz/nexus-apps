@@ -15,6 +15,7 @@
 //! message. The rail reads the list as it was last laid out; a canvas after the list asks for one more frame when that
 //! changed, so the rail never lags a frame behind a scroll or a resize.
 
+use crate::workspace::FloatingGround;
 use gpui_kit::prelude::*;
 use gpui_kit::*;
 
@@ -874,7 +875,7 @@ fn render_rail(
                     .max_w(px(320.))
                     .px(px(10.))
                     .rounded(px(12.))
-                    .bg(palette.menu)
+                    .floating_ground(12.0, palette.menu, false, &palette)
                     .shadow(palette.pop_shadow(palette.pop_ring()))
                     .text_size(px(13.))
                     .line_height(px(18.))

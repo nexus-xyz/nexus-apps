@@ -3,6 +3,7 @@
 //! (`nexus_desktop_core::notice`). It stays over the foot of whichever page is open, so it outlives the menu or the
 //! session that raised it.
 
+use crate::workspace::FloatingGround;
 use std::time::Duration;
 
 use gpui_kit::component::h_flex;
@@ -131,7 +132,7 @@ impl Workspace {
             .py(px(8.))
             .px(px(12.))
             .rounded(px(12.))
-            .bg(palette.pop)
+            .floating_ground(12.0, palette.pop, true, &palette)
             .border_1()
             .border_color(palette.border)
             .shadow(palette.pop_shadow(palette.border))
