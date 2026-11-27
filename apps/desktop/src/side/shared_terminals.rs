@@ -231,6 +231,8 @@ pub struct SharedTerminals {
     /// When each command arrived, and when its state last changed, for their short entrances.
     arrived: HashMap<String, Instant>,
     changed: HashMap<String, Instant>,
+    /// One redraw when a stop's hold-off ends, so its word starts to shimmer (`rows::word`).
+    stop_wake: Option<Task<()>>,
     /// Requests the person accepted that have not ended yet, and the cards of those that have (`finished.rs`).
     accepted: HashSet<String>,
     finished: Vec<finished::Finished>,
@@ -348,6 +350,7 @@ impl SharedTerminals {
             seen: None,
             arrived: HashMap::new(),
             changed: HashMap::new(),
+            stop_wake: None,
             accepted: HashSet::new(),
             finished: Vec::new(),
             reveal: None,
@@ -401,9 +404,11 @@ impl SharedTerminals {
             cx.notify();
         }
     }
-    /// Record what arrived and what changed state since the last read. The first read only records.
-    fn note_motion(&mut self, entries: &[Entry]) {
+    /// Record what arrived and what changed state since the last read. The first read only records. True when a
+    /// command began to stop.
+    fn note_motion(&mut self, entries: &[Entry]) -> bool {
         let now = Instant::now();
+        let mut stopping = false;
         match &mut self.seen {
             None => self.seen = Some(entries.iter().map(|entry| entry.id.clone()).collect()),
             Some(seen) => {
@@ -416,6 +421,7 @@ impl SharedTerminals {
                         .is_some_and(|old| list::tone(old) != list::tone(entry))
                     {
                         self.changed.insert(entry.id.clone(), now);
+                        stopping |= list::tone(entry) == list::Tone::Stopping;
                     }
                 }
             }
@@ -423,6 +429,7 @@ impl SharedTerminals {
         let fresh = Duration::from_secs(1);
         self.arrived.retain(|_, at| at.elapsed() < fresh);
         self.changed.retain(|_, at| at.elapsed() < fresh);
+        stopping
     }
     pub fn registry_revision(&self) -> u64 {
         self.registry_revision
@@ -533,7 +540,13 @@ impl SharedTerminals {
                             );
                             this.inline_initialized = entries.iter().any(Entry::active);
                             this.pending_rows.follow(&entries);
-                            this.note_motion(&entries);
+                            if this.note_motion(&entries) {
+                                this.stop_wake = Some(cx.spawn(async move |this, cx| {
+                                    cx.background_executor().timer(crate::motion::HOLD_OFF).await;
+                                    // A pane closed meanwhile has nothing to redraw.
+                                    this.update(cx, |_, cx| cx.notify()).ok();
+                                }));
+                            }
                             let finished = this.note_finished(&entries);
                             if finished {
                                 cx.emit(SharedTerminalsEvent::Activity);

@@ -10,8 +10,10 @@ pub(super) enum Tone {
     Attention,
     /// Running now: the mark breathes.
     Running,
-    /// Starting, waiting on the provider, or stopping.
+    /// Starting, or waiting on the provider.
     Pending,
+    /// The person asked it to stop, and it has not ended yet: the running dot becomes a filled square.
+    Stopping,
     /// Ended with exit code 0.
     Done,
     /// Ended with another code, or failed to start.
@@ -29,7 +31,7 @@ pub(super) fn tone(entry: &Entry) -> Tone {
         return Tone::Attention;
     }
     if entry.stop_requested && entry.status == "running" {
-        return Tone::Pending;
+        return Tone::Stopping;
     }
     match (entry.status.as_str(), entry.exit_code) {
         ("running", _) => Tone::Running,
@@ -190,7 +192,7 @@ mod tests {
         assert_eq!(tone(&entry("running", None)), Tone::Running);
         let mut stopping = entry("running", None);
         stopping.stop_requested = true;
-        assert_eq!(tone(&stopping), Tone::Pending);
+        assert_eq!(tone(&stopping), Tone::Stopping, "a stop is not a start");
         assert_eq!(tone(&entry("providerPending", None)), Tone::Pending);
         assert_eq!(tone(&entry("completed", Some(0))), Tone::Done);
         assert_eq!(tone(&entry("failed", Some(2))), Tone::Failed);

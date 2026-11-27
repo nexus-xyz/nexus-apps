@@ -59,6 +59,10 @@ pub const PULSE: Duration = Duration::from_millis(2400);
 /// The brand's calm working mark (`motion.breathe` in brand v5's `tokens.json`): opacity 1 to .62 and back, in-out.
 pub const BREATHE: Duration = Duration::from_millis(3200);
 
+/// How long a loop for a short wait holds off before it starts (a stopping command's shimmer): a wait that ends
+/// sooner shows no loop, so it never flickers.
+pub const HOLD_OFF: Duration = Duration::from_millis(400);
+
 /// The frame rate for a loop that never ends (a spinner, a breathing dot, a loading pulse): 30 a second, as the
 /// shimmer, the thinking dot and the working dot already run, and as Zeron's shared pulse clock ticks (33ms). An
 /// uncapped loop asks for a frame at the display's rate, 60 to 120 a second, and each frame draws again the whole view
