@@ -8,6 +8,15 @@ use nexus_cli::style::{now_ms, should_color};
 use nexus_cli::{Context, Spinner, Terminal, VERSION, run_cli};
 
 fn main() {
+    #[cfg(windows)]
+    match nexus_cli::update::launch_windows_install() {
+        Ok(Some(code)) => std::process::exit(code),
+        Err(error) => {
+            eprintln!("Could not start the installed Windows CLI: {error}");
+            std::process::exit(1);
+        }
+        Ok(None) => {}
+    }
     // Keep the version marker in the binary: Gateway and `nexus update --rollback` read it (`update::binary_version`).
     std::hint::black_box(nexus_cli::update::VERSION_MARKER);
     let argv: Vec<String> = std::env::args().skip(1).collect();

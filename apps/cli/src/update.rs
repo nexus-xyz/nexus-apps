@@ -138,6 +138,80 @@ pub enum Layout {
     Elsewhere { how: String, hint: String },
 }
 
+fn windows_binary(name: &str) -> bool {
+    name.strip_suffix(".exe")
+        .is_some_and(|hash| hash.len() == 64 && hash.bytes().all(|b| b.is_ascii_hexdigit()))
+}
+
+/// The installed Windows launcher delegates to the selected immutable executable.
+#[cfg(windows)]
+pub fn launch_windows_install() -> std::io::Result<Option<i32>> {
+    let exe = std::env::current_exe()?;
+    let Some(bin) = exe.parent() else { return Ok(None) };
+    if exe.file_name().and_then(|n| n.to_str()) != Some("nexus.exe")
+        || bin.file_name().and_then(|n| n.to_str()) != Some("bin")
+    {
+        return Ok(None);
+    }
+    let lib = bin.parent().unwrap().join("lib");
+    let state = match std::fs::read_to_string(lib.join("windows-active")) {
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        other => other?,
+    };
+    let active = state
+        .lines()
+        .next()
+        .filter(|s| windows_binary(s))
+        .ok_or_else(|| std::io::Error::other("invalid installed Windows CLI version"))?;
+    let mut command = std::process::Command::new(lib.join(active));
+    command.args(std::env::args_os().skip(1));
+    for (key, file) in [("NEXUS_URL", "windows-gateway"), ("NEXUS_UI_URL", "windows-ui")] {
+        if std::env::var_os(key).is_none() {
+            let value = std::fs::read_to_string(lib.join(file))?;
+            if !value.trim().is_empty() {
+                command.env(key, value.trim());
+            }
+        }
+    }
+    Ok(Some(command.status()?.code().unwrap_or(1)))
+}
+
+fn windows_layout(path: &Path) -> Option<Layout> {
+    let folder = path.parent()?;
+    let name = path.file_name()?.to_str()?;
+    if !windows_binary(name) || folder.file_name()? != "lib" || !folder.parent()?.join("bin/nexus.exe").is_file() {
+        return None;
+    }
+    let state = std::fs::read_to_string(folder.join("windows-active")).ok()?;
+    let mut lines = state.lines();
+    if lines.next()? != name {
+        return None;
+    }
+    let previous = lines
+        .next()
+        .filter(|name| windows_binary(name))
+        .unwrap_or("no-previous-version");
+    Some(Layout::Installed {
+        lib: path.to_owned(),
+        previous: folder.join(previous),
+    })
+}
+
+// A running Windows executable stays mapped. Switch both version names with one rename.
+fn select_windows_binary(current: &Path, next: &Path) -> std::io::Result<()> {
+    let folder = current.parent().expect("installed binary directory");
+    let state = folder.join("windows-active");
+    let old = current.file_name().unwrap().to_string_lossy();
+    let new = next.file_name().unwrap().to_string_lossy();
+    let temp = folder.join(format!(".windows-active-{}", uuid::Uuid::new_v4()));
+    std::fs::write(&temp, format!("{new}\n{old}\n"))?;
+    let result = std::fs::rename(&temp, state);
+    if result.is_err() {
+        let _ = std::fs::remove_file(temp);
+    }
+    result
+}
+
 /// Whether the running binary is the installer's (`<dir>/lib/nexus`, started by `<dir>/bin/nexus`); otherwise how it
 /// seems to have been installed and how to update it.
 pub fn install_layout(exe: Option<&Path>, core_url: &str) -> Layout {
@@ -150,6 +224,9 @@ pub fn install_layout(exe: Option<&Path>, core_url: &str) -> Layout {
         };
     };
     let path = std::fs::canonicalize(exe).unwrap_or_else(|_| exe.to_path_buf());
+    if let Some(layout) = windows_layout(&path) {
+        return layout;
+    }
     let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
     let parent = path.parent();
     let dir = parent.and_then(Path::parent);
@@ -348,7 +425,14 @@ pub fn update_command(ctx: &Context, core_url: &str, args: &Args, json: bool, st
         .into());
     }
     let folder = lib.parent().map(Path::to_path_buf).unwrap_or_default();
-    let temp = folder.join(format!(".nexus-update-{}-{}", std::process::id(), random_hex()));
+    let windows = lib.file_name().and_then(|s| s.to_str()).is_some_and(windows_binary);
+    let suffix = if windows { ".exe" } else { "" };
+    let temp = folder.join(format!(".nexus-update-{}-{}{suffix}", std::process::id(), random_hex()));
+    let destination = if windows {
+        folder.join(format!("{actual}.exe"))
+    } else {
+        lib.clone()
+    };
     let installed_result = (|| -> std::result::Result<(), CliError> {
         let fail = |error: std::io::Error| {
             CliError::hint(
@@ -371,6 +455,20 @@ pub fn update_command(ctx: &Context, core_url: &str, args: &Args, json: bool, st
                 "Try again; if it persists, tell your Gateway's administrator.",
             ));
         }
+        if windows {
+            if destination.exists() {
+                if sha256_hex(&std::fs::read(&destination).map_err(fail)?) != actual {
+                    return Err(CliError::hint(
+                        "Installed executable checksum mismatch.",
+                        "Reinstall the Windows CLI.",
+                    ));
+                }
+                std::fs::remove_file(&temp).map_err(fail)?;
+            } else {
+                std::fs::rename(&temp, &destination).map_err(fail)?;
+            }
+            return select_windows_binary(&lib, &destination).map_err(fail);
+        }
         // Keep the current version for --rollback (written aside, then renamed), then swap.
         let keep = PathBuf::from(format!("{}.{}.tmp", previous.display(), random_hex()));
         std::fs::copy(&lib, &keep).map_err(fail)?;
@@ -382,6 +480,8 @@ pub fn update_command(ctx: &Context, core_url: &str, args: &Args, json: bool, st
         let _ = std::fs::remove_file(&temp);
         return Err(error.into());
     }
+    let previous = if windows { lib } else { previous };
+    let lib = destination;
     refresh_cache(&update_cache_path(&ctx.config_path), core_url, &published.version);
     // Tab completion needs no manual step: each update turns it on, and a failure never fails the update.
     let completion =
@@ -547,9 +647,14 @@ fn rollback(ctx: &Context, layout: &Layout, json: bool, style: &Style) -> Result
         .unwrap_or_else(|| "the previous version".to_string());
     let aside = PathBuf::from(format!("{}.{}.tmp", lib.display(), random_hex()));
     let folder = lib.parent().map(Path::to_path_buf).unwrap_or_default();
-    let swapped = std::fs::copy(lib, &aside)
-        .and_then(|_| std::fs::rename(previous, lib))
-        .and_then(|_| std::fs::rename(&aside, previous));
+    let windows = lib.file_name().and_then(|s| s.to_str()).is_some_and(windows_binary);
+    let swapped = if windows {
+        select_windows_binary(lib, previous)
+    } else {
+        std::fs::copy(lib, &aside)
+            .and_then(|_| std::fs::rename(previous, lib))
+            .and_then(|_| std::fs::rename(&aside, previous))
+    };
     if let Err(error) = swapped {
         let _ = std::fs::remove_file(&aside);
         return Err(CliError::hint(
@@ -558,6 +663,7 @@ fn rollback(ctx: &Context, layout: &Layout, json: bool, style: &Style) -> Result
         )
         .into());
     }
+    let (lib, previous) = if windows { (previous, lib) } else { (lib, previous) };
     if json {
         ctx.io.out(&pretty(&json!({
             "rolledBack": true, "from": current, "to": before,
@@ -598,6 +704,41 @@ mod tests {
         assert_eq!(binary_version(&code).as_deref(), Some("0.3.0+abc1234"));
         assert_eq!(binary_version(b"nothing here"), None);
         assert!(VERSION_MARKER.contains(VERSION));
+    }
+
+    #[test]
+    fn windows_switch_keeps_the_running_executable_and_a_rollback_target() {
+        let root = std::env::temp_dir().join(uuid::Uuid::new_v4().to_string());
+        let lib = root.join("lib");
+        std::fs::create_dir_all(&lib).unwrap();
+        std::fs::create_dir(root.join("bin")).unwrap();
+        std::fs::write(root.join("bin/nexus.exe"), b"launcher").unwrap();
+        let old_name = format!("{}.exe", sha256_hex(b"old"));
+        let new_name = format!("{}.exe", sha256_hex(b"new"));
+        let old = lib.join(&old_name);
+        let new = lib.join(&new_name);
+        std::fs::write(&old, b"old").unwrap();
+        std::fs::write(&new, b"new").unwrap();
+        std::fs::write(lib.join("windows-active"), &old_name).unwrap();
+        select_windows_binary(&old, &new).unwrap();
+        assert_eq!(
+            windows_layout(&new),
+            Some(Layout::Installed {
+                lib: new.clone(),
+                previous: old.clone()
+            })
+        );
+        assert_eq!(windows_layout(&old), None);
+        select_windows_binary(&new, &old).unwrap();
+        assert_eq!(
+            windows_layout(&old),
+            Some(Layout::Installed {
+                lib: old.clone(),
+                previous: new
+            })
+        );
+        assert_eq!(std::fs::read(old).unwrap(), b"old");
+        std::fs::remove_dir_all(root).unwrap();
     }
 
     #[test]
