@@ -1032,6 +1032,10 @@ impl MacWindow {
                 }
             } else {
                 style_mask = NSWindowStyleMask::Titled | NSWindowStyleMask::FullSizeContentView;
+                // Nexus: a window with no title bar still honours `is_resizable`, so the panel resizes from its edges.
+                if is_resizable {
+                    style_mask |= NSWindowStyleMask::Resizable;
+                }
             }
 
             let native_window: *mut AnyObject = match kind {
