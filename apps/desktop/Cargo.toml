@@ -190,7 +190,7 @@ x11rb = "0.13"
 raw-window-handle = "0.6"
 # Dictation from a chosen microphone (`src/dictation.rs`): PipeWire's ALSA device opened with the source's name. The
 # ALSA crate cpal already uses on Linux.
-alsa = "0.9"
+alsa = "0.10"
 
 # GPUI's D3D11 renderer on Windows (the patched copy in `vendor/`), for a texture drawn as a surface
 # (`SharedTexture`), and the `windows` crate with the version and features GPUI's Windows crate already uses. Only the
