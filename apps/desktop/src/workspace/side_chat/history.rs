@@ -43,6 +43,8 @@ struct Row {
     place: Place,
     open: (bool, bool),
     text: bool,
+    /// The lines in the editor that rewrites this row's message, which grows as the person types (`edit.rs`).
+    editor: Option<usize>,
 }
 
 impl HistoryList {
@@ -94,7 +96,11 @@ impl HistoryList {
 
 impl SideChat {
     /// Bring the history's list up to date with the blocks, their folds and the tail.
-    pub(super) fn sync_history(&mut self, palette: Palette) {
+    pub(super) fn sync_history(&mut self, palette: Palette, cx: &App) {
+        let editor = self.editing.as_ref().map(|editing| {
+            let lines = editing.input.read(cx).value().lines().count();
+            (editing.seq, lines + usize::from(editing.error.is_some()))
+        });
         let places = code_folds::layout(&self.blocks, &self.history.folds, &self.history.all_folds, 0)
             .into_iter()
             .enumerate()
@@ -102,6 +108,9 @@ impl SideChat {
                 place,
                 open: self.row_open(ix),
                 text: self.texts.contains_key(&ix),
+                editor: editor.and_then(|(seq, lines)| {
+                    matches!(self.blocks[ix].inner(), Block::User { seq: at, .. } if *at == seq).then_some(lines)
+                }),
             })
             .collect();
         let tail = {
@@ -164,6 +173,11 @@ impl SideChat {
             Block::Tool { call, .. } => (
                 self.history.open.contains(&call.id),
                 self.history.all_output.contains(&call.id),
+            ),
+            // The editor in its place, or Rewind's confirmation under it (`edit.rs`).
+            Block::User { seq, .. } => (
+                self.editing.as_ref().is_some_and(|editing| editing.seq == *seq),
+                self.rewinding.as_ref().is_some_and(|rewinding| rewinding.seq == *seq),
             ),
             _ => (false, false),
         }
@@ -284,8 +298,13 @@ impl SideChat {
                 code_view::render_block(ix, block, self.texts.get(&ix).cloned(), None, None, p, link, None)
             }
             Block::User {
-                seq, at, text, from, ..
-            } => self.history_user(*seq, *at, text, from.is_some(), p, cx),
+                seq,
+                at,
+                text,
+                from,
+                rewound,
+                ..
+            } => self.history_user(*seq, *at, text, from.is_some(), *rewound, p, cx),
             Block::Thinking(text, ms) => {
                 let key = format!("thought-{ix}");
                 let open = self.history.open.contains(&key);
@@ -400,17 +419,47 @@ impl SideChat {
     }
 
     /// A message, as the session's: the bubble at the right, its time under it, and Copy on hover.
+    #[allow(clippy::too_many_arguments)]
     fn history_user(
         &self,
         seq: i64,
         at: i64,
         text: &str,
         linked: bool,
+        rewound: bool,
         p: Palette,
         cx: &mut Context<Self>,
     ) -> AnyElement {
         let copied = self.history.copied == Some(seq);
-        let shown = copied || self.history.hovered_message == Some(seq);
+        let editing = self.editing.as_ref().filter(|editing| editing.seq == seq);
+        let asking = self.rewinding.as_ref().filter(|rewinding| rewinding.seq == seq);
+        let shown = copied || asking.is_some() || self.history.hovered_message == Some(seq);
+        // Rewind and Edit, as on a session's message: disabled while the agent runs (`edit.rs`).
+        let running = self.summary.status.busy();
+        let actionable = self.can_edit(linked, rewound) && editing.is_none();
+        let action = |id: &'static str, icon: Lucide, tip: &'static str| {
+            answer_footer::hover_button((id, seq as u64), icon, tip, p).when(running, |button| button.opacity(0.4))
+        };
+        let rewind = actionable.then(|| {
+            let tip = if running {
+                "Stop the agent before rewinding"
+            } else {
+                "Rewind to this message"
+            };
+            action("side-user-rewind", Lucide::Undo2, tip)
+                .debug_selector(move || format!("side-rewind-{seq}"))
+                .on_click(cx.listener(move |this, _, _, cx| this.ask_rewind(seq, cx)))
+        });
+        let edit = actionable.then(|| {
+            let tip = if running {
+                "Stop the agent before editing"
+            } else {
+                "Edit this message"
+            };
+            action("side-user-edit", Lucide::Pencil, tip)
+                .debug_selector(move || format!("side-edit-message-{seq}"))
+                .on_click(cx.listener(move |this, _, window, cx| this.start_edit(seq, window, cx)))
+        });
         let copy = {
             let text = text.to_string();
             answer_footer::hover_button(
@@ -453,15 +502,31 @@ impl SideChat {
                         .child("From another session"),
                 )
             })
-            .child(code_view::user_prompt(text.to_string(), vec![], None, p, None))
             .child(
-                h_flex()
-                    .h(px(24.))
-                    .gap(px(2.))
-                    .items_center()
-                    .children(time)
-                    .child(div().when(!shown, |slot| slot.opacity(0.)).child(copy)),
+                div()
+                    .w_full()
+                    .flex()
+                    .justify_end()
+                    // A rewound message stays, dimmed.
+                    .when(rewound, |row| row.opacity(0.5))
+                    .child(match editing {
+                        Some(editing) => self.render_editor(editing, p, cx),
+                        None => code_view::user_prompt(text.to_string(), vec![], None, p, None).into_any_element(),
+                    }),
             )
+            .child(
+                h_flex().h(px(24.)).gap(px(2.)).items_center().children(time).child(
+                    h_flex()
+                        .gap(px(2.))
+                        .when(!shown, |slot| slot.opacity(0.))
+                        .children(rewind)
+                        .children(edit)
+                        .child(copy),
+                ),
+            )
+            .when_some(asking, |column, rewinding| {
+                column.child(self.render_rewind_confirm(rewinding, p, cx))
+            })
             .into_any_element()
     }
 

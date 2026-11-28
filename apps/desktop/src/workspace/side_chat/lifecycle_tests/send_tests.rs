@@ -201,6 +201,58 @@ fn stacked_replies_go_with_the_next_send(cx: &mut TestAppContext) {
     });
 }
 
+/// Rewind puts a sent message back in the composer; Edit rewinds to before it and sends the rewrite, as on a
+/// session's message.
+#[gpui_kit::test]
+fn rewind_and_edit_act_on_a_sent_side_message(cx: &mut TestAppContext) {
+    use crate::code::Block;
+    let rpc = Rpc::default();
+    let (chat, cx) = chat(cx, &rpc);
+    chat.update_in(cx, |chat, window, cx| {
+        chat.blocks = vec![Block::User {
+            seq: 5,
+            at: 110,
+            text: "old question".into(),
+            from: None,
+            rewound: false,
+            images: 0,
+            image_data: vec![],
+        }];
+        chat.ask_rewind(5, cx);
+        chat.confirm_rewind(window, cx);
+    });
+    cx.run_until_parked();
+    let rewind = rpc.take("wb_rewind_message");
+    assert_eq!(rewind.args["seq"], 5);
+    rewind.answer.send(Ok(json!(true))).unwrap();
+    cx.run_until_parked();
+    chat.read_with(cx, |chat, cx| {
+        assert!(chat.rewinding.is_none());
+        assert_eq!(chat.input.read(cx).value().as_ref(), "old question");
+    });
+    chat.update_in(cx, |chat, window, cx| {
+        chat.input.update(cx, |input, cx| input.set_value("", window, cx));
+        chat.start_edit(5, window, cx);
+        chat.editing
+            .as_ref()
+            .unwrap()
+            .input
+            .update(cx, |input, cx| input.set_value("new question", window, cx));
+        chat.send_edit(window, cx);
+    });
+    cx.run_until_parked();
+    rpc.take("wb_rewind_message").answer.send(Ok(json!(true))).unwrap();
+    cx.run_until_parked();
+    let send = rpc.take("wb_send");
+    assert_eq!(send.args["text"], "new question");
+    send.answer.send(Ok(json!(true))).unwrap();
+    cx.run_until_parked();
+    chat.read_with(cx, |chat, cx| {
+        assert!(chat.editing.is_none());
+        assert_eq!(chat.input.read(cx).value().as_ref(), "", "the composer is left alone");
+    });
+}
+
 #[gpui_kit::test]
 fn a_refused_message_comes_back_ahead_of_what_was_typed_since(cx: &mut TestAppContext) {
     let rpc = Rpc::default();

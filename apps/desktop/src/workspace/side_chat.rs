@@ -6,6 +6,8 @@ mod controls;
 mod creation;
 mod dock;
 mod echo;
+mod edit;
+mod edit_view;
 mod history;
 mod keys;
 mod message_composer;
@@ -92,6 +94,9 @@ pub(super) struct SideChat {
     held: Option<bool>,
     /// Stacked replies to passages of side answers (`replies.rs`).
     replies: replies::Replies,
+    /// Rewind's confirmation under a message, and a message rewritten in place (`edit.rs`).
+    rewinding: Option<edit::Rewinding>,
+    editing: Option<edit::Editing>,
     answers: Vec<Entity<InputState>>,
     request: Option<String>,
     permission_reason: Entity<InputState>,
@@ -194,6 +199,8 @@ impl SideChat {
             budget: None,
             held: None,
             replies,
+            rewinding: None,
+            editing: None,
             answers: vec![],
             request: None,
             permission_reason: cx.new(|cx| InputState::new(window, cx).placeholder("Reason (optional)")),
