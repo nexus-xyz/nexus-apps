@@ -1,5 +1,5 @@
 //! In gateway mode the open page registers this computer with no click, once; in approvals mode it waits for the
-//! person, as before. A computer pinned to approvals follows Gateway's own trust only after the person opts in.
+//! person, as before. A computer that relied on approvals follows Gateway's own trust only after the person opts in.
 
 #[path = "../budgets_test_support.rs"]
 #[allow(dead_code)] // The shared fixture has fields this page does not read.
@@ -263,7 +263,7 @@ fn approvals_mode_waits_for_the_person(cx: &mut TestAppContext) {
 }
 
 #[gpui_kit::test]
-fn a_computer_pinned_to_approvals_follows_gateway_trust_only_after_the_person_opts_in(cx: &mut TestAppContext) {
+fn a_computer_that_relied_on_approvals_follows_gateway_trust_only_after_the_person_opts_in(cx: &mut TestAppContext) {
     let Page {
         page,
         cx,
@@ -272,13 +272,29 @@ fn a_computer_pinned_to_approvals_follows_gateway_trust_only_after_the_person_op
         key,
     } = open(cx);
     let person = person();
-    // This computer read approvals before: the pin says approvals.
     let owner = super::approver::owner(
         gateway_url(&page, cx).as_str(),
         &json!({ "kind": "person", "userId": person }),
     )
     .expect("owner");
     let store = super::approver::store().expect("store");
+    // Under approvals the phone approved this computer, and the person confirmed the phone's code here: this computer
+    // relied on approvals. A computer that only read approvals relied on nothing, and follows Gateway at once.
+    let me_key = page.read_with(cx, |page, _| match &page.key {
+        Load::Ready(key) => key.key.clone(),
+        _ => unreachable!("the key is read"),
+    });
+    let phone_key = DeviceKey::generate();
+    let approval = e2e::approval_message("dev_me", &me_key.encryption_key(), &me_key.signing_key()).expect("message");
+    let approved = [
+        json!({ "id": "dev_phone", "kind": "device", "state": "trusted",
+            "encryptionKey": e2e::b64u(&phone_key.encryption_key()), "signingKey": e2e::b64u(&phone_key.signing_key()),
+            "approvedBy": null, "approvalSignature": null }),
+        json!({ "id": "dev_me", "kind": "device", "state": "trusted", "encryptionKey": key.0, "signingKey": key.1,
+            "approvedBy": "dev_phone", "approvalSignature": e2e::b64u(&phone_key.sign(&approval)) }),
+    ];
+    nexus_workbench::session_sync::approver::confirm(&store, &owner, &approved, &me_key, "dev_phone")
+        .expect("confirmed");
     store
         .settle_trust(&owner, nexus_workbench::session_sync::DeviceTrust::Approvals)
         .expect("pinned");

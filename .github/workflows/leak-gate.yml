@@ -1,5 +1,6 @@
 # The leak gate: scans every tracked file for secrets (gitleaks, the semgrep rules, trufflehog's verified findings)
-# and reports internal references (the blocklist). Read .github/oss-leak-gate/README.md. No secrets.
+# and internal references (the blocklist), and a pull request's commits with gitleaks and the blocklist. Any finding
+# fails. Read .github/oss-leak-gate/README.md. No secrets.
 # Each tool is pinned, and each download is checked against its release's checksums file.
 name: leak-gate
 
@@ -23,6 +24,8 @@ jobs:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
         with:
           persist-credentials: false
+          # The commit scan reads every commit between the pull request's base and head.
+          fetch-depth: 0
       - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
         with:
           python-version: '3.12'
@@ -54,6 +57,13 @@ jobs:
       # A rule that stops flagging its own marked cases would let a leak through as a clean run.
       - name: Semgrep rule tests
         run: (cd .github/oss-leak-gate && semgrep --test --metrics=off --disable-version-check .)
-      # Secrets fail the job. The blocklist reports and never fails it.
+      # Secrets and internal references fail the job.
       - name: Scan the tree
         run: python3 .github/scripts/leak_gate.py tree --summary "$GITHUB_STEP_SUMMARY"
+      # The tree scan sees only the last commit: a secret one commit adds and a later one removes stays in the history.
+      - name: Scan the pull request's commits
+        if: github.event_name == 'pull_request'
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: python3 .github/scripts/leak_gate.py commits "$BASE_SHA" "$HEAD_SHA" --summary "$GITHUB_STEP_SUMMARY"

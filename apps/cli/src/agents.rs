@@ -737,7 +737,7 @@ pub fn launch_agent(agent: Agent, argv: &[String], ctx: &Context, config: &Confi
         None => args.forwarded.clone(),
     };
     // The commits the session makes in a nexus-xyz repository name Nexus as a co-author. Only for Nexus's
-    // own people while Nexus tries it on its own work first. The agent is told, or it offers to undo it.
+    // own people while Nexus tries it on its own work first. The agent is told, or it offers to remove it.
     // An agent that takes no instructions gets no trailer either: it would not know where the trailer came from.
     let employee = core.get("/v1/tenants/me").is_ok_and(|me| is_employee(&me)) && takes_instructions(agent);
     let (instructions, memory) = launch_instructions(agent, employee, &cwd, &ctx.env_fn()).unwrap_or_else(|error| {
@@ -2433,7 +2433,7 @@ mod tests {
         // The trailer instructions, whole.
         assert_eq!(
             commit_trailer::INSTRUCTIONS,
-            "Nexus co-author: when a commit you make in a nexus-xyz repository ends with `Co-authored-by: Nexus CLI` or `Co-authored-by: Nexus Desktop` in place of your own co-author line, a Nexus git hook did that on purpose, so Nexus can count the work done in it. Keep the commit as it is: do not amend it, skip the hook, or offer to restore your line."
+            "Nexus co-author: when a commit you make in a nexus-xyz repository ends with `Co-authored-by: Nexus CLI` or `Co-authored-by: Nexus Desktop`, a Nexus git hook added that line on purpose, so Nexus can count the work done in it. Your own co-author line stays. Keep the commit as it is: do not amend it, skip the hook, or remove the Nexus line."
         );
     }
 

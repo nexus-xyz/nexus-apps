@@ -1,0 +1,67 @@
+#!/usr/bin/env node
+// hello-nexus: a Nexus Desktop plugin with one MCP tool, `hello`, and no permissions.
+// It speaks MCP over stdio: one JSON-RPC message per line in, one per line out. It needs Node 18 or later and no packages.
+"use strict";
+
+const readline = require("node:readline");
+
+const SERVER = { name: "hello-nexus", version: "0.1.0" };
+const PROTOCOL = "2025-06-18";
+
+const TOOLS = {
+  hello: {
+    description: "Say hello to someone. Proves that the plugin runs in the session.",
+    inputSchema: {
+      type: "object",
+      properties: { name: { type: "string", description: "Who to greet. Defaults to world." } },
+      additionalProperties: false,
+    },
+    run: ({ name }) => `Hello, ${typeof name === "string" && name.trim() ? name.trim() : "world"}! This answer comes from the hello-nexus plugin.`,
+  },
+};
+
+/** The answer to one request, or undefined for a notification. A tool may be async: its answer is awaited. */
+async function answer(message) {
+  const { method, params = {} } = message;
+  switch (method) {
+    case "initialize":
+      return { protocolVersion: params.protocolVersion || PROTOCOL, capabilities: { tools: {} }, serverInfo: SERVER };
+    case "ping":
+      return {};
+    case "tools/list":
+      return { tools: Object.entries(TOOLS).map(([name, { description, inputSchema }]) => ({ name, description, inputSchema })) };
+    case "tools/call": {
+      const tool = TOOLS[params.name];
+      if (!tool) return { content: [{ type: "text", text: `No tool named ${params.name}.` }], isError: true };
+      try {
+        return { content: [{ type: "text", text: await tool.run(params.arguments || {}) }] };
+      } catch (error) {
+        // A tool's failure is an answer the agent reads, not a protocol error.
+        return { content: [{ type: "text", text: String(error.message || error) }], isError: true };
+      }
+    }
+    default:
+      throw Object.assign(new Error(`Method not found: ${method}`), { code: -32601 });
+  }
+}
+
+function send(message) {
+  process.stdout.write(`${JSON.stringify({ jsonrpc: "2.0", ...message })}\n`);
+}
+
+readline.createInterface({ input: process.stdin }).on("line", async (line) => {
+  if (!line.trim()) return;
+  let message;
+  try {
+    message = JSON.parse(line);
+  } catch {
+    return send({ id: null, error: { code: -32700, message: "Parse error" } });
+  }
+  const isRequest = message.id !== undefined && message.id !== null;
+  try {
+    const result = await answer(message);
+    if (isRequest) send({ id: message.id, result });
+  } catch (error) {
+    if (isRequest) send({ id: message.id, error: { code: error.code || -32603, message: error.message } });
+  }
+});

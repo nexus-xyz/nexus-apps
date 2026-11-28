@@ -840,6 +840,7 @@ impl Workspace {
             let (rows, waiting, chats) = super::sidebar_marks::in_place_while(expansion.moving() || gliding, || {
                 // Linked sessions hang under the session that started them (`session-tree.ts`).
                 let tree = super::session_tree::tree(&active);
+                let crews = super::session_tree::in_crew(&tree);
                 let at: Vec<(&str, usize)> = tree
                     .iter()
                     .map(|(session, depth)| (session.id.as_str(), *depth))
@@ -851,10 +852,11 @@ impl Workspace {
                     .collect();
                 let rows: Vec<(AnyElement, usize)> = tree
                     .iter()
+                    .zip(crews)
                     .zip(&families)
                     .filter(|_| expansion.visible())
-                    .map(|((session, depth), (top, last))| {
-                        let row = self.render_session_row_at(session, *depth, None, now_ms, palette, window, cx);
+                    .map(|(((session, depth), crew), (top, last))| {
+                        let row = self.render_session_row_at(session, *depth, crew, None, now_ms, palette, window, cx);
                         let open = super::sidebar_filter::Open::Code(session.id.clone());
                         let row = self.filter_cursor_mark(row, &open, palette);
                         let slot = listed.clone().map(|listed| super::session_drag::RowSlot {
@@ -893,7 +895,9 @@ impl Workspace {
             let empty = total == 0 && !filtering;
             // A deleted session's row folds as it leaves, and the group folds with it (`row_exit.rs`).
             let sessions_height = self.row_exits.height(
-                active.iter().map(|session| session.id.as_str()),
+                active
+                    .iter()
+                    .map(|session| (session.id.as_str(), super::session_tree::row_height(session))),
                 std::time::Instant::now(),
                 cx.reduce_motion(),
             ) - self.sidebar_hold.shortfall(&project.id, moment);

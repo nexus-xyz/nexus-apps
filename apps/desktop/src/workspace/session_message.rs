@@ -1,5 +1,5 @@
 //! A linked session's message in a Code session's transcript, as the Nexus app's `session-message.tsx` draws it. It
-//! never looks like a message the person wrote: "Received message from <its session>", its text as plain text, and
+//! never looks like a message the person wrote: "Message from <its session>", its text as plain text, and
 //! Copy. A batch of its children's results shows one card per child instead, with the child's title, agent and how it
 //! ended. The batch rule is `nexus_workbench::session_results`; this file only draws it.
 
@@ -32,17 +32,31 @@ impl Workspace {
         let results = own_results(session_results(text), thread_id, Some(view.id.as_str()), |id| {
             self.session_by_id(id).map(|session| session.parent.as_deref())
         });
+        // The session's first message from the one that handed its work to it is that handoff.
+        let handoff = self
+            .code_session()
+            .and_then(|session| session.handoff_from.as_ref())
+            .filter(|from| from.thread_id == *thread_id);
+        let agent = handoff
+            .map(|from| from.agent)
+            .or_else(|| self.session_by_id(thread_id).map(|session| session.agent));
         let head = match &results {
             Some(_) => from_line(palette).child(tr("Received results from subsessions")),
             None => from_line(palette)
-                .child(tr("Received message from "))
+                .gap(px(6.))
+                .child(if handoff.is_some() {
+                    tr("Handoff from ")
+                } else {
+                    tr("Message from ")
+                })
                 .child(session_link(
                     ("session-from", seq as u64),
                     thread_id,
                     title,
                     palette,
                     cx,
-                )),
+                ))
+                .when_some(agent, |line, agent| line.child(agent_tag(agent, palette))),
         };
         let body: AnyElement = match results {
             Some(results) => v_flex()
@@ -54,7 +68,7 @@ impl Workspace {
                         .map(|(index, result)| result_card(seq, index, result, palette, cx)),
                 )
                 .into_any_element(),
-            None => message_body(text.to_string()).into_any_element(),
+            None => card(palette).child(message_body(text.to_string())).into_any_element(),
         };
         let group: SharedString = format!("session-message-{seq}").into();
         let copied = view.copied == Some(seq);
@@ -103,19 +117,36 @@ fn result_card(
     cx: &mut Context<Workspace>,
 ) -> AnyElement {
     let id = SharedString::from(format!("session-result-{seq}-{index}"));
-    let meta = format!(
-        " · {} · {}",
-        super::code_dock::agent_name(result.agent),
-        result.status_label()
-    );
-    v_flex()
+    card(palette)
         .child(
             from_line(palette)
+                .gap(px(6.))
                 .child(session_link(id, &result.session_id, &result.title, palette, cx))
-                .child(meta),
+                .child(agent_tag(result.agent, palette))
+                .child(result.status_label().to_string()),
         )
         .child(message_body(result.text.clone()))
         .into_any_element()
+}
+
+/// Another session's words, set apart from the person's own: a bordered card, never a bubble.
+fn card(palette: Palette) -> Div {
+    v_flex()
+        .w_full()
+        .p(px(12.))
+        .rounded(px(12.))
+        .border_1()
+        .border_color(palette.border)
+}
+
+/// The agent a session runs, as a small tag beside its title: a person sees which session is Claude and which Codex.
+fn agent_tag(agent: nexus_workbench::event::SessionAgent, palette: Palette) -> impl IntoElement {
+    div()
+        .px(px(6.))
+        .rounded(px(4.))
+        .bg(palette.hover)
+        .text_color(palette.secondary)
+        .child(super::code_dock::agent_name(agent))
 }
 
 /// The small muted line over a message or a report (`.wb-session-message-from`).

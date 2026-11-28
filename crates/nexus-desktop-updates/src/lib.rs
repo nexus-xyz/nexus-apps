@@ -29,9 +29,9 @@ pub const DOWNLOAD_PAGE: &str = "https://nexus.inc/download";
 /// The beta's download page: the open-source repository's releases, where each beta is a prerelease. A beta build sends
 /// its users here, never to [`DOWNLOAD_PAGE`], which would move them off the beta without saying so.
 pub const BETA_DOWNLOAD_PAGE: &str = "https://github.com/nexus-xyz/nexus-apps/releases";
-/// The internal channel's installer (README.md, "Distribution"). It needs a gcloud sign-in with a Nexus account. It is
-/// configuration: Nexus's release builds set `NEXUS_DESKTOP_INTERNAL_INSTALL` (factory-release.yml). A build without it
-/// (a local or open-source build) offers the download page on the internal channel too.
+/// The internal channel's installer (README.md, "Distribution"), for Nexus staff. It is configuration: Nexus's release
+/// builds set `NEXUS_DESKTOP_INTERNAL_INSTALL`. A build without it (a local or open-source build) offers the download
+/// page on the internal channel too.
 pub const INTERNAL_INSTALL: Option<&str> = match option_env!("NEXUS_DESKTOP_INTERNAL_INSTALL") {
     Some(command) if !command.is_empty() => Some(command),
     _ => None,

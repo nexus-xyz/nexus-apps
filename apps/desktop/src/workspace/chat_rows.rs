@@ -366,19 +366,19 @@ impl Workspace {
                 rows.push(note("Nothing archived", palette));
             }
         }
-        // Each row and note is one ROW tall, so the group's height is known before it is laid out. A deleted session's
-        // row folds as it leaves (`row_exit.rs`).
-        let folded = if expansion.visible() {
-            self.archived_code.len() as f32 * ROW
-                - self.row_exits.height(
-                    self.archived_code.iter().map(|session| session.id.as_str()),
+        let height = if expansion.visible() {
+            let chat_height = rows.len().saturating_sub(self.archived_code.len()) as f32 * ROW;
+            chat_height
+                + self.row_exits.height(
+                    self.archived_code
+                        .iter()
+                        .map(|session| (session.id.as_str(), super::session_tree::row_height(session))),
                     std::time::Instant::now(),
                     cx.reduce_motion(),
                 )
         } else {
             0.
         };
-        let height = rows.len() as f32 * ROW - folded;
         let body = expansion.draw(
             div().flex_none().child(v_flex().flex_none().children(rows)),
             "archived-rows".to_string(),

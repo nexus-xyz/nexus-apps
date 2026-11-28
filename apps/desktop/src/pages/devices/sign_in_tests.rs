@@ -144,6 +144,28 @@ fn a_computer_gateway_lists_already_registers_nothing(cx: &mut TestAppContext) {
 }
 
 #[gpui_kit::test]
+fn a_computer_left_pending_from_approvals_registers_again_and_turns_trusted(cx: &mut TestAppContext) {
+    // It registered under approvals and nobody approved it, inside or past the pairing window. Gateway trusts the same
+    // key when it registers again, so the computer connects with no click.
+    init(cx);
+    let key = DeviceKey::generate();
+    let encryption_key = e2e::b64u(&key.encryption_key());
+    let row = listed(&key, "pending");
+    let run = start(cx, key, false, true);
+    support::answer(
+        run.gateway.take("/v1/devices"),
+        json!({ "trust": "gateway", "devices": [row] }),
+        cx,
+    );
+    let registration = posted(&run.gateway, cx).expect("the pending computer registers again");
+    let body = registration.body.clone().expect("a registration body");
+    assert_eq!(body["encryptionKey"], encryption_key, "the same key, not a new one");
+    support::answer(registration, json!({ "id": "dev_me", "state": "trusted" }), cx);
+    assert_eq!(finished(&run, cx), Ok(Registration::Registered));
+    assert_eq!(run.handed.get(), 1, "session sync connects again at once");
+}
+
+#[gpui_kit::test]
 fn a_revoked_computer_stays_revoked(cx: &mut TestAppContext) {
     init(cx);
     let key = DeviceKey::generate();

@@ -3,14 +3,14 @@
 //! decrypts every event. Gateway stores ciphertext only.
 //!
 //! It runs the real CLI (`run_cli`), engine, adapter and `nexus_client::e2e`, with a stand-in `claude` that writes a
-//! transcript as Claude Code does. Gateway is the `nexus-gateway` binary, started as a process. It runs when
-//! `NEXUS_SYNC_E2E_GATEWAY` names that binary and `TEST_DATABASE_URL` a Postgres; otherwise it returns early.
+//! transcript as Claude Code does. Gateway is a Nexus Gateway binary, started as a process. Gateway is not in this
+//! repository, so the test is ignored by default. Run it with `--ignored` when `NEXUS_SYNC_E2E_GATEWAY` names that
+//! binary and `TEST_DATABASE_URL` a Postgres; without them it returns early.
 //!
 //! ```sh
-//! (cd eng/factory/rs && cargo build -p nexus-gateway && scripts/pg.sh start .e2e-pg 55445)
-//! NEXUS_SYNC_E2E_GATEWAY=$PWD/eng/factory/rs/target/debug/nexus-gateway \
-//!   TEST_DATABASE_URL=postgres://postgres@127.0.0.1:55445/postgres \
-//!   cargo test --locked -p nexus-cli session_sync_e2e -- --nocapture
+//! NEXUS_SYNC_E2E_GATEWAY=/path/to/nexus-gateway \
+//!   TEST_DATABASE_URL=postgres://postgres@127.0.0.1:5432/postgres \
+//!   cargo test --locked -p nexus-cli --test session_sync_e2e -- --ignored --nocapture
 //! ```
 #![cfg(unix)]
 
@@ -182,6 +182,7 @@ fn read_as_b(client: &Client, thread: &str, b: (&str, &DeviceKey)) -> Vec<Value>
 }
 
 #[test]
+#[ignore = "requires Nexus Gateway"]
 fn a_cli_session_reaches_a_trusted_device_paired_by_code() {
     let (Ok(bin), Ok(database)) = (
         std::env::var("NEXUS_SYNC_E2E_GATEWAY"),

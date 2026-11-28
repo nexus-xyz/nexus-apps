@@ -16,6 +16,7 @@ struct Fake {
     #[cfg(target_os = "macos")]
     service_without_keychain: Mutex<Option<&'static str>>,
     fail_writes: std::sync::atomic::AtomicBool,
+    fail_deletes: std::sync::atomic::AtomicBool,
 }
 
 impl Fake {
@@ -74,6 +75,9 @@ impl Store for Handle {
     }
 
     fn delete(&self, service: &str, account: &str) -> Result<(), String> {
+        if self.0.fail_deletes.load(Ordering::SeqCst) {
+            return Err("The item belongs to another build of Nexus.".into());
+        }
         lock(&self.0.items).remove(&(service.to_string(), account.to_string()));
         Ok(())
     }
@@ -282,6 +286,38 @@ fn a_failed_write_is_reported_and_holds_nothing_the_store_lacks() {
     );
     assert!(keychain.write(GATEWAY, "nxc_new").is_err());
     assert_eq!(keychain.read(GATEWAY), Ok(None));
+}
+
+#[test]
+fn a_failed_delete_is_reported_and_the_run_still_holds_the_stored_key() {
+    // Make a new key: the delete fails (an item another build owns), so the key is still in the store. The run must
+    // not read "no key" and make a second one over it.
+    let fake = Fake::with(&[(OWN, DEVICE, "device-secret")]);
+    let record = Record::new("delete");
+    let keychain = launch(&fake, &record);
+    assert_eq!(keychain.read(DEVICE), Ok(Some("device-secret".into())));
+    fake.fail_deletes.store(true, Ordering::SeqCst);
+    assert!(keychain.delete(DEVICE).is_err());
+    assert_eq!(
+        keychain.read(DEVICE),
+        Ok(Some("device-secret".into())),
+        "the run keeps the key the store still has"
+    );
+    // A delete that works afterwards clears it, as before.
+    fake.fail_deletes.store(false, Ordering::SeqCst);
+    keychain.delete(DEVICE).expect("deleted");
+    assert_eq!(keychain.read(DEVICE), Ok(None));
+    assert_eq!(fake.item(OWN, DEVICE), None);
+}
+
+#[test]
+fn a_failed_delete_before_the_first_read_leaves_the_account_unread() {
+    let fake = Fake::with(&[(OWN, DEVICE, "device-secret")]);
+    fake.fail_deletes.store(true, Ordering::SeqCst);
+    let record = Record::new("delete-unread");
+    let keychain = launch(&fake, &record);
+    assert!(keychain.delete(DEVICE).is_err());
+    assert_eq!(keychain.read(DEVICE), Ok(Some("device-secret".into())));
 }
 
 #[test]

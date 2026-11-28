@@ -1,0 +1,1077 @@
+# Path items. The root openapi.yaml references each one.
+/v1/cloud/machines:
+  get:
+    tags:
+      - Cloud machines
+    operationId: listCloudMachines
+    summary: >-
+      Your live cloud machines in this organization, one for each desktop session at most, each state read from the
+      provider.
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/CloudMachineList
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      "503":
+        description: >-
+          No provider account on this Gateway (`cloud_unavailable`), or the provider has no free machine
+          (`cloud_capacity`) or the machine is not ready yet (the provider's code, such as `sandbox_restoring`); try
+          again later.
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: cloud.machines.use
+    x-internal-stability: beta
+  post:
+    tags:
+      - Cloud machines
+    operationId: createCloudMachine
+    summary: >-
+      Create the cloud machine of a desktop session. Send `sessionId` and the session's `title`: a create for a session
+      that has a live machine returns that machine. Nexus names and sizes every machine, so `name` and `size` are read
+      and ignored. The machine starts from Nexus's image, with its own Nexus token in `~/.nexus/host/credentials`;
+      deleting the machine revokes that token. Send an `Idempotency-Key`: the machine's id is derived from it, so a
+      resend names the machine the first send made, and finishes it when the provider's answer was lost. A machine that
+      cannot start now waits in the queue (202, state `queued`): Gateway runs its most machines, the person runs their
+      share, the person started 20 machines and gets one more every 5 minutes, or the provider is at its limits. The
+      meter starts the queue oldest first. A person asks for at most 200 starts (creates and wakes) in a UTC day, and an
+      organization's people 500 together: one more answers 429 `cloud_daily_starts` until 00:00 UTC (`Retry-After`). An
+      organization with only the free start is on the trial: it runs one machine at a time, and all trial organizations
+      together a few. A trial machine never waits in the queue: one more answers 429 `cloud_trial_limit` or
+      `cloud_trial_busy` (`Retry-After`), which name Billing. Credits, a card or a contract lift the trial. A person
+      keeps at most 50 machines, asleep or not: one more answers 429 `cloud_machine_limit`. Read the queued machine
+      (GET) while you wait: one nobody read for 10 minutes ends, `failed`. Its running time is charged as cloud compute
+      from its start.
+    parameters:
+      - name: x-nexus-github-token
+        in: header
+        required: false
+        description: >-
+          The person's own GitHub token. With `repo`, Gateway asks GitHub with it whether the person may read the
+          repository, and only then starts the machine from the organization's saved copy of it. Used for that check
+          only, never kept.
+        schema:
+          type: string
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKeyRequired
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas.yaml#/CreateCloudMachine
+    responses:
+      "200":
+        description: The machine a send with this key made, or the live machine of this session
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/CloudMachine
+      "201":
+        description: "Created: the machine is starting"
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/CloudMachine
+      "202":
+        description: "Accepted: the machine waits in the queue (`queued`, with `queuedUntil`)"
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/CloudMachine
+      "400":
+        description: The body is not an object, or `sessionId` is not 1 to 128 letters, digits, `_` and `-` (`invalid_session_id`).
+      "402":
+        description: >-
+          Nothing covers 15 minutes of this machine's cloud compute (`budget_exceeded`), so no new compute starts. Nexus
+          pays for cloud compute: it is held on the organization's Nexus balance (its subsidy, then its credits, then
+          its contract), and on its budget. An organization past due gets `payment_past_due`. The refusal is recorded.
+          When a running machine's next 15 minutes are refused, Gateway puts it to sleep, with `stopReason` `budget`.
+      "403":
+        description: >-
+          Cloud machines are not turned on for this organization (`cloud_not_enabled`). Only the organizations Nexus
+          lists may start or use a machine; anyone may still list, sleep and delete their own.
+      "409":
+        description: The create took so long that Gateway ended it (`machine_gone`); send a new one.
+      "422":
+        description: This `Idempotency-Key` names another machine (`idempotency_key_reused`); send a new key.
+      "428":
+        $ref: ../components/common.yaml#/responses/PreconditionRequired
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      "502":
+        description: The cloud provider failed or did not answer (`cloud_provider_error`); try again.
+      "503":
+        description: No provider account on this Gateway (`cloud_unavailable`); try again later.
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: cloud.machines.use
+    x-internal-stability: beta
+    x-idempotency: required
+/v1/cloud/machines/pair:
+  post:
+    tags:
+      - Cloud machines
+    operationId: pairCloudServer
+    summary: >-
+      Pair your own server, so Nexus Desktop reaches it through Gateway with no SSH and no open port. `nexus-host login`
+      calls this with the token its device sign-in got, and that token becomes the machine's own: only it opens the
+      machine's host connection, and deleting the machine revokes it. It reads `ready`, with provider `own`;
+      `hostOnline` says whether it answers. Nexus never starts, stops, sizes or charges it, and any organization may
+      pair one. A second pairing with the same token answers the same machine. A person pairs at most 10 servers (409
+      `own_servers_full`).
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas.yaml#/PairCloudServer
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/CloudMachine
+      "400":
+        description: The name is empty (`invalid_name`), or the token may not pair a server (`not_a_host_token`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "409":
+        description: You have 10 servers paired already (`own_servers_full`)
+        content: {}
+      "428":
+        $ref: ../components/common.yaml#/responses/PreconditionRequired
+      "503":
+        description: >-
+          No provider account on this Gateway (`cloud_unavailable`), or the machine is not ready yet (the provider's
+          code, such as `sandbox_restoring`); try again later.
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: cloud.machines.use
+    x-internal-stability: beta
+    parameters:
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKeyRequired
+    x-idempotency: required
+/v1/cloud/machines/{id}:
+  delete:
+    tags:
+      - Cloud machines
+    operationId: deleteCloudMachine
+    summary: Delete your machine at the provider, disk and all, and charge its running time. You may then create another.
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[A-Za-z0-9_-]+$
+        description: The machine's id (`cm_…`), as POST /v1/cloud/machines answered it
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKey
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/CloudMachineDeleted
+      "404":
+        description: >-
+          No such machine of yours: another person's machine, another organization's and a deleted one are as absent as
+          a missing one.
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      "502":
+        description: The cloud provider failed or did not answer (`cloud_provider_error`); try again.
+      "503":
+        description: >-
+          No provider account on this Gateway (`cloud_unavailable`), or the provider has no free machine
+          (`cloud_capacity`) or the machine is not ready yet (the provider's code, such as `sandbox_restoring`); try
+          again later.
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: cloud.machines.use
+    x-internal-stability: beta
+    x-idempotency: optional
+  get:
+    tags:
+      - Cloud machines
+    operationId: getCloudMachine
+    summary: One of your machines, its state read from the provider. A machine the provider no longer has is `gone`.
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[A-Za-z0-9_-]+$
+        description: The machine's id (`cm_…`), as POST /v1/cloud/machines answered it
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/CloudMachine
+      "404":
+        description: >-
+          No such machine of yours: another person's machine, another organization's and a deleted one are as absent as
+          a missing one.
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      "503":
+        description: >-
+          No provider account on this Gateway (`cloud_unavailable`), or the provider has no free machine
+          (`cloud_capacity`) or the machine is not ready yet (the provider's code, such as `sandbox_restoring`); try
+          again later.
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: cloud.machines.use
+    x-internal-stability: beta
+/v1/cloud/machines/{id}/access:
+  post:
+    tags:
+      - Cloud machines
+    operationId: cloudMachineAccess
+    summary: >-
+      Add this device's SSH public key to your machine. Answers where to connect and the host key to pin. Both change on
+      every wake. An access with the machine's own Nexus token does not count as the person's activity.
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[A-Za-z0-9_-]+$
+        description: The machine's id (`cm_…`), as POST /v1/cloud/machines answered it
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKeyRequired
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas.yaml#/CloudAccessRequest
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/CloudAccess
+      "400":
+        description: >-
+          `publicKey` is not one SSH public key line (`invalid_ssh_key`), or the machine is not running
+          (`machine_not_running`).
+      "403":
+        description: >-
+          Cloud machines are not turned on for this organization (`cloud_not_enabled`). Only the organizations Nexus
+          lists may start or use a machine; anyone may still list, sleep and delete their own.
+      "404":
+        description: >-
+          No such machine of yours: another person's machine, another organization's and a deleted one are as absent as
+          a missing one.
+      "428":
+        $ref: ../components/common.yaml#/responses/PreconditionRequired
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      "502":
+        description: The cloud provider failed or did not answer (`cloud_provider_error`); try again.
+      "503":
+        description: >-
+          No provider account on this Gateway (`cloud_unavailable`), or the provider has no free machine
+          (`cloud_capacity`) or the machine is not ready yet (the provider's code, such as `sandbox_restoring`); try
+          again later.
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: cloud.machines.use
+    x-internal-stability: beta
+    x-idempotency: required
+/v1/cloud/machines/{id}/activity:
+  post:
+    tags:
+      - Cloud machines
+    operationId: reportCloudMachineActivity
+    summary: >-
+      A cloud machine's heartbeat, sent by its host (`nexus-host`) every minute with the machine's own Nexus token (the
+      one in `~/.nexus/host/credentials`): whether its agent works, since when it is idle, the person's last interaction
+      and the kernel's out-of-memory kill count. Gateway stores the last report. A time after now is taken as now. The
+      report never extends the machine's longest run (a server setting, from the person's last create, wake or access).
+      Gateway puts the machine to sleep (`idle`) when its agent was idle 5 minutes and its person did not interact for
+      20 minutes, and never while its agent works. A machine whose host sends no report for 15 minutes (or never sent
+      one) sleeps 20 minutes after its last interaction, create, wake or access. A rise in the out-of-memory count
+      restarts the machine one size bigger, up to `large` (`resize`).
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[A-Za-z0-9_-]+$
+        description: The machine's id (`cm_…`), as POST /v1/cloud/machines answered it
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKey
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas.yaml#/CloudActivity
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/CloudMachine
+      "400":
+        description: >-
+          The body is not `{ busy, agentIdleSince, interactedAt, oomKills }`, or a time is not RFC 3339
+          (`invalid_time`).
+      "403":
+        description: "The caller's token is not this machine's own (`not_machine_token`): only the machine reports its activity."
+      "404":
+        description: >-
+          No such machine of yours: another person's machine, another organization's and a deleted one are as absent as
+          a missing one.
+      "409":
+        description: The provider has not made the machine yet (`machine_not_made`).
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      "503":
+        description: No provider account on this Gateway (`cloud_unavailable`).
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: cloud.machines.use
+    x-internal-stability: beta
+    x-idempotency: optional
+    description: "Exempt: a heartbeat. A repeat only renews the same state."
+/v1/cloud/machines/{id}/connect:
+  get:
+    tags:
+      - Cloud machines
+    operationId: cloudMachineConnect
+    summary: >-
+      A stream to your machine's host, a WebSocket, with your Gateway token: the desktop app's connection to its cloud
+      session, with no SSH. Gateway asks the host to open its side and joins the two. Each text and binary frame and the
+      close pass on as they came. Gateway reads and stores no frame. A frame is at most 16 MiB. Gateway pings every 20
+      seconds. When the host does not open its side within 10 seconds, the stream closes with 1013 (try again later);
+      when Gateway stops, with 1012. A joined stream counts as an interaction, as an access does. Gateway holds the
+      streams in memory, on one copy.
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[A-Za-z0-9_-]+$
+        description: The machine's id (`cm_…`), as POST /v1/cloud/machines answered it
+      - name: Upgrade
+        in: header
+        required: true
+        schema:
+          type: string
+          enum:
+            - websocket
+        description: A WebSocket upgrade (RFC 6455).
+    responses:
+      "101":
+        description: "Switching Protocols: Gateway asks the host to open its side."
+      "400":
+        description: The request is not a WebSocket upgrade (`websocket_required`).
+      "403":
+        description: Cloud machines are not turned on for this organization (`cloud_not_enabled`).
+      "404":
+        description: >-
+          No such machine of yours: another person's machine, another organization's and a deleted one are as absent as
+          a missing one.
+      "409":
+        description: >-
+          The machine's host is not connected (`host_offline`): it is asleep or still starting. Wake it, or try again
+          after `Retry-After` seconds.
+      "429":
+        description: >-
+          The machine has its most streams open, 8 (`too_many_streams`): close one first. Also over the caller's rate
+          limit (`rate_limit_error`): retry after `Retry-After` seconds.
+      "503":
+        description: >-
+          No provider account on this Gateway (`cloud_unavailable`). Also `machine_not_ready`: the provider has not made
+          the machine yet.
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: cloud.machines.use
+    x-internal-stability: beta
+/v1/cloud/machines/{id}/history:
+  get:
+    tags:
+      - Cloud machines
+    operationId: listCloudHistoryThreads
+    summary: >-
+      The machine's workbench threads that have stored history, most recently updated first, at most 500, with each
+      one's stored range. The machine's owner reads it, and so does the machine's own Nexus token, which backfills after
+      the last stored event when it wakes. `enabled` is false, with no threads, while the organization's `cloudHistory`
+      is off.
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[A-Za-z0-9_-]+$
+        description: The machine's id (`cm_…`), as POST /v1/cloud/machines answered it
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/CloudHistoryThreads
+      "404":
+        description: >-
+          No such machine of yours: another person's machine, another organization's and a deleted one are as absent as
+          a missing one.
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: cloud.machines.use
+    x-internal-stability: beta
+/v1/cloud/machines/{id}/history/{threadId}:
+  delete:
+    tags:
+      - Cloud machines
+    operationId: deleteCloudHistoryThread
+    summary: >-
+      Deletes a thread's stored history, as the workbench deleted or archived the thread. The machine's owner or its own
+      Nexus token. A repeat changes nothing.
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[A-Za-z0-9_-]+$
+        description: The machine's id (`cm_…`), as POST /v1/cloud/machines answered it
+      - name: threadId
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[A-Za-z0-9_-]{1,128}$
+        description: "The workbench thread id on the machine: the session's `sessionId` (`t_…`) for its main thread"
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKey
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/CloudHistoryThreadDeleted
+      "400":
+        description: The thread id is not 1 to 128 letters, digits, `_` and `-` (`invalid_request`).
+      "404":
+        description: >-
+          No such machine of yours: another person's machine, another organization's and a deleted one are as absent as
+          a missing one.
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: cloud.machines.use
+    x-internal-stability: beta
+    x-idempotency: optional
+/v1/cloud/machines/{id}/history/{threadId}/events:
+  get:
+    tags:
+      - Cloud machines
+    operationId: listCloudHistoryEvents
+    summary: >-
+      A page of a thread's stored events, in number order, for the machine's owner only. Without `after` or `before`,
+      the page is the thread's latest events. With `before`, it ends just before that event; with `after`, it starts
+      just after it. A page holds at most `limit` events and about 4 MiB of bodies after its first event. An event whose
+      body was over the per-event cap (256 KiB) has a null `body` and its size in `omittedBytes`. A thread with nothing
+      stored answers no events and null numbers. While the organization's `cloudHistory` is off, `enabled` is false and
+      there are no events.
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[A-Za-z0-9_-]+$
+        description: The machine's id (`cm_…`), as POST /v1/cloud/machines answered it
+      - name: threadId
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[A-Za-z0-9_-]{1,128}$
+        description: "The workbench thread id on the machine: the session's `sessionId` (`t_…`) for its main thread"
+      - name: after
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 0
+        description: Start just after this event number
+      - name: before
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 1
+        description: End just before this event number; not with `after`
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 500
+          default: 100
+        description: The most events a page holds
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/CloudHistoryEventPage
+      "400":
+        description: >-
+          `after` with `before`, a number that is not a whole number, a `limit` outside 1 to 500, or a bad thread id
+          (`invalid_request`).
+      "404":
+        description: >-
+          No such machine of yours: another person's machine, another organization's and a deleted one are as absent as
+          a missing one.
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: cloud.machines.use
+    x-internal-stability: beta
+  post:
+    tags:
+      - Cloud machines
+    operationId: appendCloudHistoryEvents
+    summary: >-
+      Stores a thread's next events, sent by the machine's host (`nexus-host`) with the machine's own Nexus token as its
+      workbench log appends them. 1 to 64 events with consecutive numbers. The first is at most one past the last
+      stored, or 1 for a new thread. An event already stored must come back identical, so a retried batch never
+      duplicates. All or nothing. A body over 256 KiB is stored as omitted, with its size, and never refused. While the
+      organization's `cloudHistory` is off, nothing is stored and `enabled` is false.
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[A-Za-z0-9_-]+$
+        description: The machine's id (`cm_…`), as POST /v1/cloud/machines answered it
+      - name: threadId
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[A-Za-z0-9_-]{1,128}$
+        description: "The workbench thread id on the machine: the session's `sessionId` (`t_…`) for its main thread"
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKeyRequired
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas.yaml#/AppendCloudHistoryEvents
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/CloudHistoryAppended
+      "400":
+        description: >-
+          No events, more than 64, numbers that are not consecutive or under 1, a bad time, a body that is not JSON, or
+          an event with both or neither of `body` and `omittedBytes` (`invalid_request`).
+      "403":
+        description: "The caller's token is not this machine's own (`not_machine_token`): only the machine sends its history."
+      "404":
+        description: >-
+          No such machine of yours: another person's machine, another organization's and a deleted one are as absent as
+          a missing one.
+      "409":
+        description: >-
+          The first event is past the next one Gateway expects (`seq_gap`): read listCloudHistoryThreads and send from
+          its `lastSeq` + 1. Or an event already stored differs from the one sent (`event_conflict`).
+      "413":
+        description: >-
+          The person's cloud history in this organization holds its cap (`cloud_history_full`), or the body is over 1
+          MB.
+      "428":
+        $ref: ../components/common.yaml#/responses/PreconditionRequired
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: cloud.machines.use
+    x-internal-stability: beta
+    x-idempotency: required
+/v1/cloud/machines/{id}/host:
+  get:
+    tags:
+      - Cloud machines
+    operationId: cloudMachineHost
+    summary: >-
+      The control connection of a cloud machine's host (`nexus-host`), a WebSocket, with the machine's own Nexus token
+      (the one in `~/.nexus/host/credentials`). Gateway sends it a text frame `{"type":"open","stream":"<id>"}` for each
+      app stream, and the host opens that stream within 10 seconds (GET /v1/cloud/machines/{id}/host/streams/{stream}).
+      The host sends nothing but pings. One per machine: a new one closes the old one (close code 1000, `replaced`).
+      Gateway pings every 20 seconds and closes with 1012 when it stops. While it is open, the machine's `hostOnline` is
+      true.
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[A-Za-z0-9_-]+$
+        description: The machine's id (`cm_…`), as POST /v1/cloud/machines answered it
+      - name: Upgrade
+        in: header
+        required: true
+        schema:
+          type: string
+          enum:
+            - websocket
+        description: A WebSocket upgrade (RFC 6455).
+    responses:
+      "101":
+        description: "Switching Protocols: the control connection is open."
+      "400":
+        description: The request is not a WebSocket upgrade (`websocket_required`).
+      "403":
+        description: "The caller's token is not this machine's own (`not_machine_token`): only the machine's host opens it."
+      "404":
+        description: >-
+          No such machine of yours: another person's machine, another organization's and a deleted one are as absent as
+          a missing one.
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      "503":
+        description: No provider account on this Gateway (`cloud_unavailable`).
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: cloud.machines.use
+    x-internal-stability: beta
+/v1/cloud/machines/{id}/host/streams/{stream}:
+  get:
+    tags:
+      - Cloud machines
+    operationId: cloudMachineHostStream
+    summary: >-
+      A stream from a cloud machine's host, a WebSocket, with the machine's own Nexus token: the answer to an `open`
+      frame of its control connection. Gateway joins it to the app that waits, and passes each text and binary frame and
+      the close on as they came. Gateway reads and stores no frame. A frame is at most 16 MiB.
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[A-Za-z0-9_-]+$
+        description: The machine's id (`cm_…`), as POST /v1/cloud/machines answered it
+      - name: stream
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[A-Za-z0-9_-]+$
+        description: The stream's id, from the control connection's `open` frame
+      - name: Upgrade
+        in: header
+        required: true
+        schema:
+          type: string
+          enum:
+            - websocket
+        description: A WebSocket upgrade (RFC 6455).
+    responses:
+      "101":
+        description: "Switching Protocols: the stream is joined to the app's."
+      "400":
+        description: The request is not a WebSocket upgrade (`websocket_required`).
+      "403":
+        description: "The caller's token is not this machine's own (`not_machine_token`): only the machine's host opens it."
+      "404":
+        description: >-
+          No such machine of yours: another person's machine, another organization's and a deleted one are as absent as
+          a missing one. Also `no_such_stream`: no app waits for this stream (it gave up after 10 seconds, or the id is
+          another machine's).
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      "503":
+        description: No provider account on this Gateway (`cloud_unavailable`).
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: cloud.machines.use
+    x-internal-stability: beta
+/v1/cloud/machines/{id}/links:
+  post:
+    tags:
+      - Cloud machines
+    operationId: cloudMachineLink
+    summary: >-
+      A private link to a port on your machine (`{kind: "port", port}`, until it sleeps), or to its desktop stream
+      (`{kind: "desktop"}`, for 10 minutes). On the cloud trial, a port link answers 403 `cloud_trial_no_links`.
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[A-Za-z0-9_-]+$
+        description: The machine's id (`cm_…`), as POST /v1/cloud/machines answered it
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKeyRequired
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas.yaml#/CloudLinkRequest
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/CloudLink
+      "400":
+        description: "`kind` or `port` is not valid (`invalid_port`: 1 to 65535, not 22, 6080, 8090, 8911 or 47984 to 48010)."
+      "403":
+        description: >-
+          Cloud machines are not turned on for this organization (`cloud_not_enabled`). Only the organizations Nexus
+          lists may start or use a machine; anyone may still list, sleep and delete their own.
+      "404":
+        description: >-
+          No such machine of yours: another person's machine, another organization's and a deleted one are as absent as
+          a missing one.
+      "428":
+        $ref: ../components/common.yaml#/responses/PreconditionRequired
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      "502":
+        description: The cloud provider failed or did not answer (`cloud_provider_error`); try again.
+      "503":
+        description: >-
+          No provider account on this Gateway (`cloud_unavailable`), or the provider has no free machine
+          (`cloud_capacity`) or the machine is not ready yet (the provider's code, such as `sandbox_restoring`); try
+          again later.
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: cloud.machines.use
+    x-internal-stability: beta
+    x-idempotency: required
+/v1/cloud/machines/{id}/setup-done:
+  post:
+    tags:
+      - Cloud machines
+    operationId: cloudMachineSetupDone
+    summary: >-
+      The machine's own setup at boot is ready. The machine's host sends the sealed grant from its `cloud.json` with the
+      machine's own Nexus token, and Gateway ends the grant: no setup token is given for the machine again. A repeat is
+      fine.
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[A-Za-z0-9_-]+$
+        description: The machine's id (`cm_…`), as POST /v1/cloud/machines answered it
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKeyRequired
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas.yaml#/CloudSetupTokenRequest
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/CloudSetupDone
+      "400":
+        description: The body is not `{ grant }`.
+      "403":
+        description: >-
+          The caller's token is not this machine's own (`not_machine_token`), or the grant is not this machine's, ran
+          out, or the setup is off (`setup_grant_refused`). The app clones the repository instead.
+      "404":
+        description: >-
+          No such machine of yours: another person's machine, another organization's and a deleted one are as absent as
+          a missing one.
+      "409":
+        description: The provider has not made the machine yet (`machine_not_made`).
+      "428":
+        $ref: ../components/common.yaml#/responses/PreconditionRequired
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      "503":
+        description: No provider account on this Gateway (`cloud_unavailable`).
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: cloud.machines.use
+    x-internal-stability: beta
+    x-idempotency: required
+/v1/cloud/machines/{id}/setup-token:
+  post:
+    tags:
+      - Cloud machines
+    operationId: cloudMachineSetupToken
+    summary: >-
+      The machine's own setup at boot (on with a server setting). The machine's host sends the sealed grant from its
+      `cloud.json` with the machine's own Nexus token. Gateway answers the repository and a GitHub App token that may
+      only read it, for an hour at most. Gateway seals a grant only when GitHub lets the session's person read the
+      repository and the organization's GitHub App reaches it. The grant works for one hour after the create, and ends
+      sooner when the machine's setup is ready (`setup-done`). Gateway never logs the token.
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[A-Za-z0-9_-]+$
+        description: The machine's id (`cm_…`), as POST /v1/cloud/machines answered it
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKeyRequired
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas.yaml#/CloudSetupTokenRequest
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/CloudSetupToken
+      "400":
+        description: The body is not `{ grant }`.
+      "403":
+        description: >-
+          The caller's token is not this machine's own (`not_machine_token`), or the grant is not this machine's, ran
+          out, or the setup is off (`setup_grant_refused`). The app clones the repository instead.
+      "404":
+        description: >-
+          No such machine of yours: another person's machine, another organization's and a deleted one are as absent as
+          a missing one.
+      "409":
+        description: >-
+          The organization's GitHub App no longer reaches the repository (`github_app_not_installed`), or the provider
+          has not made the machine yet (`machine_not_made`).
+      "428":
+        $ref: ../components/common.yaml#/responses/PreconditionRequired
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      "502":
+        description: GitHub gave no token (`github_unavailable`). Try again.
+      "503":
+        description: No provider account on this Gateway (`cloud_unavailable`).
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: cloud.machines.use
+    x-internal-stability: beta
+    x-idempotency: required
+/v1/cloud/machines/{id}/sleep:
+  post:
+    tags:
+      - Cloud machines
+    operationId: sleepCloudMachine
+    summary: >-
+      Put your machine to sleep: the provider saves its disk and frees the machine. Its running time is charged up to
+      now. A queued wake leaves the queue, and the machine stays asleep.
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[A-Za-z0-9_-]+$
+        description: The machine's id (`cm_…`), as POST /v1/cloud/machines answered it
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKeyRequired
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/CloudMachine
+      "404":
+        description: >-
+          No such machine of yours: another person's machine, another organization's and a deleted one are as absent as
+          a missing one.
+      "428":
+        $ref: ../components/common.yaml#/responses/PreconditionRequired
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      "502":
+        description: The cloud provider failed or did not answer (`cloud_provider_error`); try again.
+      "503":
+        description: >-
+          No provider account on this Gateway (`cloud_unavailable`), or the provider has no free machine
+          (`cloud_capacity`) or the machine is not ready yet (the provider's code, such as `sandbox_restoring`); try
+          again later.
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: cloud.machines.use
+    x-internal-stability: beta
+    x-idempotency: required
+/v1/cloud/machines/{id}/wake:
+  post:
+    tags:
+      - Cloud machines
+    operationId: wakeCloudMachine
+    summary: >-
+      Wake your machine from its saved disk. Its address and host key change: ask for access again. Its running time is
+      charged from now. When Gateway runs its most machines, the person woke 20 machines and gets one more wake a
+      minute, or the provider is at its limits, the wake waits in the queue (202, state `queued`); the meter starts it
+      in turn. A wake counts toward the day's starts: past them it answers 429 `cloud_daily_starts`. An organization
+      with only the free start is on the trial: it runs one machine at a time, and all trial organizations together a
+      few. A trial machine never waits in the queue: one more answers 429 `cloud_trial_limit` or `cloud_trial_busy`
+      (`Retry-After`), which name Billing. Credits, a card or a contract lift the trial. A trial machine sleeps 2 hours
+      after its wake (`max_run`). A run that stops in its first minute is charged a minute.
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[A-Za-z0-9_-]+$
+        description: The machine's id (`cm_…`), as POST /v1/cloud/machines answered it
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKeyRequired
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/CloudMachine
+      "202":
+        description: "Accepted: the wake waits in the queue (`queued`, with `queuedUntil`)"
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/CloudMachine
+      "402":
+        description: >-
+          Nothing covers 15 minutes of this machine's cloud compute (`budget_exceeded`), so no new compute starts. Nexus
+          pays for cloud compute: it is held on the organization's Nexus balance (its subsidy, then its credits, then
+          its contract), and on its budget. An organization past due gets `payment_past_due`. The refusal is recorded.
+          When a running machine's next 15 minutes are refused, Gateway puts it to sleep, with `stopReason` `budget`.
+      "403":
+        description: >-
+          Cloud machines are not turned on for this organization (`cloud_not_enabled`). Only the organizations Nexus
+          lists may start or use a machine; anyone may still list, sleep and delete their own.
+      "404":
+        description: >-
+          No such machine of yours: another person's machine, another organization's and a deleted one are as absent as
+          a missing one.
+      "409":
+        description: "The machine slept 14 days and the provider deleted its disk (`snapshot_data_expired`): it is now `gone`."
+      "428":
+        $ref: ../components/common.yaml#/responses/PreconditionRequired
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      "502":
+        description: The cloud provider failed or did not answer (`cloud_provider_error`); try again.
+      "503":
+        description: >-
+          No provider account on this Gateway (`cloud_unavailable`), or the machine is not ready yet (the provider's
+          code, such as `sandbox_restoring`); try again later.
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: cloud.machines.use
+    x-internal-stability: beta
+    x-idempotency: required

@@ -1,0 +1,195 @@
+# Path items. The root openapi.yaml references each one.
+/v1/developer/clients:
+  get:
+    tags:
+      - Developer clients
+    operationId: listDeveloperClients
+    summary: >-
+      The OAuth clients you registered for your forks, revoked ones included, oldest first, and the scopes a fork may
+      ask for (`grantableScopes`). People only.
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/DeveloperClientList
+            example:
+              clients:
+                - id: nxc_Qm3xR8tLp2Ve
+                  name: Example fork
+                  tier: registered_fork
+                  allowedScopes:
+                    - models.use
+                    - chat.ask
+                  createdAt: "2026-11-24T13:00:00.000Z"
+                  updatedAt: "2026-11-24T13:00:00.000Z"
+              grantableScopes:
+                - models.use
+                - spend.read_own
+                - connectors.use
+                - chat.ask
+                - chat.web
+                - agents.memory
+                - agents.profiles
+                - routines.use
+                - cloud.runs.use
+                - sessions.read
+                - sessions.start
+                - sessions.steer
+      "403":
+        description: The credential lacks permission to manage OAuth clients. Third-party tokens can receive `client_scope`.
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "404":
+        description: This Gateway has not enabled OAuth client tiers (`oauth_client_tiers_off`).
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: keys.manage_own
+  post:
+    tags:
+      - Developer clients
+    operationId: registerDeveloperClient
+    summary: >-
+      Register an OAuth client for your fork of a Nexus app. It gets its own `nxc_…` id. `allowedScopes` names what its
+      tokens may hold, each one of `grantableScopes`; without it, all of them. No scope for administration, billing,
+      provider keys, invitations or token management is allowed. People only.
+    parameters:
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKeyRequired
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas.yaml#/RegisterDeveloperClient
+    responses:
+      "201":
+        description: Created
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/DeveloperClient
+            example:
+              id: nxc_Qm3xR8tLp2Ve
+              name: Example fork
+              tier: registered_fork
+              allowedScopes:
+                - models.use
+                - chat.ask
+              createdAt: "2026-11-24T13:00:00.000Z"
+              updatedAt: "2026-11-24T13:00:00.000Z"
+      "400":
+        description: A blank or too long name, an unknown field, or a scope a third-party client may not hold
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "403":
+        description: The credential lacks permission to manage OAuth clients. Third-party tokens can receive `client_scope`.
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "404":
+        description: This Gateway has not enabled OAuth client tiers (`oauth_client_tiers_off`).
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "428":
+        $ref: ../components/common.yaml#/responses/PreconditionRequired
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: keys.manage_own
+    x-idempotency: required
+/v1/developer/clients/{id}/revoke:
+  post:
+    tags:
+      - Developer clients
+    operationId: revokeDeveloperClient
+    summary: >-
+      Revoke an OAuth client you registered. `reason` defaults to `revoked by owner`. Revocation also revokes tokens and
+      agent links for that client. A repeat returns the original revocation time and reason.
+    parameters:
+      - name: id
+        in: path
+        required: true
+        description: The client's id (`nxc_…`)
+        schema:
+          type: string
+          pattern: ^nxc_[A-Za-z0-9]{1,60}$
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKeyRequired
+    requestBody:
+      required: false
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas.yaml#/RevokeDeveloperClient
+    responses:
+      "200":
+        description: "OK: the client, with `revokedAt`"
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/DeveloperClient
+            example:
+              id: nxc_Qm3xR8tLp2Ve
+              name: Example fork
+              tier: registered_fork
+              allowedScopes:
+                - models.use
+                - chat.ask
+              createdAt: "2026-11-24T13:00:00.000Z"
+              updatedAt: "2026-11-25T09:00:00.000Z"
+              revokedAt: "2026-11-25T09:00:00.000Z"
+              revokedReason: revoked by owner
+      "400":
+        description: A blank or too long reason, or an unknown field
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "403":
+        description: The client is official, or the caller lacks permission to revoke clients.
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "404":
+        description: >-
+          No registered client with that ID belongs to you (`not_found`). This Gateway has not enabled OAuth client
+          tiers (`oauth_client_tiers_off`).
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "428":
+        $ref: ../components/common.yaml#/responses/PreconditionRequired
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: keys.manage_own
+    x-idempotency: required
