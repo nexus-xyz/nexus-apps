@@ -220,6 +220,12 @@ async fn only_newer_builds_from_the_installed_channel_are_downloaded() {
         ("0.8.0-internal.1", "0.8.0-internal.2", 1, false),
         ("0.8.0", "bad", 0, true),
         ("0.8.0", "0.9.0-beta.1", 0, true),
+        ("0.9.0-beta.1", "0.9.0-beta.2", 1, false),
+        ("0.9.0-beta.2", "0.9.0-beta.1", 0, false),
+        ("0.9.0-beta.1", "0.9.0", 0, true),
+        ("0.9.0-beta.1", "0.9.0-internal.3", 0, true),
+        ("0.8.0-internal.1", "0.9.0-beta.1", 0, true),
+        ("0.9.0-beta.x", "0.9.0-beta.2", 0, true),
     ] {
         let feed = FakeFeed::new(Some(offered));
         assert_eq!(
@@ -231,6 +237,29 @@ async fn only_newer_builds_from_the_installed_channel_are_downloaded() {
     }
     assert!(Channel::Stable.endpoint().contains("/desktop/stable/"));
     assert!(Channel::Internal.endpoint().contains("/desktop/internal/"));
+    assert!(Channel::Beta.endpoint().contains("/desktop-oss/beta/"));
+    for channel in [Channel::Stable, Channel::Internal, Channel::Beta] {
+        let folder = format!("https://downloads.nexus.inc/{}/latest.json", channel.folder());
+        assert_eq!(channel.endpoint(), folder);
+    }
+}
+
+#[test]
+fn a_beta_build_keeps_its_channel_without_an_employee_check() {
+    assert_eq!(Channel::of("0.12.0-beta.3"), Some(Channel::Beta));
+    assert_eq!(Channel::of("0.12.0-beta"), None);
+    assert_eq!(Channel::fixed("0.12.0-beta.3"), Some(Channel::Beta));
+    assert_eq!(Channel::fixed("0.12.0"), None);
+    assert_eq!(Channel::fixed("0.12.0-internal.4"), None);
+    let failure = Failure::new("employee_sign_in_required", "Sign in.", false);
+    assert_eq!(unverified_channel("0.12.0-beta.3", failure.clone()), Ok(Channel::Beta));
+    let offline = Failure::new("network", "Offline.", true);
+    assert_eq!(unverified_channel("0.12.0-beta.3", offline), Ok(Channel::Beta));
+    let broken = Coordinator::new("0.12.0-beta.3".into(), Some(Disabled::MissingKey), 0);
+    let manual = broken.snapshot.manual.expect("beta fallback");
+    // A beta stays on the beta: the stable download page would move its tester off it without saying so.
+    assert_eq!(manual.download_url, Some(BETA_DOWNLOAD_PAGE));
+    assert_eq!(manual.install_command, None);
 }
 
 #[tokio::test]

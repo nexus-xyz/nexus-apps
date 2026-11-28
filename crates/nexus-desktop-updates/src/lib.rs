@@ -1,5 +1,6 @@
 //! One updater per process. The host supplies time and a feed; neither windows nor tests own a timer.
-//! Nexus for desktop uses it, on one feed per channel: `desktop/<channel>/latest.json` on downloads.nexus.inc. The GPUI
+//! Nexus for desktop uses it, on one feed per channel: `desktop/<channel>/latest.json` on downloads.nexus.inc, and
+//! `desktop-oss/beta/latest.json` for the beta that the open-source repository releases. The GPUI
 //! build reads its package under `platforms["<os>-<arch>-<format>"]` ([`manifest::package_target`]). Older Nexus
 //! installs read `<os>-<arch>-<installer>`, then `<os>-<arch>`. The feed carries neither, so they never install a GPUI
 //! package.
@@ -25,6 +26,9 @@ pub const RETRY_MAX_MS: u64 = 60 * 60_000;
 pub const STUCK_AFTER: u32 = 3;
 /// The public download page. It offers only the stable channel.
 pub const DOWNLOAD_PAGE: &str = "https://nexus.inc/download";
+/// The beta's download page: the open-source repository's releases, where each beta is a prerelease. A beta build sends
+/// its users here, never to [`DOWNLOAD_PAGE`], which would move them off the beta without saying so.
+pub const BETA_DOWNLOAD_PAGE: &str = "https://github.com/nexus-xyz/nexus-apps/releases";
 /// The internal channel's installer (README.md, "Distribution"), for Nexus staff. It is configuration: Nexus's release
 /// builds set `NEXUS_DESKTOP_INTERNAL_INSTALL`. A build without it (a local or open-source build) offers the download
 /// page on the internal channel too.
@@ -67,22 +71,44 @@ impl App {
 pub enum Channel {
     Stable,
     Internal,
+    /// The open-source repository's signed beta, `<x.y.z>-beta.<N>`. It is signed with that repository's updater key,
+    /// so a beta build never reads the stable or internal feed, and those builds never read the beta feed.
+    Beta,
 }
 
 impl Channel {
     pub fn of(version: &str) -> Option<Self> {
         let version = Version::parse(version).ok()?;
+        let numbered = |prefix: &str| {
+            version
+                .pre
+                .as_str()
+                .strip_prefix(prefix)
+                .is_some_and(|n| n.parse::<u64>().is_ok())
+        };
         if version.pre.is_empty() {
             Some(Self::Stable)
-        } else if version
-            .pre
-            .as_str()
-            .strip_prefix("internal.")
-            .is_some_and(|n| n.parse::<u64>().is_ok())
-        {
+        } else if numbered("internal.") {
             Some(Self::Internal)
+        } else if numbered("beta.") {
+            Some(Self::Beta)
         } else {
             None
+        }
+    }
+
+    /// The channel a build checks without asking Gateway: beta builds stay on beta. Other builds ask Gateway whether
+    /// the person may read the internal channel.
+    pub fn fixed(installed: &str) -> Option<Self> {
+        Self::of(installed).filter(|channel| *channel == Self::Beta)
+    }
+
+    /// The channel's folder on downloads.nexus.inc: its `latest.json` and one folder per version.
+    pub fn folder(self) -> &'static str {
+        match self {
+            Self::Stable => "desktop/stable",
+            Self::Internal => "desktop/internal",
+            Self::Beta => "desktop-oss/beta",
         }
     }
 
@@ -96,6 +122,7 @@ impl Channel {
         match (app, self) {
             (App::Desktop, Self::Stable) => "https://downloads.nexus.inc/desktop/stable/latest.json",
             (App::Desktop, Self::Internal) => "https://downloads.nexus.inc/desktop/internal/latest.json",
+            (App::Desktop, Self::Beta) => "https://downloads.nexus.inc/desktop-oss/beta/latest.json",
         }
     }
 }
@@ -226,9 +253,13 @@ fn report_failure(code: &'static str) {
     }
 }
 
-/// Without a verified employee session, a public build checks the stable feed. An internal build reports the
-/// account failure instead: moving it to the stable feed would hide why its internal updates stopped.
+/// Without a verified employee session, a public build checks the stable feed and a beta build its beta feed. An
+/// internal build reports the account failure instead: moving it to the stable feed would hide why its internal updates
+/// stopped.
 pub fn unverified_channel(installed: &str, failure: Failure) -> Result<Channel, Failure> {
+    if let Some(channel) = Channel::fixed(installed) {
+        return Ok(channel);
+    }
     let account = matches!(failure.code, "employee_sign_in_required" | "employee_access_required");
     if account && Channel::of(installed) != Some(Channel::Internal) {
         Ok(Channel::Stable)
@@ -322,6 +353,12 @@ impl Coordinator {
         self.snapshot.manual = Some(match channel {
             Channel::Stable => Manual {
                 download_url: Some(DOWNLOAD_PAGE),
+                install_command: None,
+                latest_version,
+            },
+            // The download page offers stable only: a beta tester who reinstalled from it would leave the beta.
+            Channel::Beta => Manual {
+                download_url: Some(BETA_DOWNLOAD_PAGE),
                 install_command: None,
                 latest_version,
             },

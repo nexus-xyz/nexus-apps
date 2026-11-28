@@ -1,7 +1,7 @@
 //! `nexus keys` reads the providers from Gateway (`GET /v1/keys/providers`), so no string literal in the
 //! CLI's `keys` help or commands is a provider's id or names two of them. The CLI does not link the catalog
-//! (`dependencies.rs`), so it reads the ids from `fixtures/provider-ids.txt`, a copy of nexus-catalog's that
-//! `.github/scripts/cross_package_check.py` holds equal. The scan is `nexus_catalog::by_hand`'s.
+//! (`dependencies.rs`), so it reads the ids from `fixtures/provider-ids.txt`, a copy of the catalog's provider ids,
+//! updated when the catalog's list changes. The scan is `nexus_catalog::by_hand`'s.
 
 const PLACES: [(&str, &str); 2] = [
     ("src/catalog.rs", include_str!("../src/catalog.rs")),

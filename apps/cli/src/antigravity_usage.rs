@@ -728,7 +728,7 @@ mod tests {
         }
     }
 
-    /// The body is the one nexus-gateway's tests/subscription_usage_days.rs posts for "two calls".
+    /// The body is the one Gateway's own tests post for "two calls".
     #[test]
     fn body_is_the_record_gateway_counts() {
         let records = [
