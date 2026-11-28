@@ -1,6 +1,6 @@
-//! The app's assets: GPUI Kit's Lucide icons, Nexus's wordmark, the panel's resize grip, and the model makers' marks the model menu draws (`assets/marks/`,
-//! from Nexus UI's `model-mark.ts`: simple-icons, CC0, and OpenAI's monochrome Blossom from its brand kit). NVIDIA is
-//! simple-icons' too; Z.ai, which simple-icons lacks, is lobe-icons' (`@lobehub/icons-static-svg`, MIT).
+//! App assets: Lucide icons, Nexus marks, and model and agent logos.
+//! Maker marks come from Nexus UI (simple-icons, CC0), OpenAI's brand kit, and lobe-icons (Z.ai, MIT).
+//! Cursor's cube comes from its official brand kit: https://cursor.com/brand.
 
 use std::borrow::Cow;
 
@@ -64,6 +64,7 @@ pub fn mark_layers() -> &'static [Vec<u8>] {
 const MARKS: &[(&str, &[u8])] = &[
     ("anthropic", held!("marks/anthropic.svg")),
     ("openai", held!("marks/openai.svg")),
+    ("cursor", held!("marks/cursor.svg")),
     ("google", held!("marks/google.svg")),
     ("deepseek", held!("marks/deepseek.svg")),
     ("meta", held!("marks/meta.svg")),

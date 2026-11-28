@@ -552,7 +552,7 @@ impl Gateway {
     }
 
     /// A local fake Gateway for view tests; no saved settings or keychain is read.
-    #[cfg(test)]
+    #[cfg(any(test, feature = "ui-review"))]
     pub(crate) fn for_view_test_at(runtime: tokio::runtime::Handle, url: &str) -> Gateway {
         let gateway = Self::at(runtime, url).0;
         gateway.inner.fixture_account.store(true, Ordering::SeqCst);

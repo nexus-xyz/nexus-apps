@@ -24,6 +24,10 @@ pub(crate) fn person_dir(
     kind: impl AsRef<std::path::Path>,
     resolve: impl FnOnce() -> Option<PathBuf>,
 ) -> Option<PathBuf> {
+    #[cfg(feature = "ui-review")]
+    if let Some(root) = crate::review::root() {
+        return Some(root.join(kind));
+    }
     let _ = kind;
     resolve()
 }

@@ -1,6 +1,6 @@
 # Nexus for desktop and its Code sessions
 
-Desktop has chat, pages, an assistant pane and Code on macOS, Windows and Linux.
+Desktop has chat, pages, Assistant and Code on macOS, Windows and Linux.
 Code runs Claude Code, Codex and you.
 GPUI checks for updates at startup and every 30–35 minutes. Restart confirms agent stops; Continue all resumes them.
 
@@ -8,9 +8,10 @@ Chats restore saved images and files. **Retry attachments** retries missing ones
 
 ## Sessions, projects and worktrees
 
-- A project is a local or server folder, or a cloned repository. Add a project lists folders as the person types.
+- A project is a local or server folder or a cloned repository. Paths list as you type.
 - Sessions run one agent at a time. GPUI uses main worktrees unless defaults override them.
-- GPUI's model picker switches Claude Code and Codex, with a context and payer confirmation.
+- Switch Claude Code and Codex after context and payer confirmation.
+- Claude Speed controls fast mode.
 - Worktree moves include uncommitted changes.
 - Permission modes set approvals. Your modes follow `agent`.
 - Settings › App can archive sessions whose PR merged.

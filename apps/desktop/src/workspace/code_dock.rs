@@ -1057,7 +1057,7 @@ impl Workspace {
     }
 
     /// Turn the open session's fast mode on or off (`wb_thread_update`). A running agent takes it at its next model call.
-    fn set_session_fast(&mut self, on: bool, cx: &mut Context<Self>) {
+    pub(super) fn set_session_fast(&mut self, on: bool, cx: &mut Context<Self>) {
         if let Some(id) = self.code_session().map(|session| session.id.clone())
             && let Some(runs) = self.runs(&id)
         {
@@ -1067,7 +1067,9 @@ impl Workspace {
                 ..UpdateArgs::default()
             });
         }
-        if let Some(dock) = self.dock_mut() {
+        if let Some(dock) = self.dock_mut()
+            && dock.menu != Some(Menu::Model)
+        {
             dock.menu = None;
         }
         cx.notify();
@@ -1434,24 +1436,28 @@ impl Workspace {
             .unwrap_or_else(|| super::new_code::agent_maker(session.agent));
         let efforts = self.session_efforts(session);
         let (mode_label, _) = permission_copy(session.agent, shown.mode);
-        let effort_label: SharedString = if efforts.is_empty() {
+        let reasoning = shown
+            .effort
+            .and_then(|effort| EFFORTS.iter().find(|(level, _)| *level == effort))
+            .map_or("Default", |(_, label)| *label);
+        // The chip is the only way into Permissions, so it always shows: the reasoning level when one is set, else
+        // the permission mode.
+        let shows_reasoning = !efforts.is_empty() && shown.effort.is_some();
+        let effort_label: SharedString = if shows_reasoning {
+            reasoning.into()
+        } else {
             mode_label.into()
-        } else {
-            match shown.effort {
-                Some(effort) => EFFORTS
-                    .iter()
-                    .find(|(level, _)| *level == effort)
-                    .map(|(_, label)| *label)
-                    .unwrap_or("Default")
-                    .into(),
-                None => "Default".into(),
-            }
         };
-        let effort_label: SharedString = if session.fast_shown() && self.session_has_fast(session) {
-            format!("{effort_label} · Fast").into()
-        } else {
-            effort_label
-        };
+        let fast = session.fast_shown() && self.session_has_fast(session);
+        let fast_tip: SharedString = session
+            .connection
+            .as_ref()
+            .and_then(|connection| connection.fast_off.as_deref())
+            .map_or_else(
+                || "Fast mode on".to_string(),
+                |off| format!("Fast mode: {}", fast_hint(Some(off))),
+            )
+            .into();
         let open = view.dock.menu;
         // As a new session's: "Opus 5.5 High", the model bright and the effort faint, no chevrons.
         h_flex()
@@ -1504,49 +1510,68 @@ impl Workspace {
                         },
                     ),
             )
-            .child(
-                div()
-                    .relative()
-                    .child(
-                        effort_chip(
-                            "code-effort-chip",
-                            effort_label.clone(),
-                            open == Some(Menu::Effort),
-                            self.composer_layout.control_icons,
-                            if efforts.is_empty() {
-                                super::new_code::mode_icon(shown.mode)
-                            } else {
-                                Lucide::Brain
-                            },
-                            palette,
+            .map(|chips| {
+                chips.child(
+                    div()
+                        .relative()
+                        .child(
+                            effort_chip(
+                                "code-effort-chip",
+                                effort_label.clone(),
+                                open == Some(Menu::Effort),
+                                self.composer_layout.control_icons,
+                                if shows_reasoning {
+                                    Lucide::Brain
+                                } else {
+                                    super::new_code::mode_icon(shown.mode)
+                                },
+                                palette,
+                            )
+                            .when(shown.waiting_effort || shown.waiting_mode, |chip| chip.opacity(0.6))
+                            .tooltip({
+                                let text = if shown.waiting_effort || shown.waiting_mode {
+                                    format!(
+                                        "Effort: {reasoning}; permissions: {mode_label}. {}",
+                                        nexus_workbench::picker_values::APPLIES_LATER
+                                    )
+                                } else {
+                                    format!("Effort: {reasoning}; permissions: {mode_label}")
+                                };
+                                move |window, cx| {
+                                    gpui_kit::component::tooltip::Tooltip::new(text.clone()).build(window, cx)
+                                }
+                            })
+                            .menu_trigger(
+                                open == Some(Menu::Effort),
+                                cx,
+                                |this| this.dock_menu_is(Menu::Effort),
+                                |this, _, cx| this.toggle_dock_menu(Menu::Effort, cx),
+                            ),
                         )
-                        .when(shown.waiting_effort || shown.waiting_mode, |chip| chip.opacity(0.6))
-                        .tooltip({
-                            let text = if shown.waiting_effort || shown.waiting_mode {
-                                format!(
-                                    "Effort: {effort_label}; permissions: {mode_label}. {}",
-                                    nexus_workbench::picker_values::APPLIES_LATER
-                                )
-                            } else {
-                                format!("Effort: {effort_label}; permissions: {mode_label}")
-                            };
-                            move |window, cx| gpui_kit::component::tooltip::Tooltip::new(text.clone()).build(window, cx)
-                        })
-                        .menu_trigger(
-                            open == Some(Menu::Effort),
-                            cx,
-                            |this| this.dock_menu_is(Menu::Effort),
-                            |this, _, cx| this.toggle_dock_menu(Menu::Effort, cx),
+                        .when_some(
+                            motion::presence("dock-effort-menu", open == Some(Menu::Effort), cx),
+                            |frame, phase| {
+                                let menu = self.render_effort_menu(session, &efforts, palette, cx);
+                                frame.child(menu_layer(phase.menu("dock-effort-menu", 4., menu), Anchor::BottomLeft))
+                            },
                         ),
-                    )
-                    .when_some(
-                        motion::presence("dock-effort-menu", open == Some(Menu::Effort), cx),
-                        |frame, phase| {
-                            let menu = self.render_effort_menu(session, &efforts, palette, cx);
-                            frame.child(menu_layer(phase.menu("dock-effort-menu", 4., menu), Anchor::BottomLeft))
-                        },
-                    ),
-            )
+                )
+            })
+            .when(fast, |chips| {
+                chips.child(
+                    div()
+                        .id("code-fast-indicator")
+                        .flex_none()
+                        .aria_label(fast_tip.clone())
+                        .tooltip(move |window, cx| {
+                            gpui_kit::component::tooltip::Tooltip::new(fast_tip.clone()).build(window, cx)
+                        })
+                        .child(motion::pop(
+                            Icon::new(Lucide::Zap).size(px(14.)).text_color(palette.foreground),
+                            "code-fast-bolt",
+                        )),
+                )
+            })
             .into_any_element()
     }
 
@@ -2406,6 +2431,7 @@ pub(super) fn effort_chip(
 ) -> Stateful<Div> {
     h_flex()
         .id(id)
+        .debug_selector(move || id.into())
         .h(px(26.))
         .px(px(3.))
         .rounded(px(6.))
@@ -2518,7 +2544,7 @@ pub(crate) fn menu_label(label: &'static str, palette: Palette) -> impl IntoElem
 /// A menu row: its words, a hint under them, and a check when it is the current one.
 /// The Fast row's hint: what it costs, or, when Claude Code reports fast mode is not serving, why (its
 /// `fast_mode_disabled_reason`, `claude::fast_off`).
-fn fast_hint(off: Option<&str>) -> String {
+pub(super) fn fast_hint(off: Option<&str>) -> String {
     match off {
         None => "Faster output at twice the price".into(),
         // Claude Code reports these until the next model call takes the change.

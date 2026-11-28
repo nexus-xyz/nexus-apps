@@ -2685,7 +2685,7 @@ impl Workspace {
         if let Some(switch) = &view.agent_switch {
             return self.render_agent_switch(switch, palette, cx);
         }
-        if self.runner.is_none() {
+        if !self.code_composer_available() {
             // The composer, dimmed under who runs the session (`read_only.rs`); the questions it may wait on are
             // answered where it runs.
             let composer = self.render_code_composer(view, palette, cx).into_any_element();

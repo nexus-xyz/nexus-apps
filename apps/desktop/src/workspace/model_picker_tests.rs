@@ -1017,6 +1017,61 @@ fn cross_agent_confirmation_cancel_and_confirm_use_the_same_session_and_original
     });
 }
 
+/// Speed uses the existing workbench command and keeps its model panel open.
+#[gpui_kit::test]
+fn speed_changes_reach_the_same_session_without_closing_the_model_panel(cx: &mut TestAppContext) {
+    use std::sync::Mutex;
+    let _agents = crate::code_run::fixture_agents(Vec::new());
+    let (workspace, cx) = fixture(cx);
+    let calls = Arc::new(Mutex::new(Vec::new()));
+    let transport = {
+        let calls = calls.clone();
+        crate::workspace::runs::Runs::deferred_source(
+            crate::workspace::runs::Source::Local {
+                data: "speed-fixture".into(),
+                scope: "fixture".into(),
+            },
+            Arc::new(move |name, args| {
+                let (send, receive) = futures::channel::oneshot::channel();
+                if name == "wb_thread_update" {
+                    calls.lock().unwrap().push(args);
+                }
+                send.send(Ok(serde_json::Value::Null)).unwrap();
+                receive
+            }),
+        )
+    };
+    workspace.update_in(cx, |workspace, window, cx| {
+        let summary = serde_json::from_value(serde_json::json!({
+            "id":"speed-session", "projectId":"local-project", "title":"Speed fixture", "agent":"claude",
+            "model":"claude-opus-5-5", "permissionMode":"default", "effort":"high", "via":"nexus",
+            "status":"idle", "costUsd":0.0, "nexusSessions":[], "contextTokens":null,
+            "contextWindow":null, "createdAt":0, "updatedAt":1, "archived":false
+        }))
+        .unwrap();
+        workspace.archived_code = vec![crate::code::CodeSession::of(summary)];
+        workspace.run_fixtures.insert("speed-session".into(), transport);
+        let mut view = crate::workspace::code_view::CodeView::new("speed-session".into(), window, cx);
+        view.dock.menu = Some(crate::workspace::code_dock::Menu::Model);
+        workspace.view = View::Code(view);
+        assert!(workspace.session_has_fast(workspace.code_session().unwrap()));
+        for fast in [true, false] {
+            workspace.set_session_fast(fast, cx);
+            assert!(workspace.dock_menu_is(crate::workspace::code_dock::Menu::Model));
+        }
+    });
+    let calls = calls.lock().unwrap();
+    assert_eq!(calls.len(), 2);
+    for (args, fast) in calls.iter().zip([true, false]) {
+        let update: nexus_workbench::api::UpdateArgs = serde_json::from_value(args.clone()).unwrap();
+        assert_eq!(update.thread_id, "speed-session");
+        assert_eq!(update.fast, Some(fast));
+        // The wire contract uses null for a field that stays unchanged.
+        assert!(update.model.is_none(), "speed must not change the model");
+        assert!(update.effort.is_none(), "speed must not change reasoning");
+    }
+}
+
 #[gpui_kit::test]
 fn local_code_keeps_subscription_routing_and_only_offers_code_projects(cx: &mut TestAppContext) {
     use nexus_workbench::event::Via;

@@ -83,6 +83,8 @@ mod project_groups;
 mod pull_page;
 mod record;
 mod redact;
+#[cfg(feature = "ui-review")]
+mod review;
 mod revoked;
 mod rich_text;
 mod secret_request;
@@ -198,6 +200,11 @@ fn key_bindings() -> Vec<KeyBinding> {
 }
 
 fn main() {
+    #[cfg(feature = "ui-review")]
+    if review::requested() {
+        review::run();
+        return;
+    }
     // `npm run measure`'s first mark, the process start (`measure.rs`).
     measure::start();
     // Chromium's helper processes, the web host process, Code sessions' built-in MCP server and the launcher of an
@@ -276,29 +283,9 @@ fn main() {
     }
     app.run(move |cx: &mut App| {
         ui_thread::mark();
-        gpui_kit::init(cx);
+        init_ui(cx);
         local_providers_opt_in::start(cx);
         pages::local_providers::start(cx);
-        // Grayscale text, as browsers draw it on Linux and macOS draws it today: GPUI's subpixel (ClearType-style) text
-        // fringes every glyph with red and blue, which reads as cheap next to the web, and is wrong over a frosted
-        // window anyway.
-        cx.set_text_rendering_mode(gpui_kit::TextRenderingMode::Grayscale);
-        // Nexus UI's text faces (brand v5), bundled so it does not depend on what the computer has.
-        let fonts = [
-            include_bytes!("../assets/fonts/DMSans-Regular.ttf").as_slice(),
-            include_bytes!("../assets/fonts/DMSans-Medium.ttf").as_slice(),
-            include_bytes!("../assets/fonts/DMSans-SemiBold.ttf").as_slice(),
-            include_bytes!("../assets/fonts/DMSans-Bold.ttf").as_slice(),
-            // Its code face, which the Code views and hints ask for by name.
-            include_bytes!("../assets/fonts/GeistMono-Regular.ttf").as_slice(),
-            include_bytes!("../assets/fonts/GeistMono-Medium.ttf").as_slice(),
-        ];
-        if let Err(error) = cx
-            .text_system()
-            .add_fonts(fonts.into_iter().map(std::borrow::Cow::Borrowed).collect())
-        {
-            eprintln!("nexus-desktop-gpui: fonts: {error}");
-        }
         // The keys a person set in Settings › Keyboard shortcuts (`key_bindings.rs`), before the keymap is made.
         key_bindings::load();
         cx.bind_keys(key_bindings());
@@ -508,5 +495,30 @@ mod tests {
                 .any(|line| line == format!("StartupWMClass={}", app_id::DEFAULT))
         );
         assert_eq!(env!("CARGO_BIN_NAME"), app_id::DEFAULT);
+    }
+}
+
+/// The same native components, fonts, and text rendering in the app and its review window.
+fn init_ui(cx: &mut App) {
+    gpui_kit::init(cx);
+    // Grayscale text, as browsers draw it on Linux and macOS draws it today: GPUI's subpixel (ClearType-style) text
+    // fringes every glyph with red and blue, which reads as cheap next to the web, and is wrong over a frosted
+    // window anyway.
+    cx.set_text_rendering_mode(gpui_kit::TextRenderingMode::Grayscale);
+    // Nexus UI's text faces (brand v5), bundled so it does not depend on what the computer has.
+    let fonts = [
+        include_bytes!("../assets/fonts/DMSans-Regular.ttf").as_slice(),
+        include_bytes!("../assets/fonts/DMSans-Medium.ttf").as_slice(),
+        include_bytes!("../assets/fonts/DMSans-SemiBold.ttf").as_slice(),
+        include_bytes!("../assets/fonts/DMSans-Bold.ttf").as_slice(),
+        // Its code face, which the Code views and hints ask for by name.
+        include_bytes!("../assets/fonts/GeistMono-Regular.ttf").as_slice(),
+        include_bytes!("../assets/fonts/GeistMono-Medium.ttf").as_slice(),
+    ];
+    if let Err(error) = cx
+        .text_system()
+        .add_fonts(fonts.into_iter().map(std::borrow::Cow::Borrowed).collect())
+    {
+        eprintln!("nexus-desktop-gpui: fonts: {error}");
     }
 }

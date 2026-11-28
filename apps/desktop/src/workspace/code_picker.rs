@@ -27,13 +27,11 @@ pub(crate) struct Catalog<A> {
     pub models: Vec<Model>,
 }
 
-/// The name of an agent's Default row and of the chip when no model is picked: the model the default runs, marked as
-/// the default ("Opus 5.5 · Default"), so it does not read as a model the person picked. "Default" when the model is
-/// unknown.
+/// Show the resolved model without a suffix. The detail pane explains when the agent chooses it.
 pub(crate) fn default_label(runs: Option<&str>) -> String {
     match runs {
-        Some(model) => format!("{model} · Default"),
-        None => "Default".into(),
+        Some(model) => model.into(),
+        None => "Agent model".into(),
     }
 }
 
@@ -136,6 +134,7 @@ pub(crate) fn rows<A: Copy + Eq>(
                 )
                 .filter(|(id, name)| {
                     query.is_empty()
+                        || (id.is_none() && "default".contains(&query))
                         || [*name, id.unwrap_or_default(), catalog.name.as_str()]
                             .iter()
                             .any(|field| field.to_lowercase().contains(&query))
@@ -269,9 +268,10 @@ mod tests {
     }
 
     #[test]
-    fn the_default_row_says_it_is_the_default() {
-        assert_eq!(default_label(Some("Opus 5.5")), "Opus 5.5 · Default");
-        assert_eq!(default_label(None), "Default");
+    fn the_agent_model_has_no_redundant_default_suffix() {
+        assert_eq!(default_label(Some("Opus 5.5")), "Opus 5.5");
+        assert_eq!(default_label(Some("GPT-6.2-Sol")), "GPT-6.2-Sol");
+        assert_eq!(default_label(None), "Agent model");
     }
 
     #[test]
