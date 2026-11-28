@@ -2132,8 +2132,9 @@ impl Workspace {
             }))
     }
 
-    /// A tool call that failed: a red ✕ in place of its icon, its words as any call's, and "Failed" after them.
-    /// A click opens the error under the row (`tool-row.tsx` expands a call to its output).
+    /// A tool call that failed: a red ✕ in place of its icon, its words as any call's, and "Failed" after them in the
+    /// row's tone (red is only the ✕, TR-W8). A click opens the error under the row (`tool-row.tsx` expands a call to
+    /// its output), with the canon's ways on: Ask the agent to fix it, and Copy error (TR-M4).
     #[allow(clippy::too_many_arguments)]
     fn render_failed_tool(
         &self,
@@ -2148,7 +2149,7 @@ impl Workspace {
     ) -> impl IntoElement + use<> {
         let row = tool_row(
             ("tool", ix),
-            glyph(Lucide::CircleX, palette.destructive),
+            glyph(Lucide::CircleX, palette.status_failed),
             name,
             summary,
             false,
@@ -2158,9 +2159,10 @@ impl Workspace {
             div()
                 .flex_none()
                 .text_size(px(13.))
-                .text_color(palette.destructive)
+                .text_color(palette.muted)
                 .child("Failed"),
         );
+        let fix = fix_request(name, summary, error);
         // With no error text there is nothing to open: no chevron, no pointer.
         let call_id = call_id.to_string();
         let row = if error.is_empty() {
@@ -2183,12 +2185,37 @@ impl Workspace {
             .gap(px(4.))
             .child(row)
             .when(open && !error.is_empty(), |column| {
-                column.child(with_copy(
-                    output_box(palette).child(error.to_string()),
-                    error.to_string().into(),
-                    palette,
-                ))
+                let copy = error.to_string();
+                column.child(output_box(palette).child(error.to_string())).child(
+                    h_flex()
+                        .gap(px(6.))
+                        .when(crate::canon_preview::transcript_actions(), |row| {
+                            row.child(
+                                super::code_dock::action_button(("fix-step", ix), None, ASK_TO_FIX, false, palette)
+                                    .border_1()
+                                    .border_color(palette.border)
+                                    .on_click(cx.listener(move |this, _, _, cx| this.ask_to_fix(fix.clone(), cx))),
+                            )
+                        })
+                        .child(
+                            super::code_dock::action_button(("copy-error", ix), None, "Copy error", false, palette)
+                                .on_click(move |_, _, cx| {
+                                    cx.write_to_clipboard(ClipboardItem::new_string(copy.clone()))
+                                }),
+                        ),
+                )
             })
+    }
+
+    /// Ask the agent to fix a failed step: a message to the session, which waits behind a running turn.
+    fn ask_to_fix(&mut self, message: String, cx: &mut Context<Self>) {
+        let View::Code(view) = &self.view else { return };
+        let id = view.id.clone();
+        match self.runs(&id) {
+            Some(runs) => runs.send(id, message, Default::default(), true),
+            None => self.composer_note = Some(self.read_only_note()),
+        }
+        cx.notify();
     }
 
     /// A turn's end: the shared answer footer (`answer_footer.rs`, one look with chat). Only the maker's mark shows,
@@ -3243,20 +3270,54 @@ pub(super) fn render_block(
                 }))
                 .into_any_element()
         }
+        // An answered tool request folds to the canon's one line: a mark, what was said, the command (TR-W1). Only a
+        // denial's ✕ is red; its words keep the row's tone (TR-W8).
+        Block::Approval {
+            tool,
+            answer: Some(answer @ (Decision::Allow | Decision::AllowSession | Decision::Deny)),
+            summary,
+            ..
+        } if tool != QUESTION_TOOL && tool != PLAN_TOOL => {
+            let mark = match answer {
+                Decision::Deny => glyph(Lucide::CircleX, palette.status_failed),
+                _ => glyph(Lucide::Check, palette.muted),
+            };
+            h_flex()
+                .id(("approval", ix))
+                .w_full()
+                .min_h(px(28.))
+                .gap(px(8.))
+                .text_size(px(13.))
+                .child(mark)
+                .child(
+                    div()
+                        .flex_none()
+                        .text_color(palette.muted)
+                        .child(answered_label(tool, Some(*answer), false)),
+                )
+                .child(
+                    div()
+                        .flex_1()
+                        .min_w(px(0.))
+                        .truncate()
+                        .font_family("Geist Mono")
+                        .text_color(palette.faint)
+                        .child(if summary.is_empty() {
+                            tool.clone()
+                        } else {
+                            summary.clone()
+                        }),
+                )
+                .into_any_element()
+        }
         Block::Approval {
             tool, answer, moved, ..
         } => {
-            let (said, color) = match answer {
-                None => ("Waiting for you", palette.foreground),
-                Some(Decision::Deny) if tool == PLAN_TOOL && *moved => ("Moved to a new session", palette.faint),
-                Some(Decision::Allow) if tool == QUESTION_TOOL => ("Answered", palette.faint),
-                Some(Decision::Deny) if tool == QUESTION_TOOL => ("Skipped", palette.faint),
-                Some(Decision::Allow | Decision::AllowSession) if tool == PLAN_TOOL => ("Approved", palette.faint),
-                Some(Decision::Deny) if tool == PLAN_TOOL => ("Not approved", palette.faint),
-                Some(Decision::Allow) => ("Allowed", palette.faint),
-                Some(Decision::AllowSession) => ("Allowed for this session", palette.faint),
-                Some(Decision::Deny) => ("Denied", palette.destructive),
-                Some(Decision::Expired) => ("Not answered", palette.faint),
+            let said = answered_label(tool, *answer, *moved);
+            let color = if answer.is_none() {
+                palette.foreground
+            } else {
+                palette.faint
             };
             h_flex()
                 .id(("approval", ix))
@@ -3496,6 +3557,35 @@ pub(super) fn ask_line(tool: &str) -> String {
     match tool {
         QUESTION_TOOL => "Asked you a question".into(),
         tool => format!("Asked to {}", ask_verb(tool)),
+    }
+}
+
+/// A failed step's first way on (canon `canon_transcript.py`, "Failed: the last lines").
+pub(super) const ASK_TO_FIX: &str = "Ask the agent to fix it";
+
+/// What Ask the agent to fix it sends: the step, and its error as the agent printed it.
+pub(super) fn fix_request(name: &str, summary: &str, error: &str) -> String {
+    let step = match summary.trim() {
+        "" => tool_done_verb(name).to_string(),
+        summary => format!("{} {summary}", tool_done_verb(name)),
+    };
+    format!("This step failed: {step}\n\n```\n{}\n```\n\nFix it.", error.trim_end())
+}
+
+/// What a request's line says once answered: the canon's words for a tool request, from the answered approvals in
+/// `canon_transcript.py`; a question and a plan keep their own.
+pub(super) fn answered_label(tool: &str, answer: Option<Decision>, moved: bool) -> &'static str {
+    match answer {
+        None => "Waiting for you",
+        Some(Decision::Deny) if tool == PLAN_TOOL && moved => "Moved to a new session",
+        Some(Decision::Allow) if tool == QUESTION_TOOL => "Answered",
+        Some(Decision::Deny) if tool == QUESTION_TOOL => "Skipped",
+        Some(Decision::Allow | Decision::AllowSession) if tool == PLAN_TOOL => "Approved",
+        Some(Decision::Deny) if tool == PLAN_TOOL => "Not approved",
+        Some(Decision::Allow) => "Allowed once",
+        Some(Decision::AllowSession) => "Allowed for this session",
+        Some(Decision::Deny) => "Denied",
+        Some(Decision::Expired) => "Not answered",
     }
 }
 
