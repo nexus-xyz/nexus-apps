@@ -113,6 +113,10 @@ pub struct Settings {
     /// The MCP servers every Code session gets (src/mcp.rs); their secrets' values are in the keychain.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub mcp_servers: Vec<McpServer>,
+    /// The person's approval of each installed plugin, by id ([`crate::plugins::approval`]); plugins are off unless
+    /// `NEXUS_DESKTOP_PLUGINS=1`.
+    #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
+    pub plugins: std::collections::BTreeMap<String, crate::plugins::Approval>,
     /// The person's hooks (Settings › Hooks, [`crate::hooks`]): a command run on a Code session event. Only this file
     /// sets them; an entry that does not read is dropped, not the whole file ([`crate::hooks::lenient`]).
     #[serde(

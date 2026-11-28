@@ -43,6 +43,7 @@ pub mod pane_layout;
 pub mod pane_resize;
 pub mod panel;
 pub mod path_notices;
+pub mod plugins;
 pub mod policy;
 pub mod prefs;
 pub mod presence;
