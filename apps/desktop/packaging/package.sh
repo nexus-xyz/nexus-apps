@@ -22,13 +22,27 @@
 # Windows: packaging/package.ps1.
 set -euo pipefail
 
+caller_pwd="$PWD"
 crate="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$crate"
 bin=nexus-desktop-gpui
 # The release sets NEXUS_DESKTOP_BUILD_VERSION (an internal build's `<version>-internal.<n>`); else Cargo.toml's.
 version="${NEXUS_DESKTOP_BUILD_VERSION:-$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)}"
-out="$crate/target/package"
-cef_root="${CEF_PATH:-$crate/target/cef}"
+
+# This crate is a member of the root workspace, so cargo writes to the root's target/.
+if [[ -n "${CARGO_TARGET_DIR:-}" ]]; then
+  if [[ "$CARGO_TARGET_DIR" = /* ]]; then
+    target_dir="$CARGO_TARGET_DIR"
+  else
+    target_dir="$caller_pwd/$CARGO_TARGET_DIR"
+    export CARGO_TARGET_DIR="$target_dir"
+  fi
+else
+  target_dir="$(cd "$crate/../.." && pwd)/target"
+fi
+target_dir="${target_dir%/}"
+out="$target_dir/package"
+cef_root="${CEF_PATH:-$target_dir/cef}"
 
 profile="${NEXUS_PROFILE:-dist}"
 if [[ -z "${NO_BUILD:-}" ]]; then
@@ -36,7 +50,7 @@ if [[ -z "${NO_BUILD:-}" ]]; then
   # The release keeps it as an artifact. It changes nothing in the binaries.
   cargo build --profile "$profile" --locked --bins --timings
 fi
-built="target/$profile"
+built="$target_dir/$profile"
 [[ -x "$built/$bin" ]] || { echo "no $built/$bin; build first" >&2; exit 1; }
 rm -rf "$out"
 mkdir -p "$out"

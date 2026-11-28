@@ -3,7 +3,17 @@
 # Usage: ./run.sh [cef|servo|both] [page-glob]. Shots land in shots/<engine>/<page>.png.
 set -u
 here=$(cd "$(dirname "$0")" && pwd)
-app="$here/../target/release/nexus-desktop-gpui"
+# This crate is a member of the root workspace, so cargo writes to the root's target/.
+if [ -n "${CARGO_TARGET_DIR:-}" ]; then
+  case "$CARGO_TARGET_DIR" in
+    /*) target_dir="$CARGO_TARGET_DIR" ;;
+    *) target_dir="$PWD/$CARGO_TARGET_DIR" ;;
+  esac
+else
+  target_dir="$(cd "$here/../../.." && pwd)/target"
+fi
+target_dir="${target_dir%/}"
+app="$target_dir/release/nexus-desktop-gpui"
 engines=${1:-both}; [ "$engines" = both ] && engines="cef servo"
 glob=${2:-*}
 wait_s=${WAIT:-10}

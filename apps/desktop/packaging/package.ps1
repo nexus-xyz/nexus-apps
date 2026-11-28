@@ -11,6 +11,7 @@
 # AZURE_SIGNING_PROFILE set (and AZURE_TENANT_ID, AZURE_CLIENT_ID, AZURE_CLIENT_SECRET for the CLI), Azure Trusted
 # Signing's trusted-signing-cli signs the app's exe and the installer. Without them, both stay unsigned.
 $ErrorActionPreference = 'Stop'
+$callerPwd = (Get-Location).ProviderPath
 $crate = Split-Path -Parent $PSScriptRoot
 Set-Location $crate
 $bin = 'nexus-desktop-gpui'
@@ -18,17 +19,36 @@ $bin = 'nexus-desktop-gpui'
 $version = if ($env:NEXUS_DESKTOP_BUILD_VERSION) { $env:NEXUS_DESKTOP_BUILD_VERSION } else {
   (Select-String -Path Cargo.toml -Pattern '^version = "(.*)"' | Select-Object -First 1).Matches[0].Groups[1].Value
 }
-$out = Join-Path $crate 'target\package'
-$cefRoot = if ($env:CEF_PATH) { $env:CEF_PATH } else { Join-Path $crate 'target\cef' }
+
+# This crate is a member of the root workspace, so cargo writes to the root's target\.
+$targetDir = if ($env:CARGO_TARGET_DIR) {
+  if ([System.IO.Path]::IsPathRooted($env:CARGO_TARGET_DIR)) {
+    $env:CARGO_TARGET_DIR
+  } else {
+    [System.IO.Path]::GetFullPath((Join-Path $callerPwd $env:CARGO_TARGET_DIR))
+  }
+} else {
+  [System.IO.Path]::GetFullPath((Join-Path $crate '..\..\target'))
+}
+$out = Join-Path $targetDir 'package'
+$cefRoot = if ($env:CEF_PATH) { $env:CEF_PATH } else { Join-Path $targetDir 'cef' }
 $buildProfile = if ($env:NEXUS_PROFILE) { $env:NEXUS_PROFILE } else { 'dist' }
 
 if (-not $env:NO_BUILD) {
-  # --timings writes target\cargo-timings\cargo-timing.html: each crate's compile time and the build's concurrency.
-  # The release keeps it as an artifact. It changes nothing in the exe.
-  cargo build --profile $buildProfile --locked --bin $bin --timings
-  if ($LASTEXITCODE -ne 0) { throw "cargo build failed" }
+  $prevTargetDir = $env:CARGO_TARGET_DIR
+  if ($prevTargetDir -and -not [System.IO.Path]::IsPathRooted($prevTargetDir)) {
+    $env:CARGO_TARGET_DIR = $targetDir
+  }
+  try {
+    # --timings writes target\cargo-timings\cargo-timing.html: each crate's compile time and the build's concurrency.
+    # The release keeps it as an artifact. It changes nothing in the exe.
+    cargo build --profile $buildProfile --locked --bin $bin --timings
+    if ($LASTEXITCODE -ne 0) { throw "cargo build failed" }
+  } finally {
+    if ($prevTargetDir -ne $env:CARGO_TARGET_DIR) { $env:CARGO_TARGET_DIR = $prevTargetDir }
+  }
 }
-$exe = Join-Path $crate "target\$buildProfile\$bin.exe"
+$exe = Join-Path $targetDir "$buildProfile\$bin.exe"
 if (-not (Test-Path $exe)) { throw "no $exe; build first" }
 if (Test-Path $out) { Remove-Item -Recurse -Force $out }
 New-Item -ItemType Directory -Path $out | Out-Null
