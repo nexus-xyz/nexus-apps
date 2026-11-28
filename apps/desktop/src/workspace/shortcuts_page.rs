@@ -13,7 +13,7 @@ use gpui_kit::*;
 
 use nexus_desktop_core::key_bindings::Bindings;
 
-use super::{FIND_HINT, glyph};
+use super::{AskAboutNexus, FIND_HINT, Workspace, glyph};
 use crate::key_bindings::{self, Outcome, REBINDABLE};
 use crate::pages::ui;
 use crate::palette::Palette;
@@ -110,11 +110,21 @@ fn entries(cx: &App) -> Vec<Entry> {
         keys,
         note: None,
     };
-    let new_window = if cfg!(target_os = "macos") {
+    let canon = crate::canon_keys::enabled();
+    let new_window = if cfg!(target_os = "macos") && canon {
+        "⌃⌘N, or ⇧⌘N"
+    } else if cfg!(target_os = "macos") {
         "⇧⌘N"
     } else {
         "Ctrl Shift N"
     };
+    let ask = canon.then(|| {
+        fixed(
+            "Ask about Nexus",
+            Area::App,
+            format!("{MOD}{}/", if cfg!(target_os = "macos") { "⇧" } else { "Shift " }),
+        )
+    });
     let fixed = [
         Entry {
             note: Some("Change it in This computer › App."),
@@ -136,6 +146,13 @@ fn entries(cx: &App) -> Vec<Entry> {
         ),
     ];
     let mut all: Vec<Entry> = changeable.chain(fixed).collect();
+    if let Some(ask) = ask {
+        let at = all
+            .iter()
+            .position(|entry| entry.label == "New window")
+            .map_or(all.len(), |at| at + 1);
+        all.insert(at, ask);
+    }
     // By area, in the page's order; within one, as listed above (a stable sort).
     all.sort_by_key(|entry| Area::ALL.iter().position(|area| *area == entry.area));
     all
@@ -530,5 +547,18 @@ impl Render for ShortcutsPage {
             .when(shown.is_empty(), |page| {
                 page.child(ui::note(empty.unwrap_or_default(), palette).py(px(12.)))
             })
+    }
+}
+
+impl Workspace {
+    /// Cmd+Shift+/ (Ctrl+Shift+/): Ask about Nexus. The app has no help-only target, so this opens the Assistant, as
+    /// Cmd+J does; without it (no agent API, signed out, the panel) the key does nothing.
+    pub(super) fn on_ask_about_nexus(&mut self, _: &AskAboutNexus, window: &mut Window, cx: &mut Context<Self>) {
+        if !self.assistant_available() {
+            cx.propagate();
+            return;
+        }
+        self.close_palette(window, cx);
+        self.open_agent(None, window, cx);
     }
 }
