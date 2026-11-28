@@ -169,7 +169,7 @@ fn way_back(events: &[StoredEvent], target: &AgentSwitch) -> Option<(i64, String
         .iter()
         .filter(|e| e.seq < at && matches!(e.event, WbEvent::TurnEnd { .. }))
         .map(|e| e.seq)
-        .last()
+        .next_back()
         .unwrap_or(0);
     // note: a move to a worktree always starts fresh; tell the conversation where it is now if that loses too much.
     let undone = events.iter().filter(|e| e.seq > at).any(|e| match &e.event {
