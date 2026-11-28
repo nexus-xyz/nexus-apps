@@ -50,6 +50,8 @@ impl Workspace {
                 chat.active(current == Some(id.as_str()), window, cx)
             });
         }
+        // A side chat bound since the budget was read gets its line too (`budget.rs`).
+        self.push_side_budget(cx);
     }
 
     pub(in crate::workspace) fn show_side_chat(

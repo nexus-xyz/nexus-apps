@@ -197,6 +197,8 @@ impl Workspace {
     /// The budget was read again, or another payer picked: once nothing blocks, the held send goes. Deferred, because
     /// the send updates this workspace.
     pub(super) fn limit_check(&mut self, cx: &mut Context<Self>) {
+        // The side chats hold their own sends (`side_chat/budget.rs`).
+        self.push_side_budget(cx);
         let held: FixKey = HELD.into();
         if !state::waiting(&held, cx)
             || !limit_lifted(

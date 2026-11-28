@@ -1,4 +1,5 @@
 //! A side chat has its own log, composer, approvals and draft. Its core owns the fork and Bring back semantics.
+mod budget;
 mod commands;
 mod composer;
 mod controls;
@@ -83,6 +84,10 @@ pub(super) struct SideChat {
     recall: Option<super::prompt_history::Walk>,
     /// Files are dragged over the window, and a drop attaches them here (`Workspace::show_file_drag`).
     file_drag: bool,
+    /// The used-up budget's line for this side chat's payer (`budget.rs`).
+    budget: Option<String>,
+    /// A send held for the budget, and whether it was queued: it goes once the budget lifts.
+    held: Option<bool>,
     answers: Vec<Entity<InputState>>,
     request: Option<String>,
     permission_reason: Entity<InputState>,
@@ -180,6 +185,8 @@ impl SideChat {
             wake: None,
             recall: None,
             file_drag: false,
+            budget: None,
+            held: None,
             answers: vec![],
             request: None,
             permission_reason: cx.new(|cx| InputState::new(window, cx).placeholder("Reason (optional)")),

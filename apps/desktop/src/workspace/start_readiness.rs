@@ -114,10 +114,6 @@ impl Workspace {
     }
 
     pub(super) fn budget_line(&self) -> Option<String> {
-        let account = self.account.as_ref()?;
-        if self.readiness.scope != ReadinessScope::Account(format!("{}:{}", self.gateway.url(), account.org)) {
-            return None;
-        }
         let gateway = match &self.view {
             View::Code(_) => self
                 .code_session()
@@ -126,6 +122,16 @@ impl Workspace {
             View::Chat => true,
             _ => false,
         };
+        self.budget_line_for(gateway)
+    }
+
+    /// The used-up budget's line for a send that pays through Gateway (`gateway`), or None when nothing blocks it. A
+    /// side chat asks for its own payer (`side_chat/budget.rs`).
+    pub(super) fn budget_line_for(&self, gateway: bool) -> Option<String> {
+        let account = self.account.as_ref()?;
+        if self.readiness.scope != ReadinessScope::Account(format!("{}:{}", self.gateway.url(), account.org)) {
+            return None;
+        }
         if !self.readiness.budget.blocks_send(gateway) {
             return None;
         }
