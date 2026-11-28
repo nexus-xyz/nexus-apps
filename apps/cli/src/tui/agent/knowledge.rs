@@ -708,8 +708,12 @@ mod tests {
             "| The person says it is independent or theirs, or hands it over | Run `nexus sessions start`.",
             "| Coordinated work in another open, trusted project | Use `start_session` with `project`. Its result \
              comes back to you |",
-            "| Another project, for independent work, or when `start_session` refuses it | Run `nexus sessions start` \
-             with `--project`. For its result, ask for a report to `$NEXUS_SESSION_ID`, or wait |",
+            "| Independent work in another project, as the person says | Run `nexus sessions start` with `--project`. \
+             Do nothing more unless the person asks |",
+            "If `start_session` answers `project_not_open`, `project_untrusted` or `cross_project_off`, tell the \
+             person why.",
+            "Say what they can do: open or unarchive the project, trust it, or turn the setting on.",
+            "Then wait. Do not start the work another way.",
             "\"independent\", \"I own it\", \"I'll take it from here\", \"don't wait for it\", \"no need to report back\"",
             "When the words are unclear, use `start_session`, and say which tool you chose and why.",
             "`start_session` with `project` takes the project's folder, GitHub owner/repo, id or name.",
@@ -738,6 +742,25 @@ mod tests {
             !sessions.lines().any(|line| line.starts_with("| \"new session\"")),
             "{sessions}"
         );
+    }
+
+    /// A refused project is the person's to fix: the topic never offers `nexus sessions start` as a way round a
+    /// refusal, which would skip the trust check or the person's setting (nexus-workbench's
+    /// `no_text_offers_the_cli_start_after_a_refusal`).
+    #[test]
+    fn the_desktop_sessions_topic_offers_no_cli_start_after_a_refusal() {
+        let sessions = topic_text("desktop-sessions");
+        for sentence in sessions.split(['.', ';', '\n', '|']) {
+            if !sentence.contains("nexus sessions start") {
+                continue;
+            }
+            for refusal in ["refus", "not_open", "untrusted", "cross_project_off", "are off"] {
+                assert!(
+                    !sentence.contains(refusal),
+                    "offers the CLI after {refusal}: {sentence}"
+                );
+            }
+        }
     }
 
     #[test]

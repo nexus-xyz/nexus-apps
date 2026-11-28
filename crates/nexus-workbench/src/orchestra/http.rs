@@ -61,8 +61,9 @@ const CREW_INSTRUCTIONS: &str = "Nexus's tools for starting subsessions, each in
     \"hand over\": use handoff_session only when the person asks to replace or archive this session. Otherwise first \
     commit your work on its branch, then start a session with `nexus sessions start` and name the branch in its \
     prompt. Leave this session as it is. For coordinated work in another open, trusted project, use start_session with \
-    project. Use `nexus sessions start` with --project there only for an independent session, or when cross-project \
-    subsessions are off or refused. When you need the result of a session you started with `nexus sessions start`, \
+    project. If it answers project_not_open, project_untrusted or cross_project_off, tell the person why. Say what \
+    they can do: open or unarchive the project, trust it, or turn the setting on. Then wait, and do not work around \
+    it. When you need the result of a session you started with `nexus sessions start`, \
     put `$NEXUS_SESSION_ID` in its prompt for a report, or run `nexus sessions wait <id>`. When the wording is unclear, use start_session, and say which \
     tool you chose and why. Stop is a pause; archiving is the cleanup: see stop_session and archive_session. Never \
     archive or hand off this session unless the person asks. A saved memory that says to always do so counts as \
@@ -629,8 +630,9 @@ mod tests {
             "Start an independent session only when the person says so: \"independent\", \"I own it\"",
             "Then run `nexus sessions start \"<prompt>\" --project",
             "For coordinated work in another open, trusted project, use start_session with project.",
-            "Use `nexus sessions start` with --project there only for an independent session, or when cross-project \
-             subsessions are off or refused.",
+            "If it answers project_not_open, project_untrusted or cross_project_off, tell the person why.",
+            "Say what they can do: open or unarchive the project, trust it, or turn the setting on.",
+            "Then wait, and do not work around it.",
             "put `$NEXUS_SESSION_ID` in its prompt for a report, or run `nexus sessions wait <id>`.",
             "When the wording is unclear, use start_session, and say which tool you chose and why.",
             "use handoff_session only when the person asks to replace or archive this session",
@@ -644,6 +646,28 @@ mod tests {
         }
         // "New session" is coordinated work by default, not an independent session.
         assert!(!CREW_INSTRUCTIONS.contains("\"New session\", \"separate session\" or \"independent\": run"));
+    }
+
+    /// A refused project is the person's to fix: no guidance offers `nexus sessions start` as a way round a refusal,
+    /// which would skip the trust check or the person's setting. Each sentence that names the command names no refusal.
+    #[test]
+    fn no_text_offers_the_cli_start_after_a_refusal() {
+        for (name, text) in [
+            ("CREW_INSTRUCTIONS", CREW_INSTRUCTIONS),
+            ("SESSIONS_GUIDANCE", crate::driver::SESSIONS_GUIDANCE),
+        ] {
+            for sentence in text.split(['.', ';', '\n', '|']) {
+                if !sentence.contains("nexus sessions start") {
+                    continue;
+                }
+                for refusal in ["refus", "not_open", "untrusted", "cross_project_off", "are off"] {
+                    assert!(
+                        !sentence.contains(refusal),
+                        "{name} offers the CLI after {refusal}: {sentence}"
+                    );
+                }
+            }
+        }
     }
 
     /// A bare `nexus sessions start` fails from a worktree, and handing over with it leaves uncommitted work behind:

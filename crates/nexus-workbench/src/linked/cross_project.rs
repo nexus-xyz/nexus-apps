@@ -24,14 +24,14 @@ pub(crate) const NO_ORCHESTRATION: &str =
     "This session runs in another project than its parent's, so its agent can't start sessions of its own.";
 
 /// Why another project is refused while the person turned the feature off.
-const OFF: &str = "The person turned off \"Enable cross-project subsessions\" in Settings: this session starts \
-                   subsessions only in its own project.";
+const OFF: &str = "The person turned off \"Enable cross-project subsessions\", so this session starts subsessions only \
+                   in its own project. The person can turn it on in Settings › Code › Subsessions.";
 
 /// Why a project nobody trusted is refused.
 fn untrusted(project: &Project) -> String {
     format!(
         "The project {name} is not trusted in Nexus, so a subsession can't start there. The person can trust it in \
-         Settings › Projects › {name}: turn on \"Trust this project's Claude and OpenCode settings\".",
+         Settings › Computer › Projects › {name}: turn on \"Trust this project's Claude and OpenCode settings\".",
         name = project.name
     )
 }

@@ -153,7 +153,7 @@ async fn a_project_not_open_trusted_or_allowed_is_refused() {
     assert_eq!(
         message,
         "The project elsewhere is not trusted in Nexus, so a subsession can't start there. The person can trust it \
-         in Settings › Projects › elsewhere: turn on \"Trust this project's Claude and OpenCode settings\"."
+         in Settings › Computer › Projects › elsewhere: turn on \"Trust this project's Claude and OpenCode settings\"."
     );
     s.workbench
         .set_claude_trust(&other.id, false)
@@ -192,7 +192,11 @@ async fn a_project_not_open_trusted_or_allowed_is_refused() {
     let other = trusted(&s);
     let (code, message) = refused(&s, &lead.id, into(&other.id, "Build it")).await;
     assert_eq!(code, OrchCode::CrossProjectOff, "{message}");
-    assert!(message.contains("\"Enable cross-project subsessions\""), "{message}");
+    assert_eq!(
+        message,
+        "The person turned off \"Enable cross-project subsessions\", so this session starts subsessions only in its \
+         own project. The person can turn it on in Settings › Code › Subsessions."
+    );
     // Its own project still starts.
     let own = finished_child(&s, &lead.id, into(&s.project, "Build it")).await;
     assert!(!own.cross_project);
