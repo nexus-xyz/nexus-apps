@@ -92,6 +92,19 @@ npm run typecheck:kit
 
 Nexus's store builds come from `mobile-v*` tags (`.github/workflows/mobile-release.yml`).
 
+### The kit as a dependency
+
+Other repositories depend on `@nexus/kit` at a fixed commit of this repository. Each push to `main` that changes
+`packages/kit` publishes the release `kit-<commit sha>`, with `npm pack` of the kit as its asset `nexus-kit.tgz`
+(`.github/workflows/kit-release.yml`). A repository pins it in its `package.json` and lets its lockfile record the
+asset's integrity:
+
+```json
+"@nexus/kit": "https://github.com/nexus-xyz/nexus-apps/releases/download/kit-<commit sha>/nexus-kit.tgz"
+```
+
+To bump a pin, change the sha to a newer `kit-*` release and run `npm install`.
+
 ## Contributing
 
 We welcome bug reports, fixes and features. Read [CONTRIBUTING.md](CONTRIBUTING.md) first.
