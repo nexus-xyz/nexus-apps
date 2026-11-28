@@ -26,6 +26,7 @@
     "./synced-follow": "./src/synced-follow.ts",
     "./synced-fixture": "./src/synced-fixture.ts",
     "./request-sites": "./src/request-sites.ts",
+    "./recipes/*.json": "./recipes/*.json",
     "./package.json": "./package.json"
   },
   "scripts": {

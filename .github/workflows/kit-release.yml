@@ -1,0 +1,63 @@
+# The kit's pinned tarball (ENG-30144). Each push to main that changes packages/kit publishes `npm pack` of the kit as
+# the asset `nexus-kit.tgz` of the release `kit-<commit sha>`, so closed repos depend on the kit at a fixed commit:
+#
+#   "@nexus/kit": "https://github.com/nexus-xyz/nexus-apps/releases/download/kit-<commit sha>/nexus-kit.tgz"
+#
+# A public release asset needs no token to download, so npm, Docker and Vercel builds install it as they are. The
+# consumer's package-lock.json records the asset's integrity, so a replaced asset fails `npm ci`. A release is never
+# marked latest and is never rewritten: a commit that already has one is skipped. README.md ("The kit as a dependency")
+# says how to bump a pin.
+name: kit-release
+
+on:
+  push:
+    branches: [main]
+    paths: ["packages/kit/**", ".github/workflows/kit-release.yml"]
+  # For a commit pushed before this workflow, or a release that failed. main only.
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: kit-release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - name: Install the test tools
+        run: npm ci --no-audit --no-fund
+      - name: kit typecheck
+        run: npm run typecheck:kit
+      - name: Pack and release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SHA: ${{ github.sha }}
+        run: |
+          tag="kit-$SHA"
+          if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "$tag exists; nothing to do." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          out="$RUNNER_TEMP/kit"
+          mkdir -p "$out"
+          file="$(cd packages/kit && npm pack --silent --pack-destination "$out")"
+          mv "$out/$file" "$out/nexus-kit.tgz"
+          gh release create "$tag" --repo "$GITHUB_REPOSITORY" --target "$SHA" --latest=false \
+            --title "kit at ${SHA:0:12}" \
+            --notes "\`@nexus/kit\` (packages/kit) at $SHA. Pin it with \`\"@nexus/kit\": \"https://github.com/$GITHUB_REPOSITORY/releases/download/$tag/nexus-kit.tgz\"\`." \
+            "$out/nexus-kit.tgz"
+          echo "Released $tag." >> "$GITHUB_STEP_SUMMARY"
