@@ -1,0 +1,877 @@
+# Path items. The root openapi.yaml references each one.
+/v1/agent-links:
+  post:
+    tags:
+      - Auth
+    operationId: linkAgent
+    summary: >-
+      Link an agent that acts for you (people only: a service account, a module key or another agent answers 403).
+      `grant` names what it may do: `models.use` (the default), `spend.read_own`, `connectors.use`, `chat.ask` (Ask your
+      code alone, askCode), `chat.web` (web search alone, askWeb) and `agents.memory` (your agent memory alone). The
+      token (`nxo_…`) is in this answer, and again in a repeat with the same `Idempotency-Key` within 24 hours: Gateway
+      keeps only its hash. The agent holds that grant cut down to your role now, and none of the routes that are yours
+      alone. The link lives 90 days unless `expiresAt` says otherwise, at most 365. A person holds at most 20 live links
+      in an organization: the next is 409 `agent_link_limit`. Audited as `agent.linked`, never with the token. With
+      `dryRun: true` everything is checked and nothing is written: the answer is a 200 with no token.
+    parameters:
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKeyRequired
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas.yaml#/CreateAgentLink
+    responses:
+      "200":
+        description: "A dry run: the link as it would be made, with no token"
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/CreatedAgentLink
+            example:
+              id: agl_P9rT2xLm4Qwe
+              userId: usr_3Kd9TqW2bNxe
+              agent: slack
+              label: Nexus Slack
+              grant:
+                - models.use
+              prefix: nxo_k9Wd
+              createdAt: "2026-10-30T13:00:00.000Z"
+              expiresAt: "2027-01-28T13:00:00.000Z"
+              dryRun: true
+      "201":
+        description: Created
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/CreatedAgentLink
+            example:
+              id: agl_P9rT2xLm4Qwe
+              userId: usr_3Kd9TqW2bNxe
+              agent: slack
+              label: Nexus Slack
+              grant:
+                - models.use
+              prefix: nxo_EXAM
+              createdAt: "2026-10-30T13:00:00.000Z"
+              expiresAt: "2027-01-28T13:00:00.000Z"
+              token: nxo_EXAMPLEdoNotUseThisTokenValue000
+              dryRun: false
+      "400":
+        description: >-
+          Not valid: an `agent` that is no slug (`invalid_agent`), no label (1 to 80 characters), an empty `grant`
+          (`invalid_grant`), an action that cannot be granted (`grant_not_allowed`) an `expiresAt` that is not a future
+          time within 365 days (`invalid_expiry`), or a field that the body does not define
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "403":
+        description: >-
+          The caller may not link: a module key (`module_key`), a service account or another agent (`role_required`), a
+          caller that is no person (`person_required`), a person who is no longer a member (`not_a_member`), or a
+          `grant` that the caller's role does not allow (`role_required`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "409":
+        description: The person already holds 20 live links (`agent_link_limit`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "428":
+        $ref: ../components/common.yaml#/responses/PreconditionRequired
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: agent_links.manage_own
+    x-idempotency: required
+  get:
+    tags:
+      - Auth
+    operationId: listAgentLinks
+    summary: >-
+      Your live agent links in this organization; `?all=1` for everyone's (owners and admins). Never a token or what it
+      hashes to. Newest first; `limit` and `cursor` page it.
+    parameters:
+      - name: all
+        in: query
+        required: false
+        description: "`1` lists everyone's links. Only owners and admins may: anyone else answers 403 `role_required`."
+        schema:
+          type: string
+          enum:
+            - "1"
+      - name: limit
+        in: query
+        required: false
+        description: Items per page, 1 to 500 (default 100). Without limit or cursor the answer holds the whole list.
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 500
+      - name: cursor
+        in: query
+        required: false
+        description: nextCursor from the previous page. A cursor whose item left the list answers 400 `invalid_cursor`.
+        schema:
+          type: string
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/AgentLinkList
+            example:
+              agentLinks:
+                - id: agl_P9rT2xLm4Qwe
+                  userId: usr_3Kd9TqW2bNxe
+                  agent: slack
+                  label: Nexus Slack
+                  grant:
+                    - chat.ask
+                    - models.use
+                  prefix: nxo_c4Lp
+                  createdAt: "2026-10-30T13:00:00.000Z"
+                  expiresAt: "2027-01-28T13:00:00.000Z"
+                  lastUsedAt: "2026-10-31T09:00:00.000Z"
+      "403":
+        description: "`?all=1` without the organization rung of the keys ladder (`role_required`)"
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: agent_links.manage_own
+/v1/agent-links/{id}:
+  delete:
+    tags:
+      - Auth
+    operationId: unlinkAgent
+    summary: >-
+      Unlink an agent: your own link, or anyone's for owners and admins (the keys ladder's organization rung). Its token
+      answers as an unknown token from then on. Your own tokens and your other links do not change. Unlinking an ended
+      link answers as it was and writes nothing. A session link is deleted when it ends, so unlinking it again answers
+      404. Audited as `agent.unlinked`.
+    parameters:
+      - name: id
+        in: path
+        required: true
+        description: The link's id (`agl_…`)
+        schema:
+          type: string
+          pattern: ^[A-Za-z0-9_-]+$
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKey
+    responses:
+      "200":
+        description: "OK: the link, with `revokedAt`"
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/AgentLink
+            example:
+              id: agl_P9rT2xLm4Qwe
+              userId: usr_3Kd9TqW2bNxe
+              agent: slack
+              label: Nexus Slack
+              grant:
+                - chat.ask
+                - models.use
+              prefix: nxo_c4Lp
+              createdAt: "2026-10-30T13:00:00.000Z"
+              expiresAt: "2027-01-28T13:00:00.000Z"
+              revokedAt: "2026-11-01T10:00:00.000Z"
+              lastUsedAt: "2026-10-31T09:00:00.000Z"
+      "403":
+        description: Another person's link, and the caller is no owner or admin (`role_required`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "404":
+        description: No such link in this organization (`unknown_agent_link`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: agent_links.manage_own
+    x-idempotency: optional
+/v1/auth/account/delete:
+  post:
+    tags:
+      - Auth
+    operationId: deleteAccount
+    summary: >-
+      Delete your own account, from a sign-in made in the last ten minutes (not an API key; a dry run says signInNeeded
+      when yours is older). The sign-in provider deletes your sign-in, the payment provider deletes your personal
+      organization's customer (its plan ends at once), and Gateway takes you out of every organization, closes your
+      personal organization and erases your email and name. Your organizations' spend and audit trail stay, under your
+      user id. Before the customer goes, paying after the fact turns off and one charge tries your personal
+      organization's unpaid usage on the card on file; what it does not collect is written off (unpaidUsageUsd), and its
+      Nexus credits are lost (creditsLostUsd). Refused while you own a company organization: transfer ownership first. A
+      deletion needs confirm: "DELETE", which the person types to confirm. dryRun checks and changes nothing.
+    parameters:
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKeyRequired
+    requestBody:
+      required: false
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              dryRun:
+                type: boolean
+              confirm:
+                type: string
+                enum:
+                  - DELETE
+                description: >-
+                  What the person typed to confirm: DELETE. A deletion without it changes nothing (400
+                  `confirmation_required`); a dry run needs none.
+            additionalProperties: false
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/AccountDeleted
+            example:
+              userId: usr_ada
+              dryRun: false
+              deleted: true
+              personalOrg: ten_ada
+              left:
+                - id: ten_acme
+                  name: Acme
+              planEnded: true
+              signInNeeded: false
+      "400":
+        description: The person did not type DELETE to confirm (`confirmation_required`). Nothing changed.
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+            example:
+              error:
+                message: >-
+                  type DELETE to confirm that you want to delete your account: send "confirm": "DELETE"; nothing was
+                  deleted
+                type: invalid_request_error
+                code: confirmation_required
+      "403":
+        description: >-
+          A sign-in older than ten minutes (`recent_sign_in_required`): sign in again first. An API key, not a sign-in
+          (`sign_in_required`), or a caller that is no person (`person_required`). Nothing changed.
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+            example:
+              error:
+                message: >-
+                  an API key cannot delete an account; sign in (Nexus UI, the app or `nexus auth login`) and delete it
+                  there
+                type: permission_error
+                code: sign_in_required
+      "404":
+        description: The account is already deleted (`not_found`).
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+            example:
+              error:
+                message: no such account
+                type: not_found
+                code: not_found
+      "409":
+        description: >-
+          You own a company organization (`owns_organization`); `nexus.organizations` lists each one's id, name and
+          slug. Or calls your card pays for, or a charge for your usage, are still running (`usage_settling`): paying
+          after the fact is now off; try again in 10 minutes. Nothing else changed.
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+            example:
+              error:
+                message: >-
+                  you own Acme; transfer ownership in Nexus UI (Members) or ask support to close it, then delete your
+                  account
+                type: invalid_request_error
+                code: owns_organization
+      "428":
+        $ref: ../components/common.yaml#/responses/PreconditionRequired
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      "502":
+        description: >-
+          The identity provider did not delete your sign-in (`clerk_unavailable`), or the payment provider did not
+          delete the customer; retry.
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+            example:
+              error:
+                message: "Clerk did not delete your sign-in, so nothing was deleted: service unavailable"
+                type: clerk_unavailable
+                code: clerk_unavailable
+      "503":
+        description: >-
+          This Gateway has no secret key for the sign-in provider, or no Stripe key while your personal organization has
+          a customer (`not_configured`); nothing changed. Also `cutover_paused`, only while the operator pauses sign-in
+          for the auth cutover; nothing changed. Retry after `Retry-After` seconds.
+        headers:
+          Retry-After:
+            description: "Whole seconds to wait on `cutover_paused`: 600."
+            schema:
+              type: integer
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+            example:
+              error:
+                message: Nexus Gateway has no CLERK_SECRET_KEY, so it cannot delete your sign-in; nothing was deleted
+                type: not_configured
+                code: not_configured
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: account.delete
+    x-idempotency: required
+/v1/auth/device:
+  post:
+    tags:
+      - Auth
+    operationId: startDeviceLogin
+    summary: >-
+      Start `nexus auth login`: a device code for the CLI and a user code to approve in Nexus UI (ten minutes, single
+      use). No key needed.
+    security: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              client:
+                type: string
+                description: >-
+                  e.g. nexus CLI on <host>. Control characters are dropped. Without agent and scope, each character
+                  outside ASCII is stored as ?. A label that starts with an agent's reserved label (Nexus Slack) needs
+                  that agent and a scope, else a 400 reserved_client.
+              agent:
+                type: string
+                pattern: ^[a-z0-9][a-z0-9-]{0,39}$
+                description: >-
+                  With scope: the agent the sign-in is for (slack). Its approval issues an agent link (nxo_…), never a
+                  personal token.
+              scope:
+                type: string
+                description: >-
+                  With agent: the matrix actions the agent link holds, space-separated (models.use, spend.read_own,
+                  connectors.use, chat.ask, chat.web, agents.memory). Any other is a 400 invalid_scope.
+              client_id:
+                type: string
+                description: >-
+                  Optional OAuth client id, not a secret. When tiers are enabled, omission selects `nxc_unregistered`. A
+                  malformed, unknown or revoked id returns 400 `invalid_client`. When tiers are disabled, the Gateway
+                  ignores this field.
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                device_code:
+                  type: string
+                user_code:
+                  type: string
+                verification_uri:
+                  type: string
+                verification_uri_complete:
+                  type: string
+                expires_in:
+                  type: integer
+                interval:
+                  type: integer
+            example:
+              device_code: nxd_EXAMPLEdoNotUseThisDeviceCodeValue000000000
+              user_code: WDJB-MJHT
+              verification_uri: https://nexus.inc/app/device
+              verification_uri_complete: https://nexus.inc/app/device?code=WDJB-MJHT
+              expires_in: 600
+              interval: 5
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      "503":
+        description: >-
+          `cutover_paused`: only while the operator pauses sign-in for the auth cutover; nothing changed. Retry after
+          `Retry-After` seconds.
+        headers:
+          Retry-After:
+            description: "Whole seconds to wait: 600."
+            schema:
+              type: integer
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+            example:
+              error:
+                message: >-
+                  sign-in, account deletion and organization changes are paused while Nexus moves to its new sign-in;
+                  try again after the maintenance window
+                type: server_error
+                code: cutover_paused
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: public
+    parameters:
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKey
+    x-idempotency: optional
+    description: "Exempt: an OAuth 2.0 endpoint (RFC 8628, RFC 6749, RFC 7009). Its own rules make a repeat safe."
+/v1/auth/logout:
+  post:
+    tags:
+      - Auth
+    operationId: logout
+    summary: Revoke the calling token. An agent link may end itself whatever its grant.
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              type: object
+            example:
+              revoked: true
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: keys.manage_own
+    parameters:
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKey
+    x-idempotency: optional
+    description: "Exempt: an OAuth 2.0 endpoint (RFC 8628, RFC 6749, RFC 7009). Its own rules make a repeat safe."
+/v1/auth/scoped-keys/revoke:
+  post:
+    tags:
+      - Auth
+    operationId: revokeScopedKey
+    summary: >-
+      Revoke a module's scoped key (`nxs_…`) before it expires, without rotating a server setting (owners and admins). A
+      scoped key lives one hour and stops when its person leaves the organization; this stops one key at once. Name it
+      by its key id (`scoped:<product>/<capability>/smk_…`) or by its `smk_…` mint id; 400 `invalid_scoped_key` for
+      anything else. `GET /v1/spend` shows the key id as `keyId` on each model call the key made. The audit log shows it
+      as the actor of the key's connector writes. Gateway keeps no record of the keys it mints, so it accepts any
+      well-formed id. A revoke does not prove that the key was live. Revoking a revoked key answers `already: true` and
+      changes nothing. With `dryRun: true`, nothing changes. Audited as `key.revoked` with target type `scoped_key`.
+    parameters:
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKeyRequired
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required:
+              - id
+            properties:
+              id:
+                type: string
+                description: The key id (scoped:intelligence/wiki/smk_…) or the mint id (smk_…).
+              reason:
+                type: string
+                description: Why, kept in the audit event.
+              dryRun:
+                type: boolean
+                default: false
+                description: Check the id and change nothing.
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/ScopedKeyRevoked
+            example:
+              id: smk_R8tK2wQx5Lmb
+              keyId: scoped:wiki/run/smk_R8tK2wQx5Lmb
+              already: false
+              dryRun: false
+              revokedAt: "2026-10-30T13:05:00.000Z"
+      "428":
+        $ref: ../components/common.yaml#/responses/PreconditionRequired
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: keys.manage_all
+    x-idempotency: required
+/v1/auth/token:
+  post:
+    tags:
+      - Auth
+    operationId: pollDeviceLogin
+    summary: >-
+      Poll for the device login's token, no faster than `interval`. 400 with code authorization_pending, slow_down (with
+      a new interval), expired_token or access_denied until approved; then a personal token, once, or for a sign-in that
+      asked for a scope, an agent link that holds only that scope. With `grant_type` `authorization_code`, the phone's
+      sign-in exchanges the code `authorizeApp` sent to its redirect URI, with its PKCE verifier, for a personal token,
+      once; 400 `invalid_grant` for an unknown, used, expired or mismatched code, which a failed try also uses up.
+    security: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            description: >-
+              Each grant needs its own fields. A device-code poll (`grant_type`
+              `urn:ietf:params:oauth:grant-type:device_code`, or none) needs `device_code`. An `authorization_code`
+              exchange needs `code`, `code_verifier` and `redirect_uri`. A missing field is a 400.
+            properties:
+              device_code:
+                type: string
+                description: The device login's code (`grant_type` `urn:ietf:params:oauth:grant-type:device_code`, or none).
+              grant_type:
+                type: string
+                enum:
+                  - urn:ietf:params:oauth:grant-type:device_code
+                  - authorization_code
+              code:
+                type: string
+                description: "With `authorization_code`: the code sent to the app's redirect URI."
+              code_verifier:
+                type: string
+                description: "With `authorization_code`: the PKCE verifier whose S256 challenge `authorizeApp` was given (RFC 7636)."
+              redirect_uri:
+                type: string
+                description: "With `authorization_code`: the redirect URI the code was sent to."
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                access_token:
+                  type: string
+                token_type:
+                  type: string
+                expires_at:
+                  type: string
+                tenant:
+                  type: object
+                user:
+                  type: object
+                role:
+                  $ref: ../components/schemas.yaml#/Role
+                scope:
+                  type: string
+                  description: The matrix actions an agent link holds, space-separated; only for a sign-in that asked for a scope.
+                ui_url:
+                  type: string
+                  description: "Nexus UI's address , when Gateway knows it: where a client's links into Nexus UI go."
+                client_id:
+                  type: string
+                  description: The OAuth client bound to this token, if the sign-in used OAuth client tiers.
+            example:
+              access_token: nx_EXAMPLEdoNotUseThisTokenValue000
+              token_type: Bearer
+              expires_at: "2027-01-28T13:00:00.000Z"
+              tenant:
+                id: ten_8Hq2LmP4xRtK
+                name: Acme
+                slug: acme
+              user:
+                id: usr_3Kd9TqW2bNxe
+                email: ana@acme.com
+              role: owner
+              ui_url: https://nexus.inc/app
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: public
+    parameters:
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKey
+    x-idempotency: optional
+    description: >-
+      Send the OAuth client id at sign-in, not at token exchange. For PKCE, send `client_id` to `GET /authorize`. Nexus
+      UI sends it as `clientId` when it requests the code. A client that is no longer valid at token issuance returns
+      400 `invalid_client`.
+
+
+      Exempt: an OAuth 2.0 endpoint (RFC 8628, RFC 6749, RFC 7009). Its own rules make a repeat safe.
+/v1/auth/tokens:
+  get:
+    tags:
+      - Auth
+    operationId: listTokens
+    summary: >-
+      Your live tokens in this organization; `?all=1` for everyone's (owners and admins). Newest first; `limit` and
+      `cursor` page it.
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                tokens:
+                  type: array
+                  items:
+                    $ref: ../components/schemas.yaml#/Token
+                nextCursor:
+                  type: string
+                  description: The next page's cursor, while more items follow. Only when limit or cursor was sent.
+            example:
+              tokens:
+                - id: key_Ui7cR2mW9xQa
+                  userId: usr_3Kd9TqW2bNxe
+                  kind: ui
+                  prefix: nx_Z8mW
+                  label: Nexus UI
+                  createdAt: "2026-10-30T13:00:00.000Z"
+                  expiresAt: "2026-10-31T01:00:00.000Z"
+                  current: true
+                - id: key_LwxpJvOYxv8C
+                  userId: usr_3Kd9TqW2bNxe
+                  kind: api
+                  prefix: nx_k3Pq
+                  label: laptop
+                  createdAt: "2026-10-20T10:00:00.000Z"
+                  current: false
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: keys.manage_own
+    parameters:
+      - name: all
+        in: query
+        required: false
+        description: "`1` for everyone's tokens (owners and admins); default: yours"
+        schema:
+          type: string
+          enum:
+            - "1"
+      - name: limit
+        in: query
+        required: false
+        description: Items per page, 1 to 500 (default 100). Without limit or cursor the answer holds the whole list.
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 500
+      - name: cursor
+        in: query
+        required: false
+        description: nextCursor from the previous page. A cursor whose item left the list answers 400 `invalid_cursor`.
+        schema:
+          type: string
+  post:
+    tags:
+      - Auth
+    operationId: createApiKey
+    summary: >-
+      Create a personal API key for CI, scripts and the API. The key is in this answer only. A person holds at most 100
+      live API keys in an organization: the next is refused with 409 `api_key_limit` until one is revoked.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              label:
+                type: string
+            required:
+              - label
+    responses:
+      "201":
+        description: Created
+        content:
+          application/json:
+            schema:
+              allOf:
+                - $ref: ../components/schemas.yaml#/Token
+                - type: object
+                  properties:
+                    token:
+                      type: string
+            example:
+              id: key_LwxpJvOYxv8C
+              userId: usr_3Kd9TqW2bNxe
+              kind: api
+              prefix: nx_EXAM
+              label: laptop
+              createdAt: "2026-10-30T13:00:00.000Z"
+              token: nx_EXAMPLEdoNotUseThisTokenValue000
+      "428":
+        $ref: ../components/common.yaml#/responses/PreconditionRequired
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: keys.manage_own
+    parameters:
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKeyRequired
+    x-idempotency: required
+/v1/auth/tokens/{id}:
+  delete:
+    tags:
+      - Auth
+    operationId: revokeToken
+    summary: "Revoke a token: your own, or anyone's for owners and admins."
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[A-Za-z0-9_-]+$
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKey
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              type: object
+            example:
+              revoked: true
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: keys.manage_own
+    x-idempotency: optional
+/v1/auth/whoami:
+  get:
+    tags:
+      - Auth
+    operationId: whoami
+    summary: >-
+      Who the calling credential is, and nothing else: its kind, its organization's id, its person's id, an agent link's
+      grant, and the email only for a person's own credential. Any valid credential may call it (`authenticated`): an
+      agent link and an operator whatever their grant. No organization details, no other member and no role. A person's
+      id is set for a person's own credential, for an agent link (the person it acts for) and for an operator (the
+      operator); a service account, a module key and a sandbox have none. Not audited, as `GET /v1/tenants/me` is not;
+      an operator's request is logged as `operator.request`.
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Whoami
+            examples:
+              person:
+                summary: A person's own API key or CLI token
+                value:
+                  kind: person
+                  tenantId: ten_8Hq2LmP4xRtK
+                  userId: usr_3Kd9TqW2bNxe
+                  email: ana@acme.com
+              agentLink:
+                summary: An agent link that holds only models.use
+                value:
+                  kind: agent_link
+                  tenantId: ten_8Hq2LmP4xRtK
+                  userId: usr_3Kd9TqW2bNxe
+                  grant:
+                    - models.use
+              serviceAccount:
+                summary: A service account's key
+                value:
+                  kind: service_account
+                  tenantId: ten_8Hq2LmP4xRtK
+      "401":
+        description: >-
+          No credential (`missing_credential`), or one Gateway does not accept: unknown, expired or revoked
+          (`invalid_credential`).
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "403":
+        description: An operator grant that is unknown, expired, revoked or another person's (`operator_grant_invalid`).
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: authenticated

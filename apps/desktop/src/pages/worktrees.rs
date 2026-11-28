@@ -1162,7 +1162,8 @@ mod tests {
     #[test]
     fn saves_the_folders_rules_and_prefix() {
         let file = crate::desktop_settings::TempFile::new("worktrees");
-        file.update(|settings| settings.set_worktree_root(WorktreeRoot::Worktrees, Some("/w".into())))
+        let folder = crate::desktop_settings::FULL_PATH;
+        file.update(|settings| settings.set_worktree_root(WorktreeRoot::Worktrees, Some(folder.into())))
             .expect("a folder");
         let rules = rules_with(&Rules::default(), Rule::Merged, true, IDLE_DAYS_DEFAULT);
         let rules = rules_with(&rules, Rule::Idle, true, parse_idle_days(" 30 ").expect("days"));
@@ -1171,7 +1172,7 @@ mod tests {
         file.update(|settings| settings.set_branch_prefix(Some("me/".into())).map(|_| ()))
             .expect("a prefix");
         let saved = nexus_desktop_core::settings::load(file.path());
-        assert_eq!(saved.worktrees_dir.as_deref(), Some("/w"));
+        assert_eq!(saved.worktrees_dir.as_deref(), Some(folder));
         assert_eq!(saved.worktree_cleanup, Some(rules));
         assert_eq!(saved.branch_prefix.as_deref(), Some("me/"));
 

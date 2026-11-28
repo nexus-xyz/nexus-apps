@@ -30,7 +30,8 @@ The internal crates (`publish = false`) are never released on their own.
 | Desktop, stable | `v<x.y.z>` | `v0.12.0` |
 | Desktop, beta | `v<x.y.z>-beta.<N>` | `v0.12.0-beta.1` |
 | Desktop, rehearsal (publishes nothing) | `v0.0.0-test.<N>` | `v0.0.0-test.1` |
-| CLI | defined by its release workflow | |
+| CLI, stable or beta | `cli-v<VERSION>` | `cli-v0.45.0`, `cli-v0.46.0-beta.1` |
+| CLI, rehearsal (publishes nothing) | `cli-v0.0.0-test.<N>` | `cli-v0.0.0-test.1` |
 | Crates | none yet | |
 
 The desktop release workflow (`.github/workflows/release.yml`, open in pull request #20) runs on every `v*` tag.
@@ -38,6 +39,11 @@ It builds a beta from `v<x.y.z>-beta.<N>` and rehearses from `v0.0.0-test.<N>`. 
 including a stable one, until stable releases are added. So a tag for another artifact must not start with `v`.
 
 The desktop's release steps, and what the release needs, are in `apps/desktop/packaging/RELEASE.md` (also in #20).
+
+The CLI release workflow (`.github/workflows/cli-release.yml`) runs on every `cli-v*` tag. The tag must name the
+version in `VERSION` and sit on `main`. `X.Y.Z` publishes to the `stable` channel and `X.Y.Z-<pre>` to `beta`. A
+manual run builds and stages every binary and publishes nothing. The workflow's header comment lists what a release
+publishes and what its `cli-release` environment needs.
 
 A published version never changes. To fix a release, tag the next number.
 

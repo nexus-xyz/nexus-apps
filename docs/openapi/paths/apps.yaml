@@ -1,0 +1,297 @@
+# Path items. The root openapi.yaml references each one.
+/v1/apps:
+  get:
+    tags:
+      - Apps
+    operationId: listApps
+    summary: Your apps, or every app of your organization for an owner or admin, by name, each with what Vercel billed for it.
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/AppList
+      "403":
+        description: The caller is not a member of an organization (`member_required`), or the role may not use apps.
+      "404":
+        description: Nexus Apps is off on this Gateway (`apps_off`).
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      "503":
+        description: Nexus Apps has no Vercel token and team on this Gateway (`apps_unavailable`).
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: apps.use
+    x-internal-stability: beta
+  post:
+    tags:
+      - Apps
+    operationId: deployApp
+    summary: >-
+      Deploy a folder as your app named `name`: a new app (201) or the next deployment of yours (200). Send every file
+      of the folder, its path relative to the folder and its bytes as standard base64: at most 5000 files and 20 MB
+      decoded (the body at most 30 MB). `framework` is a Vercel framework preset (`nextjs`, `vite`); absent, Vercel
+      detects it. Gateway makes the app's Vercel project on Nexus's team the first time, then deploys the files to
+      production; the answer's `state` is Vercel's (`QUEUED`, `BUILDING`, …) and GET /v1/apps/{id} follows it to `READY`
+      or `ERROR`. A name is the organization's: another member's app of the same name is a 409.
+    parameters:
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKeyRequired
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas.yaml#/DeployAppRequest
+    responses:
+      "200":
+        description: The next deployment of your app
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/App
+      "201":
+        description: "Created: the app's first deployment is building"
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/App
+      "400":
+        description: >-
+          The body is not a deploy: `name` (`invalid_name`), `framework` (`invalid_framework`) or `files`
+          (`invalid_files`: none, too many, a bad or repeated path, or data that is not base64).
+      "402":
+        description: >-
+          Add a saved card, resolve unpaid hosting, repay credit debt, or raise the app cap (apps_card_required,
+          apps_payment_pending, apps_debt_pending, app_paused).
+      "403":
+        description: The caller is not a member of an organization (`member_required`), or the role may not use apps.
+      "404":
+        description: Nexus Apps is off on this Gateway (`apps_off`).
+      "409":
+        description: >-
+          Another member of your organization has an app of this name (`app_name_taken`), or the app's Vercel project
+          left Nexus's team (`app_gone`): it was claimed or deleted at Vercel.
+      "413":
+        description: The files are more than 20 MB decoded (`app_too_large`), or the body more than 30 MB.
+      "422":
+        description: Vercel refused the project or the deployment (`vercel_refused`), with Vercel's own message.
+      "428":
+        $ref: ../components/common.yaml#/responses/PreconditionRequired
+      "429":
+        description: >-
+          Your organization holds its most apps (`apps_limit`, a server setting): delete one first. Also the caller's
+          rate limit.
+      "502":
+        description: Vercel failed or did not answer (`vercel_error`); try again.
+      "503":
+        description: Nexus Apps has no Vercel token and team on this Gateway (`apps_unavailable`).
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: apps.use
+    description: >-
+      Hosting requires a saved card. Paid credits or the card pay Vercel ListCost plus 8%; signed contracts keep their
+      rate. Grants never pay. Each app starts with a $10 monthly cap. Nexus sends 50%, 80% and 100% notices. Hosting
+      pauses 24 hours after the cap, or seven days after unpaid card charges or credit debt. Account usage limits count
+      hosting but cannot stop it.
+    x-internal-stability: beta
+    x-idempotency: required
+/v1/apps/{id}:
+  get:
+    tags:
+      - Apps
+    operationId: getApp
+    summary: >-
+      One app, with what Vercel billed for it. While its deployment builds, Gateway reads its state from Vercel again;
+      if Vercel does not answer, the last state stands.
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[A-Za-z0-9_-]+$
+        description: The app's id (`app_…`), as POST /v1/apps answered it
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/App
+      "403":
+        description: The caller is not a member of an organization (`member_required`), or the role may not use apps.
+      "404":
+        description: >-
+          Nexus Apps is off on this Gateway (`apps_off`), or no such app reaches you: another member's and another
+          organization's are as absent as a missing one.
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      "503":
+        description: Nexus Apps has no Vercel token and team on this Gateway (`apps_unavailable`).
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: apps.use
+    x-internal-stability: beta
+  delete:
+    tags:
+      - Apps
+    operationId: deleteApp
+    summary: >-
+      Delete the app and its Vercel project, with every deployment. A project Vercel no longer has, or a claimed one, is
+      not an error. Audited as app.deleted.
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[A-Za-z0-9_-]+$
+        description: The app's id (`app_…`), as POST /v1/apps answered it
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKey
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/AppDeleted
+      "403":
+        description: The caller is not a member of an organization (`member_required`), or the role may not use apps.
+      "404":
+        description: >-
+          Nexus Apps is off on this Gateway (`apps_off`), or no such app reaches you: another member's and another
+          organization's are as absent as a missing one.
+      "422":
+        description: Vercel refused the delete (`vercel_refused`).
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      "502":
+        description: Vercel failed or did not answer (`vercel_error`); try again.
+      "503":
+        description: Nexus Apps has no Vercel token and team on this Gateway (`apps_unavailable`).
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: apps.use
+    x-internal-stability: beta
+    x-idempotency: optional
+/v1/apps/{id}/cap:
+  put:
+    tags:
+      - Apps
+    operationId: setAppCap
+    summary: >-
+      Set the monthly hosting cap for an app you own or manage. A cap above $10, or above the cap a manager set, needs
+      `budgets.manage` (owners and admins). Audited as app.cap_changed. The app resumes after its blocking state clears.
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[A-Za-z0-9_-]+$
+        description: The app's id (`app_…`), as POST /v1/apps answered it
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKey
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/App
+      "403":
+        description: >-
+          The caller is not a member of an organization (`member_required`), the role may not use apps, or the cap needs
+          `budgets.manage` (`role_required`).
+      "404":
+        description: >-
+          Nexus Apps is off on this Gateway (`apps_off`), or no such app reaches you: another member's and another
+          organization's are as absent as a missing one.
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      "503":
+        description: Nexus Apps has no Vercel token and team on this Gateway (`apps_unavailable`).
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: apps.use
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas.yaml#/SetAppCapRequest
+    x-internal-stability: beta
+    x-idempotency: optional
+/v1/apps/{id}/claim:
+  post:
+    tags:
+      - Apps
+    operationId: claimApp
+    summary: >-
+      A claim link: whoever opens it signs in to Vercel (or signs up, free) and moves the app's project to their own
+      Vercel account, where it stops costing Nexus. Anyone with the link can claim the app, so share it with nobody
+      else. It works for 24 hours (`expiresAt`). Gateway records when it was asked for (`claimRequestedAt`), and audits
+      each request as app.claim_requested.
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[A-Za-z0-9_-]+$
+        description: The app's id (`app_…`), as POST /v1/apps answered it
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKeyRequired
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/AppClaim
+      "403":
+        description: The caller is not a member of an organization (`member_required`), or the role may not use apps.
+      "404":
+        description: >-
+          Nexus Apps is off on this Gateway (`apps_off`), or no such app reaches you: another member's and another
+          organization's are as absent as a missing one.
+      "409":
+        description: The app has no Vercel project yet (`app_not_deployed`), or its project left Nexus's team (`app_gone`).
+      "422":
+        description: Vercel refused the transfer request (`vercel_refused`).
+      "428":
+        $ref: ../components/common.yaml#/responses/PreconditionRequired
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      "502":
+        description: Vercel failed or did not answer (`vercel_error`); try again.
+      "503":
+        description: Nexus Apps has no Vercel token and team on this Gateway (`apps_unavailable`).
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: apps.use
+    x-internal-stability: beta
+    x-idempotency: required

@@ -41,6 +41,8 @@ mod mac;
 mod mouse_tests;
 mod page_drag;
 mod popup;
+#[cfg(target_os = "macos")]
+mod process_limits;
 mod protocol;
 mod ready;
 #[cfg(test)]
