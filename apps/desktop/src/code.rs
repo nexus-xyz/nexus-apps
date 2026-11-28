@@ -56,6 +56,8 @@ pub struct Transcript {
     pub more: bool,
     /// What the turn still running has cost so far; None when no turn runs.
     pub turn_cost: Option<f64>,
+    /// How long the session's prompt cache stays warm, from its usage events (`nexus_workbench::prompt_cache`).
+    pub cache: nexus_workbench::prompt_cache::CacheClock,
     /// Server-start signals from the same event snapshot, for the local session's Browser.
     pub signals: Vec<Signal>,
     /// A turn ended interrupted since the person's last message (`nexus_workbench::interrupt`).
@@ -71,6 +73,7 @@ impl Transcript {
         let reads = reads(&events);
         let context_estimate =
             nexus_workbench::context_breakdown::Estimate::of(events.iter().map(|(_, _, event)| event));
+        let cache = nexus_workbench::prompt_cache::CacheClock::of(events.iter().map(|(_, at, event)| (*at, event)));
         let start = events.first().map(|event| event.0);
         let last = events.last().map(|event| event.0).unwrap_or(0);
         let signals = auto_preview::signals(events.iter().map(|(seq, _, event)| (*seq, event)));
@@ -96,6 +99,7 @@ impl Transcript {
             blocks,
             starts,
             turn_cost,
+            cache,
             last,
             start,
             // Event numbers start at 1 in each session.
@@ -2971,6 +2975,7 @@ mod tests {
             output_tokens: 11_000,
             cache_read_tokens: 0,
             cache_write_tokens: 0,
+            cache_writes: None,
             cost_usd: cost,
             parent: parent.map(str::to_string),
         };

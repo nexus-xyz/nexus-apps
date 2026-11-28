@@ -986,6 +986,11 @@ pub enum WbEvent {
         output_tokens: u64,
         cache_read_tokens: u64,
         cache_write_tokens: u64,
+        /// `cache_write_tokens` split by how long the entries live, as Claude Code reports the call's
+        /// `usage.cache_creation` ([`CacheWrites`]). Absent: the agent did not say (Codex, the Nexus agent, a log
+        /// written before this change).
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        cache_writes: Option<CacheWrites>,
         cost_usd: f64,
         /// The sub-agent that made the call: its Agent call's id. Absent: the session's own agent, or a Codex log
         /// written before the core kept it.
@@ -1163,6 +1168,20 @@ pub struct Usage {
     pub output_tokens: u64,
     pub cache_read_tokens: u64,
     pub cache_write_tokens: u64,
+    /// `cache_write_tokens` by lifetime; None when the agent does not say.
+    pub cache_writes: Option<CacheWrites>,
+}
+
+/// The tokens one call wrote to the prompt cache, by the lifetime of the entries: Anthropic's
+/// `usage.cache_creation.ephemeral_5m_input_tokens` and `ephemeral_1h_input_tokens`, which add up to
+/// `cache_creation_input_tokens` (https://docs.claude.com/en/docs/build-with-claude/prompt-caching).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CacheWrites {
+    #[serde(default)]
+    pub five_minute_tokens: u64,
+    #[serde(default)]
+    pub one_hour_tokens: u64,
 }
 
 #[cfg(test)]
@@ -1439,6 +1458,7 @@ mod tests {
             output_tokens: 2,
             cache_read_tokens: 0,
             cache_write_tokens: 0,
+            cache_writes: None,
             cost_usd: 0.5,
             parent: Some("t1".into()),
         };

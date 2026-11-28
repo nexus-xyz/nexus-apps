@@ -21,7 +21,8 @@ use serde_json::{Map, Value, json};
 
 use crate::driver::{Background, Out, Protocol, Say, cap};
 use crate::event::{
-    BackgroundTask, Effort, Image, PermissionMode, PermissionSuggestion, TaskDetail, TaskStatus, Usage, WbEvent,
+    BackgroundTask, CacheWrites, Effort, Image, PermissionMode, PermissionSuggestion, TaskDetail, TaskStatus, Usage,
+    WbEvent,
 };
 use crate::harness::Harness;
 use crate::harness::claude::permission_mode;
@@ -103,6 +104,8 @@ struct Stream {
     message_id: String,
     model: String,
     texts: HashMap<u64, String>,
+    /// What its `message_start` said it wrote to the prompt cache, by lifetime.
+    cache_writes: Option<CacheWrites>,
 }
 
 /// Claude Code's stdout, line by line, into [`Out`]s. Keeps what it needs across lines: the message each streamed
@@ -195,6 +198,29 @@ fn parent_of(message: &Value) -> Option<String> {
 
 fn tokens(usage: &Value, key: &str) -> u64 {
     usage.get(key).and_then(Value::as_u64).unwrap_or(0)
+}
+
+/// What a call wrote to the prompt cache, by lifetime: its `usage.cache_creation`, else the sum of its `iterations`'
+/// (Claude Code 2.1.292's `message_delta` keeps the split only there). None: the call does not say.
+pub fn cache_writes(usage: &Value) -> Option<CacheWrites> {
+    let split = |creation: &Value| CacheWrites {
+        five_minute_tokens: tokens(creation, "ephemeral_5m_input_tokens"),
+        one_hour_tokens: tokens(creation, "ephemeral_1h_input_tokens"),
+    };
+    if let Some(creation) = usage.get("cache_creation").filter(|creation| creation.is_object()) {
+        return Some(split(creation));
+    }
+    let mut parts = usage
+        .get("iterations")?
+        .as_array()?
+        .iter()
+        .filter_map(|iteration| iteration.get("cache_creation").filter(|creation| creation.is_object()))
+        .peekable();
+    parts.peek()?;
+    Some(parts.map(split).fold(CacheWrites::default(), |sum, part| CacheWrites {
+        five_minute_tokens: sum.five_minute_tokens + part.five_minute_tokens,
+        one_hour_tokens: sum.one_hour_tokens + part.one_hour_tokens,
+    }))
 }
 
 impl Translator {
@@ -421,6 +447,7 @@ impl Translator {
                         message_id: text_of(start.get("id")),
                         model: text_of(start.get("model")),
                         texts: HashMap::new(),
+                        cache_writes: start.get("usage").and_then(cache_writes),
                     },
                 );
                 vec![]
@@ -450,7 +477,9 @@ impl Translator {
                 let Some(usage) = event.get("usage") else {
                     return vec![];
                 };
-                let model = self.streams.get(&parent).map(|s| s.model.clone()).unwrap_or_default();
+                let stream = self.streams.get(&parent);
+                let model = stream.map(|s| s.model.clone()).unwrap_or_default();
+                let started = stream.and_then(|s| s.cache_writes);
                 vec![Out::Call {
                     model,
                     usage: Usage {
@@ -458,6 +487,7 @@ impl Translator {
                         output_tokens: tokens(usage, "output_tokens"),
                         cache_read_tokens: tokens(usage, "cache_read_input_tokens"),
                         cache_write_tokens: tokens(usage, "cache_creation_input_tokens"),
+                        cache_writes: cache_writes(usage).or(started),
                     },
                     parent,
                 }]
@@ -2712,5 +2742,49 @@ mod tests {
             row(&moved[0]).and_then(|(_, _, d)| d.and_then(|d| d.backgrounded)),
             Some(true)
         );
+    }
+
+    #[test]
+    fn a_call_keeps_its_cache_writes_by_lifetime() {
+        // Claude Code 2.1.292's `message_delta` keeps the split only in `iterations`; `message_start` has it on top.
+        let start = |id: &str, five: u64, hour: u64| {
+            json!({"type":"stream_event","parent_tool_use_id":null,"event":{"type":"message_start","message":{
+                "id":id,"model":"claude-haiku-4-5","usage":{"input_tokens":10,"cache_creation_input_tokens":five + hour,
+                "cache_read_input_tokens":27864,"cache_creation":{"ephemeral_5m_input_tokens":five,
+                "ephemeral_1h_input_tokens":hour}}}}})
+        };
+        let frames = [
+            start("m1", 0, 1),
+            json!({"type":"stream_event","parent_tool_use_id":null,"event":{"type":"message_delta","usage":{
+                "input_tokens":10,"cache_creation_input_tokens":4364,"cache_read_input_tokens":27864,"output_tokens":241,
+                "iterations":[{"cache_creation_input_tokens":4364,"cache_creation":{"ephemeral_5m_input_tokens":0,
+                "ephemeral_1h_input_tokens":4364}}]}}}),
+            // No split in the delta: the start's stands.
+            start("m2", 70, 0),
+            json!({"type":"stream_event","parent_tool_use_id":null,"event":{"type":"message_delta","usage":{
+                "input_tokens":8,"cache_creation_input_tokens":70,"cache_read_input_tokens":32228,"output_tokens":42}}}),
+        ];
+        let mut translator = Translator::default();
+        let writes: Vec<_> = lines(&mut translator, &frames)
+            .into_iter()
+            .filter_map(|out| match out {
+                Out::Call { usage, .. } => Some(usage.cache_writes),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(
+            writes,
+            [
+                Some(CacheWrites {
+                    five_minute_tokens: 0,
+                    one_hour_tokens: 4364
+                }),
+                Some(CacheWrites {
+                    five_minute_tokens: 70,
+                    one_hour_tokens: 0
+                }),
+            ]
+        );
+        assert_eq!(cache_writes(&json!({"cache_creation_input_tokens": 5})), None);
     }
 }

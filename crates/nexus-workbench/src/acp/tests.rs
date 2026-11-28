@@ -340,13 +340,15 @@ fn recorded_turns_stream_ask_and_end_with_their_tokens() {
                 input_tokens: 8646,
                 output_tokens: 111,
                 cache_read_tokens: 0,
-                cache_write_tokens: 0
+                cache_write_tokens: 0,
+                cache_writes: None
             },
             &Usage {
                 input_tokens: 4677,
                 output_tokens: 452,
                 cache_read_tokens: 13419,
-                cache_write_tokens: 0
+                cache_write_tokens: 0,
+                cache_writes: None
             },
         ]
     );

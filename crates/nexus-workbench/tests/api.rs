@@ -1099,6 +1099,7 @@ fn every_agent_tree_field_is_in_the_contract() {
             output_tokens: 0,
             cache_read_tokens: 0,
             cache_write_tokens: 0,
+            cache_writes: None,
             cost_usd: 0.0,
             parent: parent.clone(),
         },

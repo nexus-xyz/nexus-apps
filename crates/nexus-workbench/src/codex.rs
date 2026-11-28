@@ -513,6 +513,8 @@ impl Driver {
                 output_tokens: tokens("outputTokens"),
                 cache_read_tokens: cached,
                 cache_write_tokens: tokens("cacheWriteInputTokens"),
+                // Codex reports no cache lifetime: its sessions show no warm-cache timer.
+                cache_writes: None,
             },
             parent: None,
         }]
@@ -2102,7 +2104,8 @@ mod tests {
                         input_tokens: 2705,
                         output_tokens: 30,
                         cache_read_tokens: 11520,
-                        cache_write_tokens: 0
+                        cache_write_tokens: 0,
+                        cache_writes: None,
                     },
                     parent: None
                 },

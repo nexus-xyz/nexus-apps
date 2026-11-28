@@ -676,6 +676,7 @@ impl Driver {
                     output_tokens: tokens("outputTokens"),
                     cache_read_tokens: tokens("cachedReadTokens"),
                     cache_write_tokens: tokens("cachedWriteTokens"),
+                    cache_writes: None,
                 },
                 parent: None,
             });
