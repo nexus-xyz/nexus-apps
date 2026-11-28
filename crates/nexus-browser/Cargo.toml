@@ -6,7 +6,7 @@ name = "nexus-browser"
 description = "Nexus for desktop's session browser: its address policy, dev-server checks and cookie import, shared by every desktop shell."
 version = "0.1.0"
 edition = "2024"
-rust-version = "1.94"
+rust-version.workspace = true
 publish = false
 license = "MIT"
 

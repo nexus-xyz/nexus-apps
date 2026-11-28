@@ -1,4 +1,4 @@
-# Labels for the repository. Sync them with a label-sync tool, or create them by hand.
+# Labels for the repository. The labels workflow (.github/workflows/labels.yml) syncs them on push to main.
 - name: bug
   color: d73a4a
   description: Something does not work as it should

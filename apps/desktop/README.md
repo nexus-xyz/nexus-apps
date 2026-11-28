@@ -179,7 +179,7 @@ Install the toolchain once:
 
 | | What to install |
 | --- | --- |
-| Everyone | Rust 1.97 (`rustup toolchain install 1.97`), matching the build |
+| Everyone | Rust 1.97, matching the build. The repository's `rust-toolchain.toml` pins it, so rustup installs it on the first `cargo` command |
 | macOS | The Xcode command line tools (`xcode-select --install`), cmake and Ninja (`brew install cmake ninja`). GPUI compiles its Metal shaders at run time, so full Xcode is not needed. |
 | Linux (Arch) | `sudo pacman -S base-devel clang cmake fontconfig freetype2 wayland libxkbcommon libxkbcommon-x11 libxcb vulkan-icd-loader ninja alsa-lib gtk3 libayatana-appindicator` and your GPU's Vulkan driver |
 | Linux (Debian, Ubuntu) | `sudo apt install build-essential clang cmake libfontconfig-dev libfreetype-dev libwayland-dev libxkbcommon-dev libxkbcommon-x11-dev libxcb1-dev libvulkan1 ninja-build libasound2-dev libgtk-3-dev libayatana-appindicator3-dev` |
@@ -188,7 +188,7 @@ Install the toolchain once:
 Then, from this folder:
 
 ```sh
-cargo +1.97 run --locked --release
+cargo run --locked --release
 ```
 
 The first build takes several minutes. Use the committed `Cargo.lock`.
@@ -198,14 +198,14 @@ To build while you use the computer for other things (a call, say), give the bui
 cores:
 
 ```sh
-nice -n 19 ionice -c 3 cargo +1.97 build --locked --release -j 4
+nice -n 19 ionice -c 3 cargo build --locked --release -j 4
 ```
 
 Later builds recompile only this crate, about 1.5 minutes with `--release` for a one-line edit (73–103 s, measured).
 For the edit loop, use the `fast` profile:
 
 ```sh
-cargo +1.97 run --locked --profile fast
+cargo run --locked --profile fast
 ```
 
 It optimizes every dependency as `release` does, so GPUI, web frames and images run at the same speed.
@@ -222,7 +222,7 @@ Two variables skip work that every worktree repeats:
 Point it at another Gateway with `NEXUS_URL`, as the CLI does:
 
 ```sh
-NEXUS_URL=http://localhost:8080 cargo +1.97 run --locked --release
+NEXUS_URL=http://localhost:8080 cargo run --locked --release
 ```
 
 ### Connect a phone

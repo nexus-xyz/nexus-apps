@@ -1,0 +1,6 @@
+# The toolchain CI builds and tests with. rustup installs it on the first cargo command here.
+# Cargo.toml's rust-version is the oldest Rust that still builds the workspace.
+[toolchain]
+channel = "1.97"
+components = ["rustfmt", "clippy"]
+profile = "minimal"

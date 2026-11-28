@@ -6,7 +6,7 @@ name = "nexus-desktop-core"
 description = "Nexus for desktop's core: settings, managed policy, keychain secrets and the device key, shared by every desktop shell."
 version = "0.1.0"
 edition = "2024"
-rust-version = "1.94"
+rust-version.workspace = true
 publish = false
 license = "MIT"
 

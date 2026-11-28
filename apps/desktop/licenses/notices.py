@@ -60,8 +60,9 @@ def require(tool, version):
 
 
 def cef_version():
-    """CEF's version: the build metadata of the `cef` crate in Cargo.lock (`156.3.0+156.0.15` is CEF 156.0.15)."""
-    m = re.search(r'name = "cef"\nversion = "[^"+]+\+([^"]+)"', (ROOT / "Cargo.lock").read_text())
+    """CEF's version: the build metadata of the `cef` crate in Cargo.lock (`156.3.0+156.0.15` is CEF 156.0.15).
+    The app is a workspace member, so the lockfile is the workspace's, at the repository root."""
+    m = re.search(r'name = "cef"\nversion = "[^"+]+\+([^"]+)"', (ROOT.parent.parent / "Cargo.lock").read_text())
     return m.group(1) if m else "unknown"
 
 

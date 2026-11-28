@@ -46,7 +46,7 @@ concurrency:
 
 env:
   CARGO_TERM_COLOR: always
-  RUST_VERSION: "1.94"
+  RUST_VERSION: "1.97"
   DOWNLOADS_URL: https://downloads.nexus.inc
   # Without these, the release is not served natively: the Gateway's installer reads the version's manifest.
   REQUIRED_TARGETS: darwin-arm64,darwin-x64,linux-x64,linux-arm64

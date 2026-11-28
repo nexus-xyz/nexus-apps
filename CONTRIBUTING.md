@@ -16,7 +16,7 @@ By taking part you agree to follow the [Code of Conduct](CODE_OF_CONDUCT.md).
 Follow "Build from source" in the [README](README.md). Then run the app in the `fast` profile:
 
 ```sh
-cargo +1.97 run -p nexus-desktop-gpui --locked --profile fast
+cargo run -p nexus-desktop-gpui --locked --profile fast
 ```
 
 These settings help while you work:

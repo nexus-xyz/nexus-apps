@@ -9,7 +9,7 @@ edition = "2024"
 homepage = "https://nexus.inc"
 publish = false
 repository = "https://github.com/nexus-xyz/nexus-apps"
-rust-version = "1.94"
+rust-version = "1.95"
 version = "0.1.0"
 
 [workspace.dependencies]

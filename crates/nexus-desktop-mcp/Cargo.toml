@@ -6,7 +6,7 @@ name = "nexus-desktop-mcp"
 description = "Nexus for desktop's agent tools: the MCP server list, the built-in server's routing, request_secret and outside access."
 version = "0.1.0"
 edition = "2024"
-rust-version = "1.94"
+rust-version.workspace = true
 publish = false
 license = "MIT"
 

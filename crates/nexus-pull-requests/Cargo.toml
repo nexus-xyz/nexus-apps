@@ -6,7 +6,7 @@ name = "nexus-pull-requests"
 description = "Nexus for desktop's pull requests: gh and glab reads, and the watch that tells the person and the agent what changed."
 version = "0.1.0"
 edition = "2024"
-rust-version = "1.94"
+rust-version.workspace = true
 publish = false
 license = "MIT"
 
