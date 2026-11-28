@@ -17,8 +17,10 @@ beta's GitHub release says so too.
 
 1. Make sure the commit is on `main` and its checks are green.
 2. Push a tag `v<x.y.z>-beta.<N>` on that commit. A tag ruleset limits who can push it.
-3. The workflow builds the app and the Nexus host. It reads no secret until the next step.
-4. A second person approves the `release` environment. The person who pushed the tag cannot approve.
+3. A second person approves the `release` environment for the Linux and Windows builds, which read only
+   `BRAND_ASSETS_KEY` to package Nexus's icons. The workflow builds the app and the Nexus host.
+4. A second person approves the `release` environment again, for the `release` job. The person who pushed the tag
+   cannot approve.
 5. The workflow signs every file, uploads the version's folder, creates the GitHub prerelease, and then moves the
    beta feed. Installed betas see the new version within a minute.
 
@@ -63,7 +65,8 @@ the live keys once they are set. Their version, `0.0.0-test.<N>`, passes as an u
 
 ## What the release needs
 
-The `release` environment holds every secret. Only the `release` job reads them.
+The `release` environment holds every secret. Only the `release` job reads them, except `BRAND_ASSETS_KEY`, which a
+publishing run's Linux and Windows builds read too.
 
 | Name | Kind | What it is |
 | --- | --- | --- |
@@ -77,6 +80,7 @@ The `release` environment holds every secret. Only the `release` job reads them.
 | `UPDATER_KEY_PASSWORD` | secret | The password of that key. Leave it out for a key without one. |
 | `STABLE_UPDATER_PRIVATE_KEY` | secret | Stable only. The stable key's secret half: the earlier release's `TAURI_SIGNING_PRIVATE_KEY`, as it is (already the base64 of a minisign key file). |
 | `STABLE_UPDATER_KEY_PASSWORD` | secret | Stable only. The earlier release's `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`. |
+| `BRAND_ASSETS_KEY` | secret | A read-only deploy key of the private `nexus-xyz/nexus-brand`, which holds Nexus's app icons. A publishing run copies its `desktop/` into `apps/desktop/assets/icons/` before it packages, and stops without it; a rehearsal packages the neutral stand-ins in `assets/held/`. |
 | `DOWNLOADS_BUCKET` | variable | The bucket behind `downloads.nexus.inc`. |
 | `GCP_WORKLOAD_IDENTITY_PROVIDER` | variable | The identity provider that trusts this repository's `release` job. |
 | `GCP_SERVICE_ACCOUNT` | variable | The account that writes `desktop-oss/` in the bucket. |

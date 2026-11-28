@@ -9,8 +9,11 @@
 #   v0.0.0-test.<N>     a rehearsal: builds, signs with what the environment holds, publishes nothing.
 #
 # Who can release: a tag ruleset limits who pushes `v*` tags, and the `release` environment holds every secret and
-# waits for a reviewer who is not the person who pushed the tag. The `plan`, `build` and `host` jobs read no secret,
-# so a pushed tag builds nothing signed until a second person approves `release`.
+# waits for a reviewer who is not the person who pushed the tag. The `plan` and `host` jobs read no secret, so a pushed
+# tag builds nothing signed until a second person approves `release`. In a publishing run, the Linux and Windows builds
+# run in `release` too, for one secret only: BRAND_ASSETS_KEY, the read-only deploy key of the private
+# nexus-xyz/nexus-brand, which holds Nexus's app icons (the tree holds neutral stand-ins, TRADEMARKS.md). The reviewer
+# approves those builds first, then `release`. A rehearsal builds with the stand-ins and reads no secret to build.
 #
 # What a release publishes, in this order:
 #   1. `<folder>/<version>/` on the downloads bucket: the packages, the hosts, each file's `.sig`, that version's own
@@ -142,6 +145,8 @@ jobs:
             runner: windows-2022
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 120
+    # Only for BRAND_ASSETS_KEY, and only where this job packages (macOS is packaged in `release`).
+    environment: ${{ needs.plan.outputs.publish == 'true' && matrix.platform != 'macos' && 'release' || '' }}
     permissions:
       contents: read
     env:
@@ -162,6 +167,41 @@ jobs:
         run: |
           rustup toolchain install 1.94 --profile minimal --no-self-update
           rustup default 1.94
+      # Nexus's app icons, from the private nexus-xyz/nexus-brand, in `apps/desktop/assets/icons/`, which the packaging
+      # scripts prefer over the neutral stand-ins in `assets/held/`. A publishing run stops without them.
+      - name: Check the brand key
+        if: needs.plan.outputs.publish == 'true' && matrix.platform != 'macos'
+        shell: bash
+        env:
+          SET_BRAND_ASSETS_KEY: ${{ secrets.BRAND_ASSETS_KEY != '' }}
+        run: |
+          if [[ "$SET_BRAND_ASSETS_KEY" != true ]]; then
+            echo "::error::The release environment lacks BRAND_ASSETS_KEY. Nothing was built with Nexus's icons."
+            exit 1
+          fi
+      - name: Check out Nexus's icons
+        if: needs.plan.outputs.publish == 'true' && matrix.platform != 'macos'
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          repository: nexus-xyz/nexus-brand
+          ssh-key: ${{ secrets.BRAND_ASSETS_KEY }}
+          persist-credentials: false
+          path: .nexus-brand
+      - name: Use Nexus's icons
+        if: needs.plan.outputs.publish == 'true' && matrix.platform != 'macos'
+        shell: bash
+        run: |
+          mkdir -p apps/desktop/assets/icons
+          cp .nexus-brand/desktop/* apps/desktop/assets/icons/
+          rm -rf .nexus-brand
+          # The files the packaging scripts read (package.sh, package.ps1), each beside the stand-in it replaces.
+          for pair in 128x128@2x.png:app-icon.png icon.icns:app-icon.icns icon.ico:app-icon.ico; do
+            icon="apps/desktop/assets/icons/${pair%%:*}"
+            if [[ ! -s "$icon" ]] || cmp -s "$icon" "apps/desktop/assets/held/${pair#*:}"; then
+              echo "::error::$icon is not Nexus's icon. Nothing was packaged."
+              exit 1
+            fi
+          done
       - name: Linux packages GPUI needs
         if: matrix.platform == 'linux'
         run: |
@@ -355,6 +395,41 @@ jobs:
           security set-key-partition-list -S apple-tool:,apple: -s -k "$password" "$KEYCHAIN" > /dev/null
           security list-keychains -d user -s "$KEYCHAIN" login.keychain-db
 
+      # Nexus's app icons, from the private nexus-xyz/nexus-brand, in `apps/desktop/assets/icons/`, which the packaging
+      # scripts prefer over the neutral stand-ins in `assets/held/`. A publishing run stops without them.
+      - name: Check the brand key
+        if: needs.plan.outputs.publish == 'true'
+        shell: bash
+        env:
+          SET_BRAND_ASSETS_KEY: ${{ secrets.BRAND_ASSETS_KEY != '' }}
+        run: |
+          if [[ "$SET_BRAND_ASSETS_KEY" != true ]]; then
+            echo "::error::The release environment lacks BRAND_ASSETS_KEY. Nothing was built with Nexus's icons."
+            exit 1
+          fi
+      - name: Check out Nexus's icons
+        if: needs.plan.outputs.publish == 'true'
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          repository: nexus-xyz/nexus-brand
+          ssh-key: ${{ secrets.BRAND_ASSETS_KEY }}
+          persist-credentials: false
+          path: .nexus-brand
+      - name: Use Nexus's icons
+        if: needs.plan.outputs.publish == 'true'
+        shell: bash
+        run: |
+          mkdir -p apps/desktop/assets/icons
+          cp .nexus-brand/desktop/* apps/desktop/assets/icons/
+          rm -rf .nexus-brand
+          # The files the packaging scripts read (package.sh, package.ps1), each beside the stand-in it replaces.
+          for pair in 128x128@2x.png:app-icon.png icon.icns:app-icon.icns icon.ico:app-icon.ico; do
+            icon="apps/desktop/assets/icons/${pair%%:*}"
+            if [[ ! -s "$icon" ]] || cmp -s "$icon" "apps/desktop/assets/held/${pair#*:}"; then
+              echo "::error::$icon is not Nexus's icon. Nothing was packaged."
+              exit 1
+            fi
+          done
       # Without the Developer ID (a rehearsal only), package.sh signs ad hoc and does not notarize.
       - name: Sign, notarize and package the macOS app
         env:
