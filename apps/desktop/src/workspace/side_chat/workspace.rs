@@ -12,6 +12,23 @@ impl Workspace {
             .map(|(chat, _)| chat.clone())
     }
 
+    /// Whether files dropped on the window go to the side chat: it shows, so its composer takes them.
+    pub(in crate::workspace) fn side_chat_takes_drop(&self) -> bool {
+        self.side.side_chat_visible && self.open_side_chat().is_some()
+    }
+
+    /// Files dragged over the window, or not: the drop outline goes on the composer that takes them.
+    pub(in crate::workspace) fn show_file_drag(&mut self, on: bool, cx: &mut Context<Self>) {
+        if self.file_drag != on {
+            self.file_drag = on;
+            cx.notify();
+        }
+        let side = on && self.side_chat_takes_drop();
+        if let Some(chat) = self.open_side_chat() {
+            chat.update(cx, |chat, cx| chat.show_file_drag(side, cx));
+        }
+    }
+
     pub(in crate::workspace) fn waiting_side_chat(&self) -> Option<&super::retention::RetainedChat> {
         let View::Code(view) = &self.view else { return None };
         self.side
@@ -93,7 +110,14 @@ impl Workspace {
         chat.update(cx, |chat, _| chat.authority(guard));
         let closing = side_id.clone();
         let subscription = cx.subscribe_in(&chat, window, move |this, _, event: &SideEvent, window, cx| {
-            let SideEvent::Closed(deleted) = event;
+            let deleted = match event {
+                SideEvent::Closed(deleted) => deleted,
+                // The window's image viewer, as the session composer's chips open it (`image_viewer.rs`).
+                SideEvent::OpenImages(images, index) => {
+                    this.open_image(images, *index, cx);
+                    return;
+                }
+            };
             if let View::Code(view) = &this.view
                 && this.side.side_chat_for.get(&view.id) == Some(&closing)
             {

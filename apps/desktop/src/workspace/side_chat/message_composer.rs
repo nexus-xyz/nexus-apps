@@ -261,6 +261,13 @@ impl SideChat {
         let cancel: Rc<dyn Fn(u64, &mut Window, &mut App)> = Rc::new(move |id, _, cx| {
             let _ = weak.update(cx, |this, cx| this.cancel_upload(id, cx));
         });
+        // A click on an image chip opens it full size, as the session composer's.
+        let weak = cx.weak_entity();
+        let open: Rc<dyn Fn(usize, &mut Window, &mut App)> = Rc::new(move |index, _, cx| {
+            let _ = weak.update(cx, |this, cx| {
+                cx.emit(SideEvent::OpenImages(this.draft.images.clone(), index));
+            });
+        });
         let weak = cx.weak_entity();
         let paste = move |item: &ClipboardItem, _: &mut Window, cx: &mut App| {
             weak.update(cx, |this, cx| this.paste(item, cx)).unwrap_or(false)
@@ -289,7 +296,11 @@ impl SideChat {
             .on_click(cx.listener(|this, _, window, cx| this.send(true, window, cx)));
         let stop = stop_ring("stop-side-chat", p.working(), cx.reduce_motion(), p)
             .debug_selector(|| "side-stop".into())
-            .tooltip(|window, cx| Tooltip::new("Stop (Esc)").build(window, cx))
+            // The session's Stop title: what stopping does to this agent (`interrupt_title`).
+            .tooltip({
+                let title = code_dock::interrupt_title(self.summary.agent);
+                move |window, cx| Tooltip::new(title).build(window, cx)
+            })
             .on_click(cx.listener(|this, _, window, cx| {
                 this.command(
                     "wb_interrupt",
@@ -304,7 +315,9 @@ impl SideChat {
         // The sent message's files stay over the composer while they go up, as the session's (`render_uploading`).
         let uploading = self.uploading.as_ref().filter(|draft| !draft.is_empty());
         let shown = uploading.is_some() || !self.draft.is_empty();
-        let shell = composer_shell(false, p)
+        // Up and Down recall what was sent, and Shift+Enter continues a list, as the session's (`keys.rs`).
+        let shell = self
+            .composer_keys(composer_shell(false, p), cx)
             .debug_selector(|| "side-chat-composer".into())
             // The attachments open and close in height, as the session composer's.
             .child(motion::reveal(
@@ -335,7 +348,7 @@ impl SideChat {
                                 p,
                                 Some(remove),
                                 None,
-                                None,
+                                Some(open),
                             ))
                         })
                         .into_any_element()
@@ -359,7 +372,14 @@ impl SideChat {
                     .child(toolbar_slot("side-stop-slot", busy, stop))
                     .child(toolbar_slot("side-queue-slot", busy && enabled, queue))
                     .child(toolbar_slot("side-send-slot", !busy || enabled, send)),
-            );
-        composer_frame(shell, focused, p).into_any_element()
+            )
+            // While files are dragged over the window, the drop's outline, as the session composer's.
+            .when(self.file_drag, |shell| {
+                shell.child(crate::workspace::composer::drop_overlay(
+                    crate::i18n::tr("Drop files to attach them"),
+                    p,
+                ))
+            });
+        composer_frame(shell, focused || self.file_drag, p).into_any_element()
     }
 }

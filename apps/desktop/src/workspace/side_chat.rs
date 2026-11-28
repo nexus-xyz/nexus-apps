@@ -6,6 +6,7 @@ mod creation;
 mod dock;
 mod echo;
 mod history;
+mod keys;
 mod message_composer;
 mod operations;
 mod partials;
@@ -30,6 +31,8 @@ use std::time::Duration;
 
 pub(super) enum SideEvent {
     Closed(bool),
+    /// Open the draft's images full size at `index`, in the window's image viewer.
+    OpenImages(Vec<crate::attachments::Attachment>, usize),
 }
 impl EventEmitter<SideEvent> for SideChat {}
 
@@ -76,6 +79,10 @@ pub(super) struct SideChat {
     echo: Vec<echo::Echo>,
     /// Wakes the read loop at once, as a send lands.
     wake: Option<futures::channel::mpsc::UnboundedSender<()>>,
+    /// Up and Down's walk through what was sent (`keys.rs`).
+    recall: Option<super::prompt_history::Walk>,
+    /// Files are dragged over the window, and a drop attaches them here (`Workspace::show_file_drag`).
+    file_drag: bool,
     answers: Vec<Entity<InputState>>,
     request: Option<String>,
     permission_reason: Entity<InputState>,
@@ -171,6 +178,8 @@ impl SideChat {
             uploading: None,
             echo: vec![],
             wake: None,
+            recall: None,
+            file_drag: false,
             answers: vec![],
             request: None,
             permission_reason: cx.new(|cx| InputState::new(window, cx).placeholder("Reason (optional)")),

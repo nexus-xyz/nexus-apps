@@ -615,5 +615,7 @@ fn side_partial_stream_benchmark(cx: &mut TestAppContext) {
         serde_json::json!({"samples": samples})
     );
 }
+#[path = "keys_tests.rs"]
+mod keys_tests;
 #[path = "paste_tests.rs"]
 mod paste_tests;
