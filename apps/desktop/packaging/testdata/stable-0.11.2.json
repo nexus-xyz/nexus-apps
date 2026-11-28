@@ -1,0 +1,28 @@
+{
+  "version": "0.11.2",
+  "notes": "Nexus 0.11.2 (stable)",
+  "pub_date": "2026-11-23T23:24:03.090Z",
+  "channel": "stable",
+  "commit": "940c372a56924c988749b0b7e1f08ec29a698dd6",
+  "platforms": {
+    "darwin-aarch64-dmg": {
+      "url": "https://downloads.nexus.inc/desktop/stable/0.11.2/nexus-desktop-0.11.2-macos-arm64.dmg",
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVUVjJXdHY0RHhGWjRvNXlUZDBlcTIvT1JFMkRDcDN4TWZDU0pTdHljejZnN2JkRG5Nb0dRMHFkN2EzWlFJUXlOZStwcVc0WXRPMWtnZXpoSEFTdFl6N3dpTGVoM21ZVVE0PQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzk1NDc2MjQxCWZpbGU6bmV4dXMtZGVza3RvcC0wLjExLjItbWFjb3MtYXJtNjQuZG1nCXZlcnNpb246MC4xMS4yCjF4UUNLK1Q3bHhDci8xTXJWQ1lrOXFSeWhCM0Rvdjg1bFNGcDFhUGtBNS9CNVc0MjJnZWY0QVowem9FbzhMdVVUa1gxMlhuSjNNNWUwVEY3OXBkbENBPT0K"
+    },
+    "windows-x86_64-exe": {
+      "url": "https://downloads.nexus.inc/desktop/stable/0.11.2/nexus-desktop-0.11.2-windows-x86_64.exe",
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVUVjJXdHY0RHhGWjZ3ajJkZG14aWJ3WDUrZ3ZGbDVVY0tVL0hOTDdNMXRiYWRmQmlkR3loS0Z4bFZSdnU2WXJGd1RUZmxXdGp2RjNoU3JoUFZFUnBpVkcyZnZKZUljWHc0PQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzk1NDc2MjQxCWZpbGU6bmV4dXMtZGVza3RvcC0wLjExLjItd2luZG93cy14ODZfNjQuZXhlCXZlcnNpb246MC4xMS4yCmtIYXYzSXk0MXkvYkppV201TXhOQU9TbjNhSnpnNUtvNndnd1VSc2dLcThkR3VaMkRQTzMzV09XVEtLUUlINCt2M2ZGc1pCdDVZRE16djYyQXFvTUJnPT0K"
+    },
+    "linux-x86_64-tarball": {
+      "url": "https://downloads.nexus.inc/desktop/stable/0.11.2/nexus-desktop-0.11.2-linux-x86_64.tar.xz",
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVUVjJXdHY0RHhGWjEzbzFsVnRjM1h4Rkw2NGpOdE5nYzJFNkZXN0VrckJDYlZxMWZGZ3p2dFhrQ0EySVdvbXAzb2tLeklwOGc0ZE42M0R5bUVZSzNmTUdHVXZReE5iT0FZPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzk1NDc2MjQwCWZpbGU6bmV4dXMtZGVza3RvcC0wLjExLjItbGludXgteDg2XzY0LnRhci54egl2ZXJzaW9uOjAuMTEuMgpDN2NTMGoxN0RVdDVSY3RCVklSN2tJR1c4TUFBZFp0N3F4UHAxWCszdWpMM1Vucm1YSTQrWTlocGpSTnprN1lTNGFUUlJmajk2UmV6VEZRTFk2bXFDQT09Cg=="
+    }
+  },
+  "downloads": {
+    "macos-arm64-dmg": {"url":"https://downloads.nexus.inc/desktop/stable/0.11.2/nexus-desktop-0.11.2-macos-arm64.dmg","sha256":"a3fb8196a5c8c86c69912fef504bc3ff62633cac6e6de0d77ce24a6f84df53db","size":132232810},
+    "windows-x86_64-nsis": {"url":"https://downloads.nexus.inc/desktop/stable/0.11.2/nexus-desktop-0.11.2-windows-x86_64.exe","sha256":"84240d77e33124523fbcd60fce9d80e268e3d1c967b74f58a6c3cb61578994e8","size":155105390},
+    "linux-x86_64-tarball": {"url":"https://downloads.nexus.inc/desktop/stable/0.11.2/nexus-desktop-0.11.2-linux-x86_64.tar.xz","sha256":"dc57a4926ecefebf427d0213cb7bb2da43de858b34d687376d4348686ebdd012","size":139996716},
+    "linux-x86_64-nexus-host": {"url":"https://downloads.nexus.inc/desktop/stable/0.11.2/nexus-host_0.11.2_linux-x86_64.gz","sha256":"b461bef6eb340723d2cc87a89d27dee9e5daaab146af55cb11241fd015b72b6e","size":7992280,"signature":"dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVUVjJXdHY0RHhGWjAwcldLcEc1d3dnRVcya1FxaXVwN2pCOTZJbmJjS1N6bDIrWldIZmdEbUpaNzB0dGxZam13a3lPWnJ1TFkxQjEyNFhQQ1I5eVFQUTJSbUUyeEJpd2drPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzk1NDc2MjQyCWZpbGU6bmV4dXMtaG9zdF8wLjExLjJfbGludXgteDg2XzY0Lmd6CXZlcnNpb246MC4xMS4yClc0cXlteENITjk0b1R2Y1FPN0FvQ1F1bExYYXJreFBmaWFRdWd4dkplZHdxZ0R4SFdLUG1wSFRReUFZYlVBYmZNUEQxTS96bEZLaC9Jd1liekkwZ0JnPT0K"},
+    "linux-aarch64-nexus-host": {"url":"https://downloads.nexus.inc/desktop/stable/0.11.2/nexus-host_0.11.2_linux-aarch64.gz","sha256":"8e7332aab53f4783aa906d06d47a5f8e947794918df57a4edb6b2bed83c2ebf3","size":7452503,"signature":"dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVUVjJXdHY0RHhGWjZqeW94VVMva2F5bFhFRU5PaVdHTU5RVStXRkxqdko5MkxjUCtRWm1uVytjWkdEUjhIUHFGeUhoSG8xY2ZmN0ZzN0hteWE5S0pRMkFUUjYwRnlxWkFzPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzk1NDc2MjQyCWZpbGU6bmV4dXMtaG9zdF8wLjExLjJfbGludXgtYWFyY2g2NC5negl2ZXJzaW9uOjAuMTEuMgpCR0EzQmdwSFBKWHVXWjR2TjdPOWIzUUdLWm4ybGV1dVZYTkNMOXFIQy9xZFk5b2xyN0JiaUhSWnE4Qmw0Yy85SWVKdHBGeWs1Y0swQm51V3pjM2ZBQT09Cg=="}
+  }
+}

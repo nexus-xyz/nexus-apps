@@ -68,3 +68,7 @@ jobs:
       # The one-line installers, against a local fake feed. Each runner tests the script for its own system.
       - name: installer tests
         run: node --test apps/desktop/packaging/install/install.test.mjs
+      # The release's feed script (packaging/feed.py). The updater crate's tests read the same sample manifest.
+      - name: Feed script tests
+        if: runner.os == 'Linux'
+        run: python3 -m unittest apps/desktop/packaging/test_feed.py

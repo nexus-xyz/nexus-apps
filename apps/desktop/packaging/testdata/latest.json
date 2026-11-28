@@ -1,0 +1,28 @@
+{
+  "version": "1.2.3-beta.4",
+  "notes": "Nexus 1.2.3-beta.4 (beta)",
+  "pub_date": "2026-01-02T03:04:05Z",
+  "channel": "beta",
+  "commit": "0123abc",
+  "platforms": {
+    "darwin-aarch64-dmg": {
+      "url": "https://downloads.example/desktop-oss/beta/1.2.3-beta.4/nexus-desktop-1.2.3-beta.4-macos-arm64.dmg",
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIG1pbmlzaWduIHNlY3JldCBrZXkKYzNSaGJtUXRhVzQ9CnRydXN0ZWQgY29tbWVudDogdGltZXN0YW1wOjE3MDAwMDAwMDAJZmlsZTpuZXh1cy1kZXNrdG9wLTEuMi4zLWJldGEuNC1tYWNvcy1hcm02NC5kbWcJdmVyc2lvbjoxLjIuMy1iZXRhLjQKYzNSaGJtUXRhVzQ9Cg=="
+    },
+    "windows-x86_64-exe": {
+      "url": "https://downloads.example/desktop-oss/beta/1.2.3-beta.4/nexus-desktop-1.2.3-beta.4-windows-x86_64.exe",
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIG1pbmlzaWduIHNlY3JldCBrZXkKYzNSaGJtUXRhVzQ9CnRydXN0ZWQgY29tbWVudDogdGltZXN0YW1wOjE3MDAwMDAwMDAJZmlsZTpuZXh1cy1kZXNrdG9wLTEuMi4zLWJldGEuNC13aW5kb3dzLXg4Nl82NC5leGUJdmVyc2lvbjoxLjIuMy1iZXRhLjQKYzNSaGJtUXRhVzQ9Cg=="
+    },
+    "linux-x86_64-tarball": {
+      "url": "https://downloads.example/desktop-oss/beta/1.2.3-beta.4/nexus-desktop-1.2.3-beta.4-linux-x86_64.tar.xz",
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIG1pbmlzaWduIHNlY3JldCBrZXkKYzNSaGJtUXRhVzQ9CnRydXN0ZWQgY29tbWVudDogdGltZXN0YW1wOjE3MDAwMDAwMDAJZmlsZTpuZXh1cy1kZXNrdG9wLTEuMi4zLWJldGEuNC1saW51eC14ODZfNjQudGFyLnh6CXZlcnNpb246MS4yLjMtYmV0YS40CmMzUmhibVF0YVc0PQo="
+    }
+  },
+  "downloads": {
+    "macos-arm64-dmg": {"url":"https://downloads.example/desktop-oss/beta/1.2.3-beta.4/nexus-desktop-1.2.3-beta.4-macos-arm64.dmg","sha256":"1fb2c37995bbac8eb6acb171e3cd79a809fa9f19314a12c4eb000c48c3b8e04b","size":56},
+    "windows-x86_64-nsis": {"url":"https://downloads.example/desktop-oss/beta/1.2.3-beta.4/nexus-desktop-1.2.3-beta.4-windows-x86_64.exe","sha256":"a7c035a54051db06e388c9689e1da33aec909f29a17736f34a582d124f8f9f62","size":59},
+    "linux-x86_64-tarball": {"url":"https://downloads.example/desktop-oss/beta/1.2.3-beta.4/nexus-desktop-1.2.3-beta.4-linux-x86_64.tar.xz","sha256":"8d01eb147ec70dec1e11aadfe238fd5c5b2ce656e2c52ba8f65706a69e5b41c4","size":60},
+    "linux-x86_64-nexus-host": {"url":"https://downloads.example/desktop-oss/beta/1.2.3-beta.4/nexus-host_1.2.3-beta.4_linux-x86_64.gz","sha256":"34cd5dcf63ef1622f9d0a477f18f2ada0643347ea652a8d1814cd9ce9024e23b","size":53,"signature":"dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIG1pbmlzaWduIHNlY3JldCBrZXkKYzNSaGJtUXRhVzQ9CnRydXN0ZWQgY29tbWVudDogdGltZXN0YW1wOjE3MDAwMDAwMDAJZmlsZTpuZXh1cy1ob3N0XzEuMi4zLWJldGEuNF9saW51eC14ODZfNjQuZ3oJdmVyc2lvbjoxLjIuMy1iZXRhLjQKYzNSaGJtUXRhVzQ9Cg=="},
+    "linux-aarch64-nexus-host": {"url":"https://downloads.example/desktop-oss/beta/1.2.3-beta.4/nexus-host_1.2.3-beta.4_linux-aarch64.gz","sha256":"6e16333d3a287d66e6539bc51f531a87ac5d08ef422a3303909678bf033d99aa","size":54,"signature":"dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIG1pbmlzaWduIHNlY3JldCBrZXkKYzNSaGJtUXRhVzQ9CnRydXN0ZWQgY29tbWVudDogdGltZXN0YW1wOjE3MDAwMDAwMDAJZmlsZTpuZXh1cy1ob3N0XzEuMi4zLWJldGEuNF9saW51eC1hYXJjaDY0Lmd6CXZlcnNpb246MS4yLjMtYmV0YS40CmMzUmhibVF0YVc0PQo="}
+  }
+}
