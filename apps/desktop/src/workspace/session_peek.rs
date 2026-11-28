@@ -295,7 +295,7 @@ impl Workspace {
             .child(
                 v_flex()
                     .gap(px(6.))
-                    .when_some(parent, |lines, parent| lines.child(line(Lucide::Workflow, parent)))
+                    .when_some(parent, |lines, parent| lines.child(parent_line(parent, palette)))
                     .when_some(project, |lines, project| lines.child(line(Lucide::Folder, project)))
                     .when_some(machine, |lines, machine| lines.child(line(Lucide::Server, machine)))
                     .when_some(session.branch.clone(), |lines, branch| {
@@ -308,6 +308,35 @@ impl Workspace {
             });
         frame(content, has_pull, palette, window)
     }
+}
+
+/// Its most lines: a long parent title wraps to three lines, as the card's title does, and ends in an ellipsis after.
+const PARENT_LINES: usize = 3;
+
+/// A cross-project subsession's parent line (`cross_project::subsession_line`). It wraps, unlike the card's other
+/// lines: the parent's title is the part a reader needs whole. The icon stays level with the first line.
+fn parent_line(text: String, palette: Palette) -> Div {
+    h_flex()
+        .w_full()
+        .min_w(px(0.))
+        .items_start()
+        .gap(px(8.))
+        .child(
+            div()
+                .mt(px(2.))
+                .flex_none()
+                .child(glyph(Lucide::Workflow, palette.faint).size(px(14.))),
+        )
+        .child(
+            div()
+                .flex_1()
+                .min_w(px(0.))
+                .whitespace_normal()
+                .line_height(px(18.))
+                .line_clamp(PARENT_LINES)
+                .debug_selector(|| "session-peek-parent".into())
+                .child(text),
+        )
 }
 
 pub(super) fn frame(content: Div, has_pull: bool, palette: Palette, window: &Window) -> Stateful<Div> {
@@ -327,6 +356,10 @@ pub(super) fn frame(content: Div, has_pull: bool, palette: Palette, window: &Win
         .debug_selector(|| "session-peek-card".into())
         .child(content)
 }
+
+#[cfg(test)]
+#[path = "session_peek_parent_tests.rs"]
+mod parent_tests;
 
 #[cfg(test)]
 mod tests {
