@@ -25,6 +25,8 @@ use gpui_kit::*;
 use nexus_workbench::git::PullRequestInfo;
 use nexus_workbench::source_host::Host;
 
+use gpui_kit::component::input::TextareaState;
+
 use super::super::{View, Workspace};
 use super::{Glyph, MenuRow, render_menu};
 use crate::code::CodeSession;
@@ -166,6 +168,26 @@ pub(in crate::workspace) fn insert_token(text: &str, at: &MentionQuery, token: &
             0
         };
     (format!("{}{inserted}{rest}", &text[..at.start]), caret)
+}
+
+/// Put `token` in place of the word `at` in `input` (`insert_token`), the caret after it, and the focus there. Only the
+/// typed word is replaced, so undo takes the pick back.
+pub(in crate::workspace) fn put_token<T: 'static>(
+    input: &Entity<TextareaState>,
+    at: &MentionQuery,
+    token: &str,
+    window: &mut Window,
+    cx: &mut Context<T>,
+) {
+    let text = input.read(cx).value();
+    let (next, caret) = insert_token(&text, at, token);
+    let inserted = next[at.start..next.len() - (text.len() - at.end)].to_string();
+    input.update(cx, |state, cx| {
+        state.set_selected_range(at.start..at.end, cx);
+        state.replace(inserted, window, cx);
+        state.set_selected_range(caret..caret, cx);
+        state.focus(window, cx);
+    });
 }
 
 /// A folder's files with each path's lowercase, made once when the list arrives.
@@ -371,63 +393,57 @@ pub(in crate::workspace) struct MentionState {
 
 type RowsKey = (PathBuf, usize, String, bool, Option<Instant>, Option<Instant>, usize);
 
-impl Workspace {
-    /// The folder whose files and pull requests the composer on screen mentions: the open session's, or the new
-    /// session's project. None for a session still being made, or no project.
-    fn mention_folder(&self) -> Option<PathBuf> {
-        let key = match &self.view {
-            View::Code(view) if !view.is_draft() => format!("t:{}", view.id),
-            View::NewCode => format!("p:{}", self.code_form.project.as_deref()?),
-            _ => return None,
-        };
-        let state = &self.slash.mention;
-        if let Some((cached, folder)) = &*state.folder.borrow()
+impl MentionState {
+    /// The folder for `key` ("t:" and a session id, or "p:" and a project's), read by `resolve` only when the key
+    /// changed since the last ask.
+    pub(in crate::workspace) fn folder_for(
+        &self,
+        key: String,
+        resolve: impl FnOnce(&str) -> Option<PathBuf>,
+    ) -> Option<PathBuf> {
+        if let Some((cached, folder)) = &*self.folder.borrow()
             && *cached == key
         {
             return folder.clone();
         }
-        let store = self.code.as_ref()?;
-        let folder = match key.split_at(2) {
-            ("t:", id) => store.folder(id).ok().map(|folder| folder.path),
-            (_, id) => store.project_folder(id).ok(),
-        };
-        *state.folder.borrow_mut() = Some((key, folder.clone()));
+        let folder = resolve(&key);
+        *self.folder.borrow_mut() = Some((key, folder.clone()));
         folder
     }
 
-    /// The menu's query and rows while it is open: a Code composer, focused, the slash menu closed, an "@" or "#" word
-    /// at the caret, not dismissed, with something to list.
-    pub(in crate::workspace) fn mention_matches(&self, cx: &App) -> Option<(MentionQuery, Arc<Vec<Choice>>)> {
-        if !self.composer_focused
-            || !matches!(self.view, View::Code(_) | View::NewCode)
-            || self.slash_matches(cx).is_some()
-        {
-            return None;
-        }
-        let state = &self.slash.mention;
-        let composer = self.composer.read(cx);
-        let text = composer.value();
+    /// The menu's query and rows for `text` with the caret at `caret`: an "@" or "#" word there, not dismissed, not
+    /// under a selection, in a composer with a folder (`folder`), with something to list. `sessions` are the ones "@"
+    /// may name; `self_id` is the composer's own session, which it never lists.
+    pub(in crate::workspace) fn matches<'a>(
+        &self,
+        text: &str,
+        caret: usize,
+        selected: bool,
+        folder: impl FnOnce() -> Option<PathBuf>,
+        sessions: impl FnOnce() -> Vec<&'a CodeSession>,
+        self_id: Option<&str>,
+    ) -> Option<(MentionQuery, Arc<Vec<Choice>>)> {
+        let state = self;
         {
             let mut dismissed = state.dismissed.borrow_mut();
             match dismissed.as_deref() {
-                Some(closed) if closed == text.as_ref() => return None,
+                Some(closed) if closed == text => return None,
                 Some(_) => *dismissed = None,
                 None => {}
             }
         }
         // A selection is not a mention being typed.
-        if !composer.selected_range().is_empty() {
+        if selected {
             return None;
         }
-        let caret = composer.cursor();
-        let (at, prs) = match mention_query(&text, caret) {
+        let (at, prs) = match mention_query(text, caret) {
             Some(at) => (at, false),
-            None => (pull_request_query(&text, caret)?, true),
+            None => (pull_request_query(text, caret)?, true),
         };
-        let folder = self.mention_folder()?;
+        let folder = folder()?;
         let files_at = self.want(&folder, false);
         let prs_at = prs.then(|| self.want(&folder, true)).flatten();
-        let sessions = self.projects.iter().map(|project| project.sessions.len()).sum();
+        let sessions = sessions();
         let key: RowsKey = (
             folder.clone(),
             at.start,
@@ -435,7 +451,7 @@ impl Workspace {
             prs,
             files_at,
             prs_at,
-            sessions,
+            sessions.len(),
         );
         if let Some((cached, rows)) = &*state.rows.borrow()
             && *cached == key
@@ -456,11 +472,6 @@ impl Workspace {
                 }
             }
         } else {
-            let self_id = match &self.view {
-                View::Code(view) => Some(view.id.as_str()),
-                _ => None,
-            };
-            let sessions = self.projects.iter().flat_map(|project| &project.sessions);
             for session in rank_sessions(sessions, &at.query, self_id) {
                 rows.push(Choice {
                     kind: Kind::Session,
@@ -488,7 +499,7 @@ impl Workspace {
 
     /// When `folder`'s files (or pull requests) were read; asks for them again when they never were, or are stale.
     fn want(&self, folder: &PathBuf, prs: bool) -> Option<Instant> {
-        let state = &self.slash.mention;
+        let state = self;
         let at = if prs {
             state.prs.borrow().get(folder).map(|loaded| loaded.at)
         } else {
@@ -505,11 +516,11 @@ impl Workspace {
         at
     }
 
-    /// Read what the last frames asked for, off the UI thread.
-    fn load_wanted(&self, cx: &mut Context<Self>) {
-        let wanted = std::mem::take(&mut *self.slash.mention.wanted.borrow_mut());
+    /// Read what the last frames asked for, off the UI thread, into the state `state` finds on `T`.
+    pub(in crate::workspace) fn load_wanted<T: 'static>(&self, cx: &mut Context<T>, state: fn(&T) -> &MentionState) {
+        let wanted = std::mem::take(&mut *self.wanted.borrow_mut());
         for (folder, prs) in wanted {
-            if !self.slash.mention.loading.borrow_mut().insert((folder.clone(), prs)) {
+            if !self.loading.borrow_mut().insert((folder.clone(), prs)) {
                 continue;
             }
             let dir = folder.clone();
@@ -521,7 +532,7 @@ impl Workspace {
                 cx.spawn(async move |this, cx| {
                     let list = read.await;
                     let _ = this.update(cx, |this, cx| {
-                        let state = &this.slash.mention;
+                        let state = state(this);
                         state.loading.borrow_mut().remove(&(folder.clone(), true));
                         state.prs.borrow_mut().insert(
                             folder,
@@ -544,7 +555,7 @@ impl Workspace {
                 cx.spawn(async move |this, cx| {
                     let index = read.await;
                     let _ = this.update(cx, |this, cx| {
-                        let state = &this.slash.mention;
+                        let state = state(this);
                         state.loading.borrow_mut().remove(&(folder.clone(), false));
                         state.files.borrow_mut().insert(
                             folder,
@@ -561,13 +572,125 @@ impl Workspace {
         }
     }
 
-    fn mention_active(&self, at: &MentionQuery, rows: usize) -> usize {
-        let state = &self.slash.mention;
-        if state.key.as_ref() == Some(&(at.start, at.query.clone())) {
-            state.active.min(rows.saturating_sub(1))
+    /// The highlighted row for the mention `at`: another starts again at the top.
+    pub(in crate::workspace) fn active_for(&self, at: &MentionQuery, rows: usize) -> usize {
+        if self.key.as_ref() == Some(&(at.start, at.query.clone())) {
+            self.active.min(rows.saturating_sub(1))
         } else {
             0
         }
+    }
+
+    /// Up or Down: the next row, wrapping, scrolled into view.
+    pub(in crate::workspace) fn step(&mut self, at: MentionQuery, rows: &[Choice], down: bool) {
+        let active = self.active_for(&at, rows.len());
+        self.active = if down {
+            (active + 1) % rows.len()
+        } else {
+            (active + rows.len() - 1) % rows.len()
+        };
+        self.key = Some((at.start, at.query));
+        self.scroll.scroll_to_item(row_child(rows, self.active));
+    }
+
+    /// Esc: the menu stays closed while the text is `text`.
+    pub(in crate::workspace) fn dismiss(&self, text: String) {
+        *self.dismissed.borrow_mut() = Some(text);
+    }
+
+    /// A pick filled the word: the next menu starts at the top.
+    pub(in crate::workspace) fn picked(&mut self) {
+        self.active = 0;
+        self.key = None;
+    }
+
+    pub(in crate::workspace) fn scroll(&self) -> &ScrollHandle {
+        &self.scroll
+    }
+}
+
+/// The mention menu's rows as the popup draws them: a group header over each kind, then a glyph, the name and the
+/// dimmed hint.
+pub(in crate::workspace) fn menu_rows(rows: &[Choice]) -> Vec<MenuRow> {
+    rows.iter()
+        .map(|choice| {
+            let (group, icon) = match choice.kind {
+                Kind::Session => ("Sessions", Lucide::MessageSquare.into()),
+                // The file's type icon. Its hint is its folder, so the folder can pick it (`.config/…`).
+                Kind::File => (
+                    "Files",
+                    Glyph::File(FileIcon::file(&format!("{}/{}", choice.hint, choice.name))),
+                ),
+                Kind::PullRequest => ("Pull requests", Lucide::GitFork.into()),
+            };
+            MenuRow {
+                group,
+                icon,
+                name: choice.name.clone().into(),
+                hint: choice.hint.clone().into(),
+                dim: false,
+            }
+        })
+        .collect()
+}
+
+impl Workspace {
+    /// The folder of the session `id`, read from the store.
+    pub(in crate::workspace) fn session_folder(&self, id: &str) -> Option<PathBuf> {
+        self.code.as_ref()?.folder(id).ok().map(|folder| folder.path)
+    }
+
+    /// The sessions "@" may name: every project's.
+    pub(in crate::workspace) fn mention_sessions(&self) -> Vec<&CodeSession> {
+        self.projects.iter().flat_map(|project| &project.sessions).collect()
+    }
+
+    /// The folder whose files and pull requests the composer on screen mentions: the open session's, or the new
+    /// session's project. None for a session still being made, or no project.
+    fn mention_folder(&self) -> Option<PathBuf> {
+        let key = match &self.view {
+            View::Code(view) if !view.is_draft() => format!("t:{}", view.id),
+            View::NewCode => format!("p:{}", self.code_form.project.as_deref()?),
+            _ => return None,
+        };
+        self.slash.mention.folder_for(key, |key| match key.split_at(2) {
+            ("t:", id) => self.session_folder(id),
+            (_, id) => self.code.as_ref()?.project_folder(id).ok(),
+        })
+    }
+
+    /// The menu's query and rows while it is open: a Code composer, focused, the slash menu closed, an "@" or "#" word
+    /// at the caret, not dismissed, with something to list.
+    pub(in crate::workspace) fn mention_matches(&self, cx: &App) -> Option<(MentionQuery, Arc<Vec<Choice>>)> {
+        if !self.composer_focused
+            || !matches!(self.view, View::Code(_) | View::NewCode)
+            || self.slash_matches(cx).is_some()
+        {
+            return None;
+        }
+        let composer = self.composer.read(cx);
+        let self_id = match &self.view {
+            View::Code(view) => Some(view.id.as_str()),
+            _ => None,
+        };
+        self.slash.mention.matches(
+            &composer.value(),
+            composer.cursor(),
+            !composer.selected_range().is_empty(),
+            || self.mention_folder(),
+            || self.mention_sessions(),
+            self_id,
+        )
+    }
+
+    fn load_wanted(&self, cx: &mut Context<Self>) {
+        self.slash
+            .mention
+            .load_wanted(cx, |this: &Workspace| &this.slash.mention);
+    }
+
+    fn mention_active(&self, at: &MentionQuery, rows: usize) -> usize {
+        self.slash.mention.active_for(at, rows)
     }
 
     /// Up or Down while the menu is open: the next row, wrapping. False when it is closed.
@@ -575,15 +698,7 @@ impl Workspace {
         let Some((at, rows)) = self.mention_matches(cx) else {
             return false;
         };
-        let active = self.mention_active(&at, rows.len());
-        let state = &mut self.slash.mention;
-        state.active = if down {
-            (active + 1) % rows.len()
-        } else {
-            (active + rows.len() - 1) % rows.len()
-        };
-        state.key = Some((at.start, at.query));
-        state.scroll.scroll_to_item(row_child(&rows, state.active));
+        self.slash.mention.step(at, &rows, down);
         cx.notify();
         true
     }
@@ -593,7 +708,7 @@ impl Workspace {
         if self.mention_matches(cx).is_none() {
             return false;
         }
-        *self.slash.mention.dismissed.borrow_mut() = Some(self.composer.read(cx).value().to_string());
+        self.slash.mention.dismiss(self.composer.read(cx).value().to_string());
         cx.notify();
         true
     }
@@ -610,19 +725,9 @@ impl Workspace {
 
     /// Put `token` in place of the mention `at`, a space after it, and the caret after that.
     fn mention_pick(&mut self, at: &MentionQuery, token: &str, window: &mut Window, cx: &mut Context<Self>) {
-        let text = self.composer.read(cx).value();
-        let (next, caret) = insert_token(&text, at, token);
-        let inserted = next[at.start..next.len() - (text.len() - at.end)].to_string();
-        self.composer.update(cx, |state, cx| {
-            // Only the typed word is replaced, so undo takes the pick back.
-            state.set_selected_range(at.start..at.end, cx);
-            state.replace(inserted, window, cx);
-            state.set_selected_range(caret..caret, cx);
-            state.focus(window, cx);
-        });
+        put_token(&self.composer, at, token, window, cx);
         self.composer_empty = false;
-        self.slash.mention.active = 0;
-        self.slash.mention.key = None;
+        self.slash.mention.picked();
         cx.notify();
     }
 
@@ -635,30 +740,9 @@ impl Workspace {
     ) -> Option<AnyElement> {
         let open = self.mention_matches(cx);
         self.load_wanted(cx);
-        let shown = open.as_ref().map(|(at, rows)| {
-            let menu_rows: Vec<MenuRow> = rows
-                .iter()
-                .map(|choice| {
-                    let (group, icon) = match choice.kind {
-                        Kind::Session => ("Sessions", Lucide::MessageSquare.into()),
-                        // The file's type icon. Its hint is its folder, so the folder can pick it (`.config/…`).
-                        Kind::File => (
-                            "Files",
-                            Glyph::File(FileIcon::file(&format!("{}/{}", choice.hint, choice.name))),
-                        ),
-                        Kind::PullRequest => ("Pull requests", Lucide::GitFork.into()),
-                    };
-                    MenuRow {
-                        group,
-                        icon,
-                        name: choice.name.clone().into(),
-                        hint: choice.hint.clone().into(),
-                        dim: false,
-                    }
-                })
-                .collect();
-            (menu_rows, self.mention_active(at, rows.len()))
-        });
+        let shown = open
+            .as_ref()
+            .map(|(at, rows)| (menu_rows(rows), self.mention_active(at, rows.len())));
         // A closed menu leaves with the rows it showed last (`motion::presence_of`); it takes no picks then.
         let (phase, (menu_rows, active)) = crate::motion::presence_of("mention-menu", shown, cx)?;
         Some(render_menu(

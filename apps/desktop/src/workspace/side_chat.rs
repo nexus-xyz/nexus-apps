@@ -5,6 +5,7 @@ mod controls;
 mod creation;
 mod dock;
 mod history;
+mod menus;
 mod message_composer;
 mod operations;
 mod partials;
@@ -29,6 +30,8 @@ use std::time::Duration;
 
 pub(super) enum SideEvent {
     Closed(bool),
+    /// A "/" command that opens one of the session's tools (`menus.rs`): the workspace runs it.
+    Slash(super::slash::Action),
 }
 impl EventEmitter<SideEvent> for SideChat {}
 
@@ -66,6 +69,10 @@ pub(super) struct SideChat {
     texts: HashMap<usize, Entity<TextViewState>>,
     streamed: Option<(String, Entity<TextViewState>)>,
     input: Entity<TextareaState>,
+    /// The composer's "/" and "@"/"#" menus (`menus.rs`).
+    menus: super::slash::SlashState,
+    /// The workspace that shows it, for the "@" menu's sessions and folder (`bind_workspace`).
+    workspace: Option<WeakEntity<Workspace>>,
     draft: crate::attachments::Draft,
     /// Messages sent but not yet handed to the core, oldest first (`commands.rs`, `flush_outbox`).
     outbox: std::collections::VecDeque<operations::Outgoing>,
@@ -161,6 +168,8 @@ impl SideChat {
             texts: HashMap::new(),
             streamed: None,
             input,
+            menus: Default::default(),
+            workspace: None,
             draft: Default::default(),
             outbox: Default::default(),
             uploading: None,

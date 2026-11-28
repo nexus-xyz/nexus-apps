@@ -90,10 +90,20 @@ impl Workspace {
         cx: &mut Context<Self>,
     ) {
         let guard = self.side_chat_guard();
-        chat.update(cx, |chat, _| chat.authority(guard));
+        let workspace = cx.weak_entity();
+        chat.update(cx, |chat, _| {
+            chat.authority(guard);
+            chat.bind_workspace(workspace);
+        });
         let closing = side_id.clone();
         let subscription = cx.subscribe_in(&chat, window, move |this, _, event: &SideEvent, window, cx| {
-            let SideEvent::Closed(deleted) = event;
+            let deleted = match event {
+                SideEvent::Closed(deleted) => deleted,
+                SideEvent::Slash(action) => {
+                    this.run_slash_action(*action, window, cx);
+                    return;
+                }
+            };
             if let View::Code(view) = &this.view
                 && this.side.side_chat_for.get(&view.id) == Some(&closing)
             {

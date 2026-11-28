@@ -1167,5 +1167,6 @@ fn side_chat_local_store_locator_requires_matching_data_path_and_scope(cx: &mut 
     });
 }
 
+mod menu_tests;
 mod partial_tests;
 mod send_tests;

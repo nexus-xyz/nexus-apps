@@ -118,6 +118,11 @@ impl SideChat {
         if text.trim().is_empty() && self.draft.is_empty() {
             return;
         }
+        // A Nexus command runs here, as the session composer's `slash_submit` (`menus.rs`).
+        if self.slash_submit(&text, window, cx) {
+            cx.notify();
+            return;
+        }
         let draft = std::mem::take(&mut self.draft);
         self.input.update(cx, |input, cx| input.set_value("", window, cx));
         self.brought_back = false;

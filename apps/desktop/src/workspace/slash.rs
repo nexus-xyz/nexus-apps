@@ -110,6 +110,94 @@ pub(super) struct SlashState {
     pub(super) mention: MentionState,
 }
 
+impl SlashState {
+    /// The "/" word at `caret` in `text`, unless a selection covers it or Esc closed the menu for this text. Any other
+    /// text clears the Esc, so typing the same text again opens the menu.
+    pub(super) fn word(&self, text: &str, caret: usize, selected: bool) -> Option<SlashAt> {
+        if selected {
+            return None;
+        }
+        let mut dismissed = self.dismissed.borrow_mut();
+        match dismissed.as_deref() {
+            Some(closed) if closed == text => return None,
+            Some(_) => *dismissed = None,
+            None => {}
+        }
+        drop(dismissed);
+        slash_at(text, caret)
+    }
+
+    /// The highlighted row for `query`: another query starts again at the top.
+    pub(super) fn active_for(&self, query: &str, rows: usize) -> usize {
+        if self.query == query {
+            self.active.min(rows.saturating_sub(1))
+        } else {
+            0
+        }
+    }
+
+    /// Up or Down: the next row, wrapping, scrolled into view.
+    pub(super) fn step(&mut self, query: String, rows: &[SlashCommand], down: bool) {
+        let active = self.active_for(&query, rows.len());
+        self.active = if down {
+            (active + 1) % rows.len()
+        } else {
+            (active + rows.len() - 1) % rows.len()
+        };
+        self.query = query;
+        let child = menu_row_child(rows.iter().map(|row| row.action.is_some()), self.active);
+        self.scroll.scroll_to_item(child);
+    }
+
+    /// Esc: the menu stays closed while the text is `text`.
+    pub(super) fn dismiss(&self, text: String) {
+        *self.dismissed.borrow_mut() = Some(text);
+    }
+
+    /// A pick filled the word: the next menu starts at the top.
+    pub(super) fn picked(&mut self) {
+        self.active = 0;
+    }
+
+    pub(super) fn scroll(&self) -> &ScrollHandle {
+        &self.scroll
+    }
+}
+
+/// The rows for the "/" word `slash` out of `commands`. Inside a message the rows are the agent's commands only, and
+/// none is refused: the word goes to the agent as text, not as a command.
+pub(super) fn rows_for(slash: &SlashAt, mut commands: Vec<SlashCommand>) -> Vec<SlashCommand> {
+    if slash.inline {
+        commands.retain(|command| command.action.is_none());
+        for command in &mut commands {
+            command.reason = None;
+        }
+    }
+    match_commands(commands, &slash.at.query)
+}
+
+/// The slash menu's rows as the popup draws them: "Commands" then "Skills", each "/name" and its hint (or why it can't
+/// run, dimmed).
+pub(super) fn menu_rows(rows: &[SlashCommand]) -> Vec<MenuRow> {
+    rows.iter()
+        .map(|row| {
+            let command = row.action.is_some();
+            MenuRow {
+                group: if command { "Commands" } else { "Skills" },
+                icon: if command {
+                    Lucide::SquareTerminal
+                } else {
+                    Lucide::Sparkles
+                }
+                .into(),
+                name: format!("/{}", row.name).into(),
+                hint: row.reason.map_or(row.hint.clone(), str::to_string).into(),
+                dim: row.reason.is_some(),
+            }
+        })
+        .collect()
+}
+
 /// The agent's commands that a Nexus command of the same name replaces: the menu lists only Nexus's, with no
 /// `agent:` alias. Any other clash keeps the agent's command as `agent:<name>`.
 const REPLACED: [&str; 1] = ["rename"];
@@ -312,37 +400,17 @@ impl Workspace {
             return None;
         }
         let composer = self.composer.read(cx);
-        // A selection is not a command being typed.
-        if !composer.selected_range().is_empty() {
-            return None;
-        }
-        let caret = composer.cursor();
-        let text = composer.value();
-        let mut dismissed = self.slash.dismissed.borrow_mut();
-        match dismissed.as_deref() {
-            Some(closed) if closed == text.as_ref() => return None,
-            Some(_) => *dismissed = None,
-            None => {}
-        }
-        drop(dismissed);
-        let slash = slash_at(&text, caret)?;
-        let mut commands = self.slash_list();
-        if slash.inline {
-            commands.retain(|command| command.action.is_none());
-            for command in &mut commands {
-                command.reason = None;
-            }
-        }
-        let rows = match_commands(commands, &slash.at.query);
+        let slash = self.slash.word(
+            &composer.value(),
+            composer.cursor(),
+            !composer.selected_range().is_empty(),
+        )?;
+        let rows = rows_for(&slash, self.slash_list());
         (!rows.is_empty()).then_some((slash, rows))
     }
 
     fn slash_active(&self, query: &str, rows: usize) -> usize {
-        if self.slash.query == query {
-            self.slash.active.min(rows.saturating_sub(1))
-        } else {
-            0
-        }
+        self.slash.active_for(query, rows)
     }
 
     /// Up or Down while the menu is open: the next row, wrapping. False when it is closed (the key keeps its meaning).
@@ -350,16 +418,7 @@ impl Workspace {
         let Some((query, rows)) = self.slash_matches(cx) else {
             return false;
         };
-        let active = self.slash_active(&query, rows.len());
-        self.slash.active = if down {
-            (active + 1) % rows.len()
-        } else {
-            (active + rows.len() - 1) % rows.len()
-        };
-        self.slash.query = query;
-        self.slash
-            .scroll
-            .scroll_to_item(self.slash_row_child(&rows, self.slash.active));
+        self.slash.step(query, &rows, down);
         cx.notify();
         true
     }
@@ -369,7 +428,7 @@ impl Workspace {
         if self.slash_matches(cx).is_none() {
             return false;
         }
-        *self.slash.dismissed.borrow_mut() = Some(self.composer.read(cx).value().to_string());
+        self.slash.dismiss(self.composer.read(cx).value().to_string());
         cx.notify();
         true
     }
@@ -398,19 +457,9 @@ impl Workspace {
         let Some((slash, _)) = self.slash_rows(cx) else {
             return;
         };
-        let at = slash.at;
-        let text = self.composer.read(cx).value();
-        let (next, caret) = mention::insert_token(&text, &at, &format!("/{}", command.name));
-        let inserted = next[at.start..next.len() - (text.len() - at.end)].to_string();
-        self.composer.update(cx, |state, cx| {
-            // Only the typed word is replaced, so undo takes the pick back.
-            state.set_selected_range(at.start..at.end, cx);
-            state.replace(inserted, window, cx);
-            state.set_selected_range(caret..caret, cx);
-            state.focus(window, cx);
-        });
+        mention::put_token(&self.composer, &slash.at, &format!("/{}", command.name), window, cx);
         self.composer_empty = false;
-        self.slash.active = 0;
+        self.slash.picked();
         cx.notify();
     }
 
@@ -579,10 +628,6 @@ impl Workspace {
         }
     }
 
-    fn slash_row_child(&self, rows: &[SlashCommand], active: usize) -> usize {
-        menu_row_child(rows.iter().map(|row| row.action.is_some()), active)
-    }
-
     /// The slash menu: "Commands" then "Skills", each row "/name" and its hint (or why it can't run, dimmed).
     pub(super) fn render_slash_menu(
         &self,
@@ -591,27 +636,9 @@ impl Workspace {
         cx: &mut Context<Self>,
     ) -> Option<AnyElement> {
         let open = self.slash_matches(cx);
-        let shown = open.as_ref().map(|(query, rows)| {
-            let menu_rows: Vec<MenuRow> = rows
-                .iter()
-                .map(|row| {
-                    let command = row.action.is_some();
-                    MenuRow {
-                        group: if command { "Commands" } else { "Skills" },
-                        icon: if command {
-                            Lucide::SquareTerminal
-                        } else {
-                            Lucide::Sparkles
-                        }
-                        .into(),
-                        name: format!("/{}", row.name).into(),
-                        hint: row.reason.map_or(row.hint.clone(), str::to_string).into(),
-                        dim: row.reason.is_some(),
-                    }
-                })
-                .collect();
-            (menu_rows, self.slash_active(query, rows.len()))
-        });
+        let shown = open
+            .as_ref()
+            .map(|(query, rows)| (menu_rows(rows), self.slash_active(query, rows.len())));
         // A closed menu leaves with the rows it showed last (`motion::presence_of`); it takes no picks then.
         let (phase, (menu_rows, active)) = crate::motion::presence_of("slash-menu", shown, cx)?;
         let rows = open.map(|(_, rows)| rows).unwrap_or_default();
@@ -688,7 +715,7 @@ pub(super) fn menu_row_child<G: PartialEq>(groups: impl Iterator<Item = G>, acti
 /// right. Above the composer, or below a new session's. A press on a row calls `pick` with its index. It rises from
 /// the composer (or drops toward a new session's box) and leaves the same way, as `phase` says.
 #[allow(clippy::too_many_arguments)]
-pub(super) fn render_menu(
+pub(super) fn render_menu<T: 'static>(
     id: &'static str,
     scroll: &ScrollHandle,
     rows: Vec<MenuRow>,
@@ -696,8 +723,8 @@ pub(super) fn render_menu(
     below: bool,
     phase: crate::motion::Phase,
     palette: Palette,
-    pick: impl Fn(&mut Workspace, usize, &mut Window, &mut Context<Workspace>) + 'static,
-    cx: &mut Context<Workspace>,
+    pick: impl Fn(&mut T, usize, &mut Window, &mut Context<T>) + 'static,
+    cx: &mut Context<T>,
 ) -> AnyElement {
     let pick = Rc::new(pick);
     let mut list = v_flex()
