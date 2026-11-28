@@ -1,3 +1,5 @@
+// Ported from zui (https://github.com/zeronsh/zui), Copyright 2022 - 2025 Zed Industries, Inc.,
+// licensed under the Apache License, Version 2.0. Modified by Nexus Laboratories, Inc. See NOTICE.
 //! Nexus (new file): the math every renderer's backdrop blur shares (`Window::paint_backdrop_blur`). Ported from zui
 //! (<https://github.com/zeronsh/zui>, Apache-2.0, Copyright Zed Industries): its wgpu `blur_kernel.rs` and the
 //! region and scratch logic of its wgpu, Metal and D3D11 renderers, in one place so the backends agree and it is

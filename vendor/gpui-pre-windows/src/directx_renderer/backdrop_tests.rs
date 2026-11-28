@@ -1,3 +1,5 @@
+// Ported from zui (https://github.com/zeronsh/zui), Copyright 2022 - 2025 Zed Industries, Inc.,
+// licensed under the Apache License, Version 2.0. Modified by Nexus Laboratories, Inc. See NOTICE.
 //! Nexus (new file): zui's pixel regressions for backdrop blur through the production draw loop, using software
 //! D3D11 (WARP). Ported from zui (<https://github.com/zeronsh/zui>, Apache-2.0, Copyright Zed Industries),
 //! `crates/gpui_windows/src/directx_renderer/backdrop_tests.rs`. Changes: `draw_scene` is this renderer's `render`;

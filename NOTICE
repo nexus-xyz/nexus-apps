@@ -3,6 +3,9 @@ Copyright 2025-2026 Nexus Laboratories, Inc.
 
 This product is licensed under the MIT license. See the LICENSE file.
 
+The full list of third-party software in a desktop release package (Rust crates, npm packages, CEF, fonts and
+marks), with the full text of each license, is in apps/desktop/THIRD_PARTY_NOTICES.txt.
+
 This product includes software developed by others. Each item below keeps its own license.
 The Apache-2.0 items require their attribution notices to travel with every copy, so this file stays.
 
@@ -39,15 +42,22 @@ Language file names and extensions from Visual Studio Code (apps/desktop/src/fil
 
 Selectable message text adapted from GPUI Base 0.9 (apps/desktop/src/workspace/message_text.rs)
   https://github.com/longbridge/gpui-kit
-  Licensed under the Apache License, Version 2.0.
   Copyright 2024 - 2026 Longbridge <https://longbridge.com>
+  Licensed under the Apache License, Version 2.0. The license text is in apps/desktop/THIRD_PARTY_NOTICES.txt,
+  in the Apache-2.0 entry for gpui-base 0.9.0. Modified by Nexus Laboratories, Inc.
 
-Backdrop blur code ported from zui (vendor/gpui-pre/src/backdrop_blur.rs, vendor/gpui-pre-wgpu/src/wgpu_backdrop.rs,
-  vendor/gpui-pre-wgpu/src/shaders.wgsl, vendor/gpui-pre-windows/src/directx_renderer/backdrop.rs,
-  vendor/gpui-pre-windows/src/directx_renderer/backdrop_tests.rs, vendor/gpui-pre-apple/src/metal_renderer.rs)
+Backdrop blur code ported from zui
+  New files: vendor/gpui-pre/src/backdrop_blur.rs, vendor/gpui-pre-wgpu/src/wgpu_backdrop.rs,
+  vendor/gpui-pre-windows/src/directx_renderer/backdrop.rs,
+  vendor/gpui-pre-windows/src/directx_renderer/backdrop_tests.rs.
+  Ported parts, marked by comments that name zui: vendor/gpui-pre/src/scene.rs, vendor/gpui-pre/src/window.rs,
+  vendor/gpui-pre-apple/build.rs, vendor/gpui-pre-apple/src/metal_renderer.rs, vendor/gpui-pre-apple/src/shaders.metal,
+  vendor/gpui-pre-wgpu/src/wgpu_renderer.rs, vendor/gpui-pre-wgpu/src/shaders.wgsl,
+  vendor/gpui-pre-windows/src/directx_renderer.rs, vendor/gpui-pre-windows/src/shaders.hlsl.
   https://github.com/zeronsh/zui
   Copyright 2022 - 2025 Zed Industries, Inc.
   Licensed under the Apache License, Version 2.0. The license text is in apps/desktop/licenses/third-party/zui-LICENSE-APACHE.
+  Modified by Nexus Laboratories, Inc.
 
 global-hotkey 0.8.0 (vendor/global-hotkey)
   Copyright 2022-2022 Tauri Programme within The Commons Conservancy
@@ -95,7 +105,7 @@ Chromium Embedded Framework (CEF)
   anyone who asks a complete machine-readable copy of the corresponding source code of the CEF and Chromium version in
   that package, FFmpeg included, with the scripts used to build it, on a physical medium or by download, for no more
   than our cost of doing so. The offer is open to anyone, not only to people who received the package from us.
-  To ask, write to trademarks@nexus.inc and say the package version and your platform.
+  To ask, write to legal@nexus.inc and say the package version and your platform.
 
 Rust crates
   The app depends on Rust crates from crates.io under their own licenses.

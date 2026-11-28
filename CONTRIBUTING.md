@@ -30,16 +30,43 @@ Until then, follow the patterns in the code next to your change.
 
 ## Tests and checks
 
-Run these before you push:
+CI checks each package on its own, never with `--workspace`. The desktop app turns on features of shared crates
+that the CLI leaves off, so a workspace build tests a different CLI. Run the checks for the parts you changed
+before you push. They are the commands the workflows in `.github/workflows` run.
+
+Formatting, for every change:
 
 ```sh
-cargo fmt --check
-cargo test --locked
-cargo clippy --locked --all-targets
+cargo fmt --all -- --check
 ```
 
-Run the first two before you open a pull request. Pull requests run the repository's checks, so keep them green.
-The crate is not clippy-clean yet, so add no new warnings.
+The desktop app (`desktop.yml`, on Linux, macOS and Windows):
+
+```sh
+cargo clippy --locked -p nexus-desktop-gpui --all-targets
+cargo nextest run --locked -p nexus-desktop-gpui
+```
+
+The CLI (`cli.yml`):
+
+```sh
+cargo clippy --locked -p nexus-cli --no-default-features --all-targets -- -D warnings
+cargo nextest run --locked -p nexus-cli --no-default-features
+```
+
+The shared crates (`crates.yml`), and the dependency licenses and sources:
+
+```sh
+cargo clippy --locked --workspace --exclude nexus-desktop-gpui --exclude nexus-cli --all-targets --all-features -- -D warnings
+cargo nextest run --locked --workspace --exclude nexus-desktop-gpui --exclude nexus-cli --all-features
+cargo deny --locked check licenses sources
+```
+
+The tests use [cargo-nextest](https://nexte.st). `cargo test --locked -p <package>` also works.
+[cargo-deny](https://github.com/EmbarkStudios/cargo-deny) checks dependencies against `deny.toml`.
+Pull requests run the same checks, so keep them green.
+The CLI and the shared crates fail on any clippy warning. The desktop app is not clippy-clean yet, so add no new
+warnings there.
 GPUI tests use `TestAppContext` and run without a display. `apps/desktop/src/pages/ui_tests.rs` and `apps/desktop/src/motion/mark.rs` show the pattern.
 
 Every fix lands with its test. For a bug fix, write a test that fails before your change and passes after it.
@@ -86,6 +113,8 @@ By contributing, you agree that your contribution is licensed under the [MIT lic
 7. When it is approved and the checks pass, a maintainer squash-merges it.
 
 We aim to give a first response within a few working days.
+
+`.greptile/`, `.review-bot/`, `AGENTS.md` and `CLAUDE.md` are maintainer tooling, for review bots and coding agents.
 
 ## Help
 

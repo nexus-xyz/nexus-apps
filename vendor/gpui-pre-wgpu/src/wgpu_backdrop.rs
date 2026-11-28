@@ -1,3 +1,5 @@
+// Ported from zui (https://github.com/zeronsh/zui), Copyright 2022 - 2025 Zed Industries, Inc.,
+// licensed under the Apache License, Version 2.0. Modified by Nexus Laboratories, Inc. See NOTICE.
 //! Nexus (new file): backdrop blur in the wgpu renderer (`Window::paint_backdrop_blur`). Ported from zui
 //! (<https://github.com/zeronsh/zui>, Apache-2.0, Copyright Zed Industries), `crates/gpui_wgpu/src/wgpu_renderer.rs`
 //! (`process_backdrop_blur`, `draw_backdrop_composite`, the scratch textures and the copyable frame). The math is

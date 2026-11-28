@@ -98,8 +98,12 @@ name = "zui backdrop blur"
 license = "Apache-2.0"
 source = "https://github.com/zeronsh/zui (LICENSE-APACHE at 361ff20b919f)"
 paths = ["vendor/gpui-pre/src/backdrop_blur.rs", "vendor/gpui-pre-wgpu/src/wgpu_backdrop.rs",
-         "vendor/gpui-pre-wgpu/src/shaders.wgsl", "vendor/gpui-pre-windows/src/directx_renderer/backdrop.rs",
-         "vendor/gpui-pre-windows/src/directx_renderer/backdrop_tests.rs", "vendor/gpui-pre-apple/src/metal_renderer.rs"]
+         "vendor/gpui-pre-windows/src/directx_renderer/backdrop.rs",
+         "vendor/gpui-pre-windows/src/directx_renderer/backdrop_tests.rs", "vendor/gpui-pre/src/scene.rs",
+         "vendor/gpui-pre/src/window.rs", "vendor/gpui-pre-apple/build.rs", "vendor/gpui-pre-apple/src/metal_renderer.rs",
+         "vendor/gpui-pre-apple/src/shaders.metal", "vendor/gpui-pre-wgpu/src/wgpu_renderer.rs",
+         "vendor/gpui-pre-wgpu/src/shaders.wgsl", "vendor/gpui-pre-windows/src/directx_renderer.rs",
+         "vendor/gpui-pre-windows/src/shaders.hlsl"]
 license_file = "licenses/third-party/zui-LICENSE-APACHE"
 
 [[ported]]
