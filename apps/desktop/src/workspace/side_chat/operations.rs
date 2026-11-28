@@ -115,11 +115,19 @@ impl<T: 'static> Pending<T> {
     }
 }
 
+/// A message the person sent, waiting in the side chat's line (`commands.rs`): it left the composer at once.
+pub(super) struct Outgoing {
+    pub text: String,
+    pub draft: crate::attachments::Draft,
+    /// Wait for the running turn to end instead of joining it (Ctrl+Enter, Queue), as the session's `queued`.
+    pub queued: bool,
+}
+
 pub(super) enum Effect {
+    /// The message being sent: on a failure, its text and files go back to the composer.
     Send {
         text: String,
-        revision: u64,
-        files: Vec<u64>,
+        draft: crate::attachments::Draft,
     },
     Command {
         close: bool,

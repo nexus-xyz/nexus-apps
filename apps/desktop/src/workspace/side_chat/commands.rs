@@ -1,5 +1,5 @@
 //! Existing Workbench mutations, with results owned independently of the window.
-use super::operations::{Completion, Effect};
+use super::operations::{Completion, Effect, Outgoing};
 use super::*;
 use futures::{Future, StreamExt};
 use nexus_workbench::attachment_upload::CANCELLED;
@@ -54,22 +54,22 @@ impl SideChat {
         };
         self.sending = false;
         if matches!(effect, Effect::Send { .. }) {
-            self.draft.upload = None;
-            if result.as_ref().is_err_and(|error| error == CANCELLED) {
-                self.note = Some(CANCELLED.into());
-                cx.notify();
-                return;
-            }
+            self.uploading = None;
         }
         match result {
-            Err(error) => self.problem = Some(error),
+            Err(error) => match effect {
+                Effect::Send { text, draft } => {
+                    self.echo_settled(&text, false);
+                    self.unsent(text, draft, error, window, cx);
+                }
+                _ => self.problem = Some(error),
+            },
             Ok(value) => match effect {
-                Effect::Send { text, revision, files } => {
-                    if self.draft_revision == revision && self.input.read(cx).value().as_ref() == text {
-                        self.input.update(cx, |input, cx| input.set_value("", window, cx));
-                    }
-                    for id in files {
-                        self.draft.remove(id);
+                Effect::Send { text, .. } => {
+                    // The store has the message now: read it at once rather than at the next poll.
+                    self.echo_settled(&text, true);
+                    if let Some(wake) = &self.wake {
+                        let _ = wake.unbounded_send(());
                     }
                 }
                 Effect::Command {
@@ -105,29 +105,63 @@ impl SideChat {
                 Effect::Secret => self.secret.update(cx, |input, cx| input.set_value("", window, cx)),
             },
         }
+        // The next message in the line goes once this answer is in, as the session's `outbox`.
+        self.flush_outbox(window, cx);
         cx.notify();
     }
-    pub(super) fn send(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        if !self.can_command() || self.request.is_some() || self.secret_id.is_some() {
+
+    /// Whether the composer takes a message: a send or another command in flight does not stop it.
+    pub(super) fn can_compose(&self) -> bool {
+        !self.retired && self.ready && self.pending.valid()
+    }
+
+    /// Send what is in the composer, as the session composer does (`code_view.rs`, `submit_code`): the text and files
+    /// leave the composer at once, and a message the core refuses comes back to it (`unsent`). Messages leave in the
+    /// order they were sent, one after the other. `queued`: while the turn runs, the message waits for it to end (a
+    /// Queued chip) instead of joining it.
+    pub(super) fn send(&mut self, queued: bool, window: &mut Window, cx: &mut Context<Self>) {
+        if !self.can_compose() || self.request.is_some() || self.secret_id.is_some() {
             return;
         }
         let text = self.input.read(cx).value().to_string();
         if text.trim().is_empty() && self.draft.is_empty() {
             return;
         }
-        if text != self.draft_text {
-            self.draft_text = text.clone();
-            self.draft_revision = self.draft_revision.wrapping_add(1);
+        let draft = std::mem::take(&mut self.draft);
+        self.input.update(cx, |input, cx| input.set_value("", window, cx));
+        self.brought_back = false;
+        self.problem = None;
+        self.note = None;
+        self.echo_sent(&text, queued);
+        self.scroll.to_end();
+        self.outbox.push_back(Outgoing { text, draft, queued });
+        self.flush_outbox(window, cx);
+        cx.notify();
+    }
+
+    /// Send the oldest message in the line when nothing else is in flight.
+    pub(super) fn flush_outbox(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if !self.can_command() {
+            return;
         }
-        self.begin_upload();
-        let draft = self.draft.clone();
+        let Some(Outgoing {
+            text,
+            mut draft,
+            queued,
+        }) = self.outbox.pop_front()
+        else {
+            return;
+        };
+        // Files over one piece go up in pieces; their chips follow the upload (`uploads.rs`).
+        draft.upload = draft
+            .sends_in_pieces()
+            .then(|| std::sync::Arc::new(nexus_workbench::attachment_upload::UploadRun::default()));
         let effect = Effect::Send {
             text: text.clone(),
-            revision: self.draft_revision,
-            files: draft.all().map(|f| f.id).collect(),
+            draft: draft.clone(),
         };
         let (runs, thread, permit) = (self.runs.clone(), self.summary.id.clone(), self.pending.permit());
-        self.brought_back = false;
+        let (sent, back) = (draft.clone(), text.clone());
         self.launch(effect, async move {
             permit.check()?;
             let files = crate::attachments::sendable_files(&thread, &draft,
@@ -141,13 +175,45 @@ impl SideChat {
                     async move { permit.check()?; runs.call("wb_attachment_cancel",json!({"uploadId":id,"threadId":thread})).await.map_err(|_|"The upload cancellation was lost.".to_string())?.map(drop) }
                 }).await?;
             permit.check()?;
-            runs.call("wb_send_files",json!({"threadId":thread,"text":text,"images":crate::attachments::session_images(&draft),"files":files}))
+            let mut args = json!({"threadId":thread,"text":text,"images":crate::attachments::session_images(&draft),"files":files});
+            // Only when set: an older host ignores it, and the message joins the turn (`Runs::send`).
+            if queued {
+                args["queued"] = Value::Bool(true);
+            }
+            runs.call("wb_send_files",args)
                 .await.unwrap_or_else(|_|Err("The send answer was lost. Read the current state before retrying.".into()))
         },cx);
-        if self.sending {
+        if !self.sending {
+            // The send could not start: the message goes back, never lost.
+            self.echo_settled(&back, false);
+            self.unsent(back, sent, "The side chat is unavailable.".into(), window, cx);
+            return;
+        }
+        if sent.upload.is_some() {
+            self.uploading = Some(sent);
             self.watch_upload(window, cx);
+        }
+    }
+
+    /// A message the core did not take: its text and files go back to the composer, ahead of what was typed since,
+    /// with the reason, as the session's `unsent` (`workspace/uploads.rs`). A cancelled upload says only that.
+    pub(super) fn unsent(
+        &mut self,
+        text: String,
+        draft: crate::attachments::Draft,
+        error: String,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.draft = super::super::uploads::ahead(draft, std::mem::take(&mut self.draft));
+        let typed = self.input.read(cx).value().to_string();
+        if let Some(value) = super::super::uploads::restored(&text, &typed) {
+            self.input.update(cx, |input, cx| input.set_value(value, window, cx));
+        }
+        if error == CANCELLED {
+            self.note = Some(CANCELLED.into());
         } else {
-            self.draft.upload = None;
+            self.problem = Some(format!("{error} The message was not sent; it is back in the composer."));
         }
     }
     pub(super) fn command(

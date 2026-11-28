@@ -1574,7 +1574,7 @@ mod activity_tests {
 }
 
 /// The keys that queue a Code session's message behind its running turn (and send a chat's next message now).
-fn queue_keys() -> &'static str {
+pub(super) fn queue_keys() -> &'static str {
     if cfg!(target_os = "macos") {
         "⌘↩"
     } else {

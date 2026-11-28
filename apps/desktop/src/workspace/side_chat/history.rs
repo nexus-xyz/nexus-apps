@@ -109,8 +109,9 @@ impl SideChat {
             let mut hasher = std::collections::hash_map::DefaultHasher::new();
             (
                 self.streamed.as_ref().map(|(text, _)| text.as_str()),
+                self.echo_texts(),
                 self.working_since.is_some(),
-                self.is_empty() && !self.summary.status.busy(),
+                self.is_empty() && self.echo.is_empty() && !self.summary.status.busy(),
                 f32::from(self.dock_height.room()).to_bits(),
             )
                 .hash(&mut hasher);
@@ -131,7 +132,8 @@ impl SideChat {
             let place = place.clone();
             return row.child(self.history_item(ix, &place, p, cx)).into_any_element();
         }
-        let mut tail = Vec::new();
+        // A sent message shows at once, before a read brings its event (`echo.rs`).
+        let mut tail = self.render_echo(p);
         if let Some((_, text)) = &self.streamed {
             tail.push(code_view::render_block(
                 usize::MAX,
@@ -145,7 +147,7 @@ impl SideChat {
             ));
         }
         tail.extend(self.history_working(p));
-        if self.is_empty() && !self.summary.status.busy() {
+        if self.is_empty() && self.echo.is_empty() && !self.summary.status.busy() {
             tail.push(self.render_welcome(p, cx).into_any_element());
         }
         row.when(!tail.is_empty(), |row| {

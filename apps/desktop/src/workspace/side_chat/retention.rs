@@ -21,6 +21,9 @@ struct Data {
     history: history::History,
     input: String,
     draft: crate::attachments::Draft,
+    outbox: std::collections::VecDeque<operations::Outgoing>,
+    uploading: Option<crate::attachments::Draft>,
+    echo: Vec<echo::Echo>,
     revision: u64,
     rewrite: Option<(i64, String, String)>,
     brought_back: bool,
@@ -44,11 +47,14 @@ impl Drop for RetainedChat {
     }
 }
 impl RetainedChat {
+    /// A side chat just made. `sent`: the first message, which landed: it shows before the first read.
+    #[allow(clippy::too_many_arguments)]
     pub(super) fn created(
         summary: ThreadSummary,
         parent_title: String,
         source: crate::workspace::runs::Source,
         input: String,
+        sent: Option<String>,
         problem: Option<String>,
         guard: Rc<dyn Fn() -> bool>,
         partial: bool,
@@ -67,6 +73,9 @@ impl RetainedChat {
                 events: vec![],
                 history: Default::default(),
                 draft: Default::default(),
+                outbox: Default::default(),
+                uploading: None,
+                echo: sent.map(echo::Echo::landed).into_iter().collect(),
                 revision: 0,
                 rewrite: None,
                 brought_back: false,
@@ -86,27 +95,25 @@ impl RetainedChat {
     pub(in crate::workspace) fn preview(&self) -> (String, String, Vec<String>) {
         let data = self.data.as_ref().expect("retained side chat");
         let mut input = data.input.clone();
-        let submitted = self.pending.inspect(|completion| match completion {
-            Some(operations::Completion {
-                effect: operations::Effect::Send { text, revision, files },
-                result: Ok(_),
-            }) => {
-                if data.revision == *revision && input == *text {
-                    input.clear();
+        let mut files: Vec<String> = data.draft.all().map(|file| file.name.clone()).collect();
+        // A sent message left the composer; one the core refused goes back to it once the side chat is open again.
+        self.pending.inspect(|completion| {
+            if let Some(operations::Completion {
+                effect: operations::Effect::Send { text, draft },
+                result: Err(_),
+            }) = completion
+            {
+                if let Some(value) = crate::workspace::uploads::restored(text, &input) {
+                    input = value;
                 }
-                files.clone()
+                files = draft
+                    .all()
+                    .map(|file| file.name.clone())
+                    .chain(files.drain(..))
+                    .collect();
             }
-            _ => vec![],
         });
-        (
-            data.summary.title.clone(),
-            input,
-            data.draft
-                .all()
-                .filter(|file| !submitted.contains(&file.id))
-                .map(|file| file.name.clone())
-                .collect(),
-        )
+        (data.summary.title.clone(), input, files)
     }
     pub(in crate::workspace) fn parent(&self) -> Option<&str> {
         self.data.as_ref()?.summary.source_thread_id.as_deref()
@@ -160,6 +167,9 @@ impl SideChat {
             history: std::mem::take(&mut self.history),
             input: self.input.read(cx).value().to_string(),
             draft: std::mem::take(&mut self.draft),
+            outbox: std::mem::take(&mut self.outbox),
+            uploading: self.uploading.take(),
+            echo: std::mem::take(&mut self.echo),
             revision: self.draft_revision,
             rewrite: self
                 .rewrite
@@ -210,6 +220,10 @@ impl SideChat {
             .update(cx, |input, cx| input.set_value(data.input, window, cx));
         chat.draft_revision = data.revision;
         chat.draft = data.draft;
+        chat.outbox = data.outbox;
+        // The chips follow an upload still running; a finished one's answer clears it (`apply_commands`).
+        chat.uploading = data.uploading;
+        chat.echo = data.echo;
         chat.brought_back = data.brought_back;
         chat.problem = data.problem;
         chat.note = data.note;
