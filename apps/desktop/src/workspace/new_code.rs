@@ -2020,7 +2020,7 @@ impl Workspace {
         let form = &self.code_form;
         let compact = self.composer_layout.chat_icons;
         let models = self.agent_catalog(form.agent);
-        // The picked model, else the one Default runs ("Opus 5.5 · Default"), else the agent while its models are read.
+        // The picked model, else the agent's configured model, else the agent while its models are read.
         let model: SharedString = if let Some(model) = form.selected_server_model() {
             model.to_string()
         } else if form.server_models().is_some() {
@@ -2305,7 +2305,7 @@ impl Workspace {
         self.launch_panel().0
     }
 
-    /// A row's name: the model's, or for the agent's own default the model it runs ("Opus 5.5 · Default").
+    /// A row's name: the picked model, or the model the agent is configured to run.
     fn row_name(&self, row: &LaunchRow) -> String {
         match &row.model {
             None => super::code_picker::default_label(
@@ -2816,6 +2816,14 @@ impl Workspace {
                 )
             });
         let mut pane = v_flex().p(px(14.)).gap(px(12.)).child(head);
+        if row.model.is_none() {
+            pane = pane.child(
+                div()
+                    .text_size(px(12.))
+                    .text_color(palette.muted)
+                    .child(format!("Uses {}'s configured model.", label(row.agent))),
+            );
+        }
 
         if !in_session && self.is_local() {
             let choices = form
@@ -3066,6 +3074,43 @@ impl Workspace {
             );
         }
 
+        // Speed belongs to the current session's model. Hovering another row must not change it.
+        if in_session
+            && picked
+            && let Some(session) = self.code_session().filter(|session| self.session_has_fast(session))
+        {
+            let on = session.fast_shown();
+            let off = session
+                .connection
+                .as_ref()
+                .and_then(|connection| connection.fast_off.as_deref());
+            let choices = [false, true].into_iter().map(|fast| {
+                let content = h_flex()
+                    .gap(px(4.))
+                    .when(fast, |row| row.child(Icon::new(Lucide::Zap).size(px(14.))))
+                    .child(if fast { "Fast" } else { "Standard" });
+                segment(
+                    SharedString::from(format!("launch-speed-{fast}")),
+                    content.into_any_element(),
+                    on == fast,
+                    true,
+                )
+                .on_click(cx.listener(move |this, _, _, cx| this.set_session_fast(fast, cx)))
+            });
+            pane = pane.child(
+                v_flex()
+                    .gap(px(6.))
+                    .child(section("Speed"))
+                    .child(track().children(choices))
+                    .child(
+                        div()
+                            .text_size(px(12.))
+                            .text_color(palette.muted)
+                            .child(super::code_dock::fast_hint(on.then_some(off).flatten())),
+                    ),
+            );
+        }
+
         // Reasoning: Default and the model's own levels.
         let efforts = self.row_efforts(row.agent, row.model.as_deref());
         if !efforts.is_empty() {
@@ -3234,7 +3279,7 @@ impl Workspace {
         let catalog = self.agent_catalog(agent);
         let reported = match model {
             Some(id) => catalog.iter().find(|entry| entry.id == id),
-            // Default takes what its model does (the Nexus app's chip reads "· Default", not the permission mode).
+            // The agent's configured model supplies its own reasoning levels.
             None => catalog.iter().find(|entry| crate::code::is_default_entry(entry)),
         }
         .map(|entry| entry.efforts.clone())

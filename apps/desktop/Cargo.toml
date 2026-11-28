@@ -18,6 +18,10 @@ path = "src/main.rs"
 name = "nexus-desktop-gpui-helper"
 path = "src/helper.rs"
 
+# Opt-in native review window with fixture data and GPUI frame exports. Never enabled in shipped builds.
+[features]
+ui-review = ["dep:gpui-pre"]
+
 [dependencies]
 # OS idle-sleep and display inhibitors, held on one worker thread (Windows uses thread-local execution state).
 keepawake = "=0.6.1"
@@ -53,6 +57,8 @@ nexus-cloud = { path = "../../crates/nexus-cloud" }
 # (the `gpui-pre-*` snapshots of Zed's crates, pinned by gpui-kit), its platform layer, the components (text input,
 # Markdown view) and their icons. Exact pin: any snapshot may change GPUI's API.
 gpui-kit = { version = "=0.9.0", features = ["syntect"] }
+# The existing renderer’s frame inspection API, only for the native review feature.
+gpui-pre = { version = "=0.3.11", optional = true, features = ["test-support"] }
 # The same versions as nexus-client's workspace pins, so nexus-client builds the same here.
 serde_json = { version = "=1.0.154", features = ["preserve_order"] }
 # The web host process's protocol (`src/web/protocol.rs`), typed on both sides.

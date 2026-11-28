@@ -265,6 +265,25 @@ On macOS, measure the `dist` package (`packaging/package.sh`): the bare release 
 page never opens.
 Set `NEXUS_WEB_TRACE=1` when collecting embedded-page frame traces.
 
+### Review the model picker natively
+
+On macOS, build the optional review window from this folder:
+
+```sh
+cargo build --locked --features ui-review --bin nexus-desktop-gpui
+target/debug/nexus-desktop-gpui --review-model-picker \
+  --review-output /absolute/path/to/.nexus/artifacts
+```
+
+The review uses the production Workspace, composer, picker, and theme renderer with sample data.
+It stores its settings under the output folder and restores no account or conversation.
+It starts no agents.
+The window stays open after it exports six native PNGs.
+Use the Picker review menu, or Cmd+1 for connections, Cmd+2 for standard, and Cmd+3 for fast.
+Use Cmd+L and Cmd+D for light and dark.
+The Fast control uses the normal update handler with a fixture transport.
+The `ui-review` feature stays off in shipped builds.
+
 ## Package it
 
 Package a build with CEF, from this folder:

@@ -96,16 +96,16 @@ pub(crate) enum Runs {
     There(Relay),
 }
 
-#[cfg(test)]
+#[cfg(any(test, feature = "ui-review"))]
 type FixtureCall =
     std::sync::Arc<dyn Fn(&'static str, Value) -> oneshot::Receiver<Result<Value, String>> + Send + Sync>;
 
 /// A server's commands, and where their results go.
 #[derive(Clone)]
 pub(crate) struct Relay {
-    #[cfg(test)]
+    #[cfg(any(test, feature = "ui-review"))]
     calls: Option<FixtureCall>,
-    #[cfg(test)]
+    #[cfg(any(test, feature = "ui-review"))]
     source: Option<Source>,
     machine: String,
     machines: std::sync::Arc<Machines>,
@@ -116,7 +116,7 @@ impl Workspace {
     /// The commands for session or project `id`: its server's, else this computer's runner (None while the Nexus app
     /// holds this computer's sessions).
     pub(super) fn runs(&self, id: &str) -> Option<Runs> {
-        #[cfg(test)]
+        #[cfg(any(test, feature = "ui-review"))]
         if let Some(runs) = self.run_fixtures.get(id) {
             return Some(runs.clone());
         }
@@ -126,9 +126,9 @@ impl Workspace {
         let machines = crate::machines::get();
         match machines.machine_of(id) {
             Some(machine) => Some(Runs::There(Relay {
-                #[cfg(test)]
+                #[cfg(any(test, feature = "ui-review"))]
                 calls: None,
-                #[cfg(test)]
+                #[cfg(any(test, feature = "ui-review"))]
                 source: None,
                 machine,
                 machines,
@@ -156,7 +156,7 @@ impl Relay {
 
     /// `call` with `args` on the server, or on the test's fixture transport when it has one.
     fn request(&self, call: &'static str, args: Value) -> oneshot::Receiver<Result<Value, String>> {
-        #[cfg(test)]
+        #[cfg(any(test, feature = "ui-review"))]
         if let Some(calls) = &self.calls {
             return calls(call, args);
         }
@@ -173,7 +173,7 @@ impl Runs {
         match self {
             Self::Here(runner) => runner.source_guard(),
             Self::There(relay) => {
-                #[cfg(test)]
+                #[cfg(any(test, feature = "ui-review"))]
                 if matches!(relay.source, Some(Source::Local { .. })) {
                     return std::sync::Arc::new(|| true); // Immutable, per-instance deferred local fixture.
                 }
@@ -190,7 +190,7 @@ impl Runs {
                 Source::Local { data, scope }
             }
             Self::There(relay) => {
-                #[cfg(test)]
+                #[cfg(any(test, feature = "ui-review"))]
                 if let Some(source) = &relay.source {
                     return source.clone();
                 }
@@ -217,7 +217,7 @@ impl Runs {
     }
 
     /// Instance-local deferred transport: never replaces process-global machine/runner behavior.
-    #[cfg(test)]
+    #[cfg(any(test, feature = "ui-review"))]
     pub(in crate::workspace) fn deferred_source(source: Source, calls: FixtureCall) -> Self {
         let (events, _) = futures::channel::mpsc::unbounded();
         let machine = match &source {
@@ -235,7 +235,7 @@ impl Runs {
 
     /// The same validated workbench command on a local, service, SSH or cloud session.
     pub fn call(&self, name: &'static str, args: Value) -> oneshot::Receiver<Result<Value, String>> {
-        #[cfg(test)]
+        #[cfg(any(test, feature = "ui-review"))]
         if let Runs::There(relay) = self
             && let Some(calls) = &relay.calls
         {

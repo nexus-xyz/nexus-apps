@@ -3270,23 +3270,23 @@ async fn run_update(command: &str, env: &HashMap<String, String>) -> Result<(), 
     })
 }
 
-#[cfg(test)]
+#[cfg(any(test, feature = "ui-review"))]
 thread_local! {
     static TEST_AGENT_CATALOG: std::cell::RefCell<Option<Vec<AgentInfo>>> = const { std::cell::RefCell::new(None) };
 }
 
 /// A thread-local catalog for deterministic UI fixtures; dropping it restores the previous catalog.
-#[cfg(test)]
+#[cfg(any(test, feature = "ui-review"))]
 pub(crate) struct AgentCatalogFixture(Option<Vec<AgentInfo>>);
 
-#[cfg(test)]
+#[cfg(any(test, feature = "ui-review"))]
 impl Drop for AgentCatalogFixture {
     fn drop(&mut self) {
         TEST_AGENT_CATALOG.with(|catalog| *catalog.borrow_mut() = self.0.take());
     }
 }
 
-#[cfg(test)]
+#[cfg(any(test, feature = "ui-review"))]
 pub(crate) fn fixture_agents(agents: Vec<AgentInfo>) -> AgentCatalogFixture {
     AgentCatalogFixture(TEST_AGENT_CATALOG.with(|catalog| catalog.replace(Some(agents))))
 }
@@ -3325,7 +3325,7 @@ pub(crate) fn test_runner(data: PathBuf, scope: &str) -> (CodeRunner, UnboundedR
 /// and this build only reads them. Discovery asks each agent for its catalog and sends no prompt.
 pub fn read_agents() -> futures::channel::oneshot::Receiver<Vec<AgentInfo>> {
     let (answer, receiver) = futures::channel::oneshot::channel();
-    #[cfg(test)]
+    #[cfg(any(test, feature = "ui-review"))]
     if let Some(agents) = TEST_AGENT_CATALOG.with(|catalog| catalog.borrow().clone()) {
         let _ = answer.send(agents);
         return receiver;

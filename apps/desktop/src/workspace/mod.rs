@@ -148,6 +148,8 @@ mod pull_stack;
 mod pull_view;
 mod read_only;
 mod repo_groups;
+#[cfg(feature = "ui-review")]
+pub(crate) mod review;
 mod review_pick;
 mod row_exit;
 mod runs;
@@ -506,7 +508,7 @@ pub struct Workspace {
     /// This build's hold on the Code sessions (`code_run.rs`), shared by every window (`windows.rs`): `None` while the
     /// Nexus app owns them, and then the sessions are read-only here and `owner` says why.
     runner: Option<Rc<CodeRunner>>,
-    #[cfg(test)]
+    #[cfg(any(test, feature = "ui-review"))]
     run_fixtures: HashMap<String, runs::Runs>,
     /// The servers and the cloud machines (`machines.rs`), as the sidebar groups them.
     machine_source: Arc<crate::machines::Machines>,
@@ -1192,7 +1194,7 @@ impl Workspace {
             code_overview_loaded: false,
             new_session_unsettled: false,
             runner: None,
-            #[cfg(test)]
+            #[cfg(any(test, feature = "ui-review"))]
             run_fixtures: HashMap::new(),
             machine_source: machines.clone(),
             servers: machines.servers(),
@@ -2514,8 +2516,23 @@ impl Workspace {
         }
     }
 
+    /// The preview supplies a local fixture transport instead of starting an agent runner.
+    fn code_composer_available(&self) -> bool {
+        #[cfg(feature = "ui-review")]
+        if crate::review::root().is_some()
+            && matches!(&self.view, View::Code(view) if self.run_fixtures.contains_key(&view.id))
+        {
+            return true;
+        }
+        self.runner.is_some()
+    }
+
     /// Read the projects again, this computer's then each server's, and the open Code session when it moved.
     fn refresh_code(&mut self, cx: &mut Context<Self>) {
+        #[cfg(feature = "ui-review")]
+        if crate::review::root().is_some() {
+            return; // The review transport owns its sample sessions.
+        }
         let _span = crate::watchdog::span("Workspace::refresh_code");
         self.update_code_blocker();
         self.refresh_code_overview(cx);

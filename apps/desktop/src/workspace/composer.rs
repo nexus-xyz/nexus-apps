@@ -379,7 +379,7 @@ impl Workspace {
         // A Code session's agent and model are the session's own: no attach or chat model chip, but the session's own
         // model and effort chips (`code_dock.rs`), and Stop while it runs. Enter still queues a message then.
         let code = matches!(self.view, View::Code(_) | View::NewCode);
-        let session = matches!(self.view, View::Code(_)) && self.runner.is_some();
+        let session = matches!(self.view, View::Code(_)) && self.code_composer_available();
         let workspace = cx.weak_entity();
         let paste = {
             let workspace = workspace.clone();

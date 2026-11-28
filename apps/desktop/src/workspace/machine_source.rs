@@ -13,7 +13,7 @@ impl MachineSource {
             restore_sign_in: true,
         }
     }
-    #[cfg(test)]
+    #[cfg(any(test, feature = "ui-review"))]
     pub fn isolated() -> Self {
         Self {
             machines: Machines::new(
