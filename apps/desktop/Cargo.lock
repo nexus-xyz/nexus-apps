@@ -5582,6 +5582,7 @@ dependencies = [
  "keepawake",
  "keyring",
  "libc",
+ "log",
  "markdown",
  "memmap2",
  "nexus-agent-memory",

@@ -118,7 +118,7 @@ impl OutsideAccess {
                     *lock(&self.problem) = None;
                 }
                 Err(error) => {
-                    eprintln!("nexus-desktop-gpui: outside access: {error}");
+                    log::warn!("outside access: {error}");
                     *lock(&self.problem) = Some(error);
                 }
             }

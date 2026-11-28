@@ -324,7 +324,7 @@ fn build_full_and_frost(art: Art, back: [u8; 4], ink: [u8; 4]) -> Option<(Arc<Re
 fn levels(art: Art) -> Option<GrayImage> {
     image::load_from_memory_with_format(art.bytes(), ImageFormat::Png)
         .map(|image| image.to_luma8())
-        .inspect_err(|error| eprintln!("nexus-desktop-gpui: background {}: {error}", art.key()))
+        .inspect_err(|error| log::warn!("background {}: {error}", art.key()))
         .ok()
 }
 

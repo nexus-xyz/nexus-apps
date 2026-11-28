@@ -561,7 +561,7 @@ fn open_app_window(primary: bool, cx: &mut App) -> Option<(AnyWindowHandle, Enti
     let (window, workspace) = match opened {
         Ok(opened) => opened,
         Err(error) => {
-            eprintln!("nexus-desktop-gpui: a window did not open: {error}");
+            log::error!("a window did not open: {error}");
             return None;
         }
     };
@@ -583,6 +583,7 @@ fn open_app_window(primary: bool, cx: &mut App) -> Option<(AnyWindowHandle, Enti
             panel.update(cx, |panel, cx| panel.watch_main_chat(cx));
         }
     });
+    log_first_window(window, cx);
     measure_first_frame(window, cx);
     // Initialize auxiliary UI once the window's first frame has reached the screen (`launch.rs`).
     let _ = window.update(cx, |_, window, _| {
@@ -590,6 +591,23 @@ fn open_app_window(primary: bool, cx: &mut App) -> Option<(AnyWindowHandle, Enti
     });
     cx.activate(true);
     Some((window, workspace))
+}
+
+/// The start's last lines: the first window is open, then its first frame is on screen, as measure's marks are taken.
+fn log_first_window(window: AnyWindowHandle, cx: &mut App) {
+    static LOGGED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+    if LOGGED.swap(true, std::sync::atomic::Ordering::Relaxed) {
+        log::debug!("another window opened");
+        return;
+    }
+    log::info!("window opened (+{} ms)", crate::logging::since_start_ms());
+    let _ = window.update(cx, |_, window, _| {
+        window.on_next_frame(|window, _| {
+            window.on_next_frame(|_, _| {
+                log::info!("first frame on screen (+{} ms)", crate::logging::since_start_ms());
+            });
+        });
+    });
 }
 
 /// `npm run measure`'s window and first-frame marks (`measure.rs`). `open_window` lays the window out once; GPUI's
@@ -692,7 +710,7 @@ pub fn open_panel(options: WindowOptions, cx: &mut App) -> Option<(AnyWindowHand
     let (window, workspace) = match opened {
         Ok(opened) => opened,
         Err(error) => {
-            eprintln!("nexus-desktop-gpui: the panel did not open: {error}");
+            log::error!("the panel did not open: {error}");
             return None;
         }
     };

@@ -702,7 +702,7 @@ fn update_settings_at(
         nexus_desktop_core::atomic_file::write_atomic(file, &serde_json::to_vec_pretty(&Value::Object(stored))?)
     })();
     written.map_err(|error| {
-        eprintln!("nexus-desktop-gpui: settings not saved to {}: {error}", file.display());
+        log::warn!("settings not saved to {}: {error}", file.display());
         format!("Couldn't save it: {error}.")
     })
 }

@@ -112,7 +112,7 @@ pub fn mark_once(name: &str) {
 
 fn write(metrics: &Metrics) {
     if let Err(error) = metrics.write() {
-        eprintln!("nexus-desktop-gpui: measure: {error}");
+        log::warn!("measure: {error}");
     }
 }
 

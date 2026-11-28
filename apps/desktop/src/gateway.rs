@@ -515,12 +515,20 @@ impl Gateway {
         // The organization's locked Gateway, else `NEXUS_URL`, else one picked at sign-in on an internal build, else
         // the Nexus app's choice as its `settings::gateway_url` makes it (the person's, the managed one, production).
         let policy = crate::managed::policy();
-        let url = crate::managed::locked_gateway(policy)
-            .or_else(|| env("NEXUS_URL").filter(|url| !url.is_empty()))
-            .or_else(crate::paths::app_gateway_url)
+        let (url, from) = crate::managed::locked_gateway(policy)
+            .map(|url| (url, "the organization's policy"))
+            .or_else(|| {
+                env("NEXUS_URL")
+                    .filter(|url| !url.is_empty())
+                    .map(|url| (url, "NEXUS_URL"))
+            })
+            .or_else(|| crate::paths::app_gateway_url().map(|url| (url, "the one picked at sign-in")))
             .unwrap_or_else(|| {
-                nexus_desktop_core::settings::gateway_url(&crate::desktop_settings::load(), policy.managed.as_ref())
+                let settings = crate::desktop_settings::load();
+                let url = nexus_desktop_core::settings::gateway_url(&settings, policy.managed.as_ref());
+                (url, "the settings, or production")
             });
+        log::info!("Gateway {}, from {from}", crate::logging::shown_url(&url));
         // The usage signals go with the signed-in client of the Gateway in use, after a switch too. Not in
         // the unit tests: their windows start a Gateway each, and the loop would outlive the test binary's last test.
         #[cfg(not(test))]
@@ -1720,7 +1728,13 @@ impl Gateway {
         }
         let read = !self.inner.restored.swap(true, Ordering::SeqCst);
         if read {
-            self.set_token(saved());
+            let token = saved();
+            log::info!(
+                "sign-in: {} (+{} ms)",
+                if token.is_some() { "signed in" } else { "not signed in" },
+                crate::logging::since_start_ms()
+            );
+            self.set_token(token);
         }
         drop(pending);
         if read {

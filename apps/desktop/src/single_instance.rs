@@ -174,7 +174,7 @@ impl Instance {
                     }
                     match serde_json::from_str::<Handoff>(&line) {
                         Ok(handoff) => on_handoff(handoff),
-                        Err(error) => eprintln!("nexus-desktop-gpui: a second launch sent {error}"),
+                        Err(error) => log::warn!("a second launch sent {error}"),
                     }
                 }
                 drop(lock);

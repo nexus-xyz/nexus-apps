@@ -225,6 +225,10 @@ Point it at another Gateway with `NEXUS_URL`, as the CLI does:
 NEXUS_URL=http://localhost:8080 cargo +1.97 run --locked --release
 ```
 
+The app logs to stderr. By default it prints warnings and one line for each step of its start: the Gateway, the
+sign-in, the window and its first frame. `NEXUS_LOG` sets the level with the Gateway's filter syntax, such as
+`NEXUS_LOG=debug` or `NEXUS_LOG=warn,nexus_desktop_gpui=debug`. Without it, the app reads `RUST_LOG`.
+
 ### Connect a phone
 
 Phone connection requires encrypted session sync.
@@ -346,6 +350,7 @@ A fork must also change `Channel::feed` in `crates/nexus-desktop-updates/src/lib
 ## How it is built
 
 - `src/main.rs`: the app, the key bindings and the window.
+- `src/logging.rs`: the log lines on stderr, at the level `NEXUS_LOG` sets.
 - `src/helper.rs`: Chromium's helper processes on macOS, a separate small binary.
 - `src/single_instance.rs`: one running copy. A second launch hands its arguments to the first and exits.
 - `src/workspace/mod.rs`: the window's state, what changes it, the title bar and the sign-in.

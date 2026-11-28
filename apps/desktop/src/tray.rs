@@ -240,7 +240,7 @@ fn menu(state: &MenuState) -> Menu {
             }
         };
         if let Err(error) = appended {
-            eprintln!("nexus-desktop-gpui: tray menu: {error}");
+            log::warn!("tray menu: {error}");
         }
     }
     menu
@@ -327,7 +327,7 @@ fn put_up(cx: &mut App) -> bool {
     let icon = match started {
         Ok(icon) => icon,
         Err(error) => {
-            eprintln!("nexus-desktop-gpui: no tray: {error}");
+            log::warn!("no tray: {error}");
             return false;
         }
     };

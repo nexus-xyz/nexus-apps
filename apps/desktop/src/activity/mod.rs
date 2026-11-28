@@ -225,7 +225,7 @@ impl Activity {
         // };
         // match opened {
         //     Ok(opened) => self.window = Some(opened),
-        //     Err(error) => eprintln!("nexus-desktop-gpui: could not show browser activity: {error}"),
+        //     Err(error) => log::warn!("could not show browser activity: {error}"),
         // }
     }
 }

@@ -641,10 +641,10 @@ pub(in crate::web) fn read_frames(socket: OwnedFd, pages: Pages) {
         match taken {
             Ok((texture, lease)) => {
                 if !ON.swap(true, Ordering::Relaxed) {
-                    eprintln!("nexus-desktop-gpui: web pages draw GPU frames");
+                    log::info!("web pages draw GPU frames");
                 }
                 if ring && !RING_ON.swap(true, Ordering::Relaxed) {
-                    eprintln!("nexus-desktop-gpui: web pages draw the host's frame ring, with no copy");
+                    log::info!("web pages draw the host's frame ring, with no copy");
                 }
                 let (device, _) = gpui_wgpu::shared_device().expect("imported on it");
                 shared.texture = Some(Arc::new(match lease {
@@ -654,7 +654,7 @@ pub(in crate::web) fn read_frames(socket: OwnedFd, pages: Pages) {
                 shared.gpu_framed = true;
             }
             // The host sends this page's frame again, its own buffer (`Answer::NoRing`).
-            Err(error) if ring => eprintln!("nexus-desktop-gpui: frame ring off: {error}"),
+            Err(error) if ring => log::warn!("frame ring off: {error}"),
             Err(error) => turn_off(&mut shared, &error),
         }
         shared.changed();

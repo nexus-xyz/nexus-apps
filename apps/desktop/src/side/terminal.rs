@@ -1066,7 +1066,7 @@ fn spawn(
         .map_err(|error| error.to_string())?;
     // Without it, Backspace in a program that reads a line erases part of a letter and walks into the prompt.
     if let Err(error) = nexus_workbench::pty::utf8_line_editing(&*pair.master) {
-        eprintln!("nexus-desktop-gpui: terminal: UTF-8 line editing: {error}");
+        log::warn!("terminal: UTF-8 line editing: {error}");
     }
     // None: the person's login shell.
     let mut command = match &run {

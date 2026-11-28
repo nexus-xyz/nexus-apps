@@ -96,7 +96,7 @@ impl WarmCache {
             && let Some(db) = guard.as_mut()
         {
             if let Err(error) = db.wipe() {
-                eprintln!("nexus-desktop-gpui: cache sign-out cleanup: {error}");
+                log::warn!("cache sign-out cleanup: {error}");
             }
         }
     }
