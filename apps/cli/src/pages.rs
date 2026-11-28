@@ -162,8 +162,9 @@ fn written(result: &Value, verb: &str, cmd: &Cmd) -> Result<i32> {
         js_string(version.get("bytes")),
         js_string(page.get("title")),
     ));
-    // The viewer follows the latest version, so the link stays right after later updates.
-    let link = crate::artifacts::ui_link(cmd.config, &viewer_path(&id, None)?);
+    // The viewer follows the latest version, so the link stays right after later updates. `/a/<page id>` opens for
+    // the owner and for each share's readers, so the link still works once the page is shared.
+    let link = crate::artifacts::viewer_link(cmd.config, &id);
     cmd.out(format!("{} View it: {}", cmd.style.arrow, cmd.style.cyan(&link)));
     Ok(0)
 }

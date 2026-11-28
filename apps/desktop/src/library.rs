@@ -700,7 +700,8 @@ pub fn without_front_matter(markdown: &str) -> &str {
         .map_or(markdown, |(_, body)| body.trim_start())
 }
 
-/// The page a link opens in Nexus UI's page viewer (`<ui>/app/<org>/pages/<id>`, or `/app?next=/pages/<id>`), as the
+/// The page a link opens in Nexus UI's page viewer (`<ui>/app/<org>/pages/<id>`, `/app?next=/pages/<id>`, or the fast
+/// viewer's `/a/<id>`), as the
 /// Nexus app's `pageLink` (`nexus_desktop_core::page_links`); none for any other link.
 pub fn page_link(href: &str) -> Option<String> {
     nexus_desktop_core::page_links::page_link(href)
