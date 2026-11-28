@@ -63,9 +63,11 @@ pub fn update<T>(change: impl FnOnce(&mut Settings) -> Result<T, String>) -> Res
 /// the cloud sign-ins each change the file from their own thread.
 static WRITES: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
-/// [`update`] on the file at `file`, by an owner (`owns`) or not. The read, the change and the write run as one: under
-/// [`WRITES`] in this process, and under an advisory lock on `<file>.lock` for this app's other processes. Without
-/// that, two changes at once each read the file before the other wrote, and the later write drops the earlier change.
+/// [`update`] on the file at `file`, by an owner (`owns`) or not. The read, the change and the write run as one under
+/// [`WRITES`]: without it, two changes at once each read the file before the other wrote, and the later write drops
+/// the earlier change. Only the store's owner writes ([`writable`]), so that lock covers this app's writers. The
+/// advisory lock on `<file>.lock` ([`hold`]) only guards against a second writer that does not check ownership, such
+/// as an older build of this app.
 fn update_at<T>(
     file: &Path,
     owns: bool,
@@ -82,8 +84,12 @@ fn update_at<T>(
     Ok((settings, answer))
 }
 
-/// The advisory lock on `<file>.lock`, held until dropped. None when it can't be taken (no folder yet, say): the change
-/// is saved anyway, as before the lock existed, rather than lost.
+/// How long a write waits for another process's hold on `<file>.lock` before it saves anyway.
+const HOLD_WAIT: std::time::Duration = std::time::Duration::from_millis(500);
+
+/// The advisory lock on `<file>.lock`, held until dropped. None when it can't be taken within [`HOLD_WAIT`] (another
+/// process holds it, or there is no folder yet): the change is saved anyway, as before the lock existed, rather than
+/// lost or left waiting.
 fn hold(file: &Path) -> Option<std::fs::File> {
     let mut name = file.as_os_str().to_owned();
     name.push(".lock");
@@ -93,8 +99,16 @@ fn hold(file: &Path) -> Option<std::fs::File> {
         .write(true)
         .open(PathBuf::from(name))
         .ok()?;
-    lock.lock().ok()?;
-    Some(lock)
+    let until = std::time::Instant::now() + HOLD_WAIT;
+    loop {
+        match lock.try_lock() {
+            Ok(()) => return Some(lock),
+            Err(std::fs::TryLockError::WouldBlock) if std::time::Instant::now() < until => {
+                std::thread::sleep(std::time::Duration::from_millis(10));
+            }
+            Err(_) => return None,
+        }
+    }
 }
 
 /// Settings' Gateway switch, on the settings (the Nexus app's `point_at`): make `to` the Gateway, keeping `from`'s

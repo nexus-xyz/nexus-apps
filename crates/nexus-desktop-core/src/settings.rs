@@ -750,12 +750,15 @@ pub fn load(path: &Path) -> Settings {
     settings
 }
 
+/// Saves `settings` to `path`, only its owner may read it (0600). The new text replaces the file in one rename, so a
+/// reader that takes no lock (the app's own loads, the cloud sign-ins, the CLI) never reads it empty or half written,
+/// and a crash mid-write leaves the old file.
 pub fn save(path: &Path, settings: &Settings) -> std::io::Result<()> {
     if let Some(dir) = path.parent() {
         nexus_client::config::create_private_dir(dir)?;
     }
     let text = serde_json::to_string_pretty(settings).unwrap_or_default();
-    nexus_client::config::write_private(path, format!("{text}\n").as_bytes())
+    crate::atomic_file::write_atomic_private(path, format!("{text}\n").as_bytes())
 }
 
 /// This computer's policy: the OS's managed preferences merged with the managed JSON file (`NEXUS_MANAGED_CONFIG`,
@@ -1087,6 +1090,57 @@ mod tests {
             serde_json::to_value(&disabled).expect("the settings serialize"),
             serde_json::json!({ "disableCrossAgentSubsessions": true })
         );
+    }
+
+    /// A reader that takes no lock, running beside many saves, never reads the file empty or half written: each read is
+    /// a whole saved file. The file stays readable by its owner only.
+    #[test]
+    fn a_save_replaces_the_file_whole_and_keeps_it_private() {
+        let dir = std::env::temp_dir().join(format!("nexus-settings-atomic-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let file = dir.join(FILE);
+        let saved = |n: usize| Settings {
+            org: Some(format!("org-{n}")),
+            mcp_servers: (0..50)
+                .map(|i| McpServer {
+                    name: format!("server-{i}"),
+                    enabled: true,
+                    command: Some("x".repeat(200)),
+                    args: Vec::new(),
+                    url: None,
+                    secrets: Vec::new(),
+                    tool_timeout_sec: None,
+                })
+                .collect(),
+            ..Settings::default()
+        };
+        save(&file, &saved(0)).expect("saved");
+        let done = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let reader = {
+            let (file, done) = (file.clone(), done.clone());
+            std::thread::spawn(move || {
+                let mut reads = 0;
+                while !done.load(std::sync::atomic::Ordering::SeqCst) {
+                    let text = std::fs::read_to_string(&file).expect("the file is always there");
+                    let read: Settings = serde_json::from_str(&text).unwrap_or_else(|e| panic!("a partial read: {e}"));
+                    assert!(read.org.is_some() && read.mcp_servers.len() == 50, "a whole file");
+                    reads += 1;
+                }
+                reads
+            })
+        };
+        for n in 1..200 {
+            save(&file, &saved(n)).expect("saved");
+        }
+        done.store(true, std::sync::atomic::Ordering::SeqCst);
+        assert!(reader.join().expect("the reader") > 0);
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let mode = std::fs::metadata(&file).expect("the file").permissions().mode() & 0o777;
+            assert_eq!(mode, 0o600);
+        }
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     /// Cross-project subsessions are on in a file written before the switch, reach the engine, and round-trip. Only a
