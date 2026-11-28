@@ -617,3 +617,36 @@ fn side_partial_stream_benchmark(cx: &mut TestAppContext) {
 }
 #[path = "paste_tests.rs"]
 mod paste_tests;
+
+#[gpui_kit::test]
+fn remember_shows_its_rules_inside_the_side_tray(cx: &mut TestAppContext) {
+    let (panel, cx) = panel(cx);
+    let chat = panel.read_with(cx, |panel, _| panel.chat.clone());
+    chat.update(cx, |chat, cx| {
+        chat.blocks = vec![Block::Approval {
+            request_id: "permission-1".into(),
+            tool: "Bash".into(),
+            summary: "Check out the account".into(),
+            description: None,
+            input: serde_json::json!({"command": "git checkout account\n".repeat(40)}),
+            suggestions: vec![nexus_workbench::event::PermissionSuggestion {
+                kind: "addRules".into(),
+                label: "label".into(),
+                raw: serde_json::json!({"type": "addRules", "destination": "session",
+                    "rules": [{"toolName": "Bash", "ruleContent": "git checkout:*"}]}),
+            }],
+            answer: None,
+            moved: false,
+            message: None,
+        }];
+        chat.request = Some("permission-1".into());
+        cx.notify();
+    });
+    click(cx, "side-remember");
+    let tray = cx.debug_bounds("side-permission-tray").expect("tray");
+    let rule = cx.debug_bounds("side-rule-0").expect("the click opens the rules");
+    assert!(
+        rule.top() >= tray.top() && rule.bottom() <= tray.bottom(),
+        "the rule {rule:?} must show inside the tray {tray:?}"
+    );
+}

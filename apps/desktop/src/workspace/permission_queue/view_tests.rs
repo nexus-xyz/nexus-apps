@@ -117,3 +117,67 @@ fn real_permission_actions_fit_after_resize_and_collapsed_requests_stay_visible(
         assert_eq!(view.dock.permissions.open.as_deref(), Some("request-0"));
     });
 }
+
+/// One Bash request whose command fills the tray, with a rule to remember.
+fn remember_fixture(cx: &mut TestAppContext) -> (Entity<QueueView>, &mut VisualTestContext) {
+    let (queue, cx) = fixture(cx);
+    let workspace = queue.read_with(cx, |queue, _| queue.workspace.clone());
+    workspace.update(cx, |workspace, cx| {
+        let View::Code(view) = &mut workspace.view else {
+            unreachable!()
+        };
+        view.blocks = vec![Block::Approval {
+            request_id: "request-0".into(),
+            tool: "Bash".into(),
+            summary: "Check out the account".into(),
+            description: None,
+            input: json!({"command": "git checkout account\n".repeat(40), "cwd": "/work"}),
+            suggestions: vec![nexus_workbench::event::PermissionSuggestion {
+                kind: "addRules".into(),
+                label: "label".into(),
+                raw: json!({"type": "addRules", "destination": "session",
+                    "rules": [{"toolName": "Bash", "ruleContent": "git checkout:*"}]}),
+            }],
+            answer: None,
+            moved: false,
+            message: None,
+        }];
+        view.dock.permissions = PermissionQueue::default();
+        view.dock.permissions.follow(&view.blocks);
+        cx.notify();
+    });
+    (queue, cx)
+}
+
+#[gpui_kit::test]
+fn remember_shows_its_rules_inside_the_tray(cx: &mut TestAppContext) {
+    let _agents = crate::code_run::fixture_agents(Vec::new());
+    let (queue, cx) = remember_fixture(cx);
+    cx.run_until_parked();
+    cx.update(|window, cx| window.draw(cx).clear(cx));
+    // Allow always… sits under the long command: scroll to it, as a person does, before the click.
+    let workspace = queue.read_with(cx, |queue, _| queue.workspace.clone());
+    workspace.update(cx, |workspace, cx| {
+        let View::Code(view) = &workspace.view else {
+            unreachable!()
+        };
+        view.dock.permissions.scroll.scroll_to_bottom();
+        cx.notify();
+    });
+    cx.run_until_parked();
+    cx.update(|window, cx| window.draw(cx).clear(cx));
+    let remember = cx
+        .debug_bounds("permission-always-request-0")
+        .expect("Allow always… is drawn");
+    cx.simulate_click(remember.center(), Modifiers::default());
+    cx.run_until_parked();
+    cx.update(|window, cx| window.draw(cx).clear(cx));
+    let tray = cx.debug_bounds("permission-tray").unwrap();
+    let rule = cx
+        .debug_bounds("permission-rule-request-0-0")
+        .expect("the click opens the rules");
+    assert!(
+        rule.top() >= tray.top() && rule.bottom() <= tray.bottom(),
+        "the rule {rule:?} must show inside the tray {tray:?}"
+    );
+}
