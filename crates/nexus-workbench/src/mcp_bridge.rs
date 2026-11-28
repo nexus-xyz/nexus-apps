@@ -18,8 +18,13 @@ use crate::mcp_servers::{
 /// The app's socket and the run's credential for it, from the built-in server's environment
 /// (`mcp_servers::with_app_tools`). A loopback address only.
 pub fn app_socket_env() -> Option<(SocketAddr, String)> {
-    let address = std::env::var(APP_ADDRESS_VAR).ok()?;
-    let token = std::env::var(APP_TOKEN_VAR).ok()?;
+    socket_env(APP_ADDRESS_VAR, APP_TOKEN_VAR)
+}
+
+/// The app's socket and a credential for it, from the two variables named. A loopback address only.
+pub fn socket_env(address_var: &str, token_var: &str) -> Option<(SocketAddr, String)> {
+    let address = std::env::var(address_var).ok()?;
+    let token = std::env::var(token_var).ok()?;
     address
         .parse::<SocketAddr>()
         .ok()

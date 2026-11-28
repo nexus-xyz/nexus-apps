@@ -144,6 +144,7 @@ mod tests {
                     url: None,
                     secrets: vec!["LINEAR_KEY".into()],
                     tool_timeout_sec: None,
+                    plugin: None,
                 });
                 settings.set_worktree_root(WorktreeRoot::Worktrees, Some(super::FULL_PATH.into()))
             })

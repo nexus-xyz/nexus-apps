@@ -4,9 +4,13 @@
 //! - [`server`]: an approved plugin as the [`crate::mcp_servers::McpServer`] the sessions start, and the fingerprint
 //!   of what the person approved.
 //!
-//! Nothing here installs, approves or runs a plugin yet: the app does that behind `NEXUS_DESKTOP_PLUGINS` (off).
+//! A local plugin runs only through the launcher, with no credential variable, under every agent
+//! ([`crate::mcp_servers::McpServer::launcher_only`]). The app installs, approves and adds plugins behind
+//! `NEXUS_DESKTOP_PLUGINS` (off).
 
 pub mod manifest;
+#[cfg(test)]
+mod run_tests;
 pub mod server;
 
 pub use manifest::{Access, Manifest, ManifestError, McpEntry, PathGrant, Permissions};

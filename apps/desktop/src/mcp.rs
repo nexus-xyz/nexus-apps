@@ -26,15 +26,25 @@ pub fn saved_values() -> Values {
         .unwrap_or_default()
 }
 
-/// The servers' secrets, from the Nexus app's keychain entry; read only when an enabled server has one.
+/// The servers' secrets: Settings' from the Nexus app's keychain entry, a plugin's from the plugins' own. Each entry is
+/// read only when an enabled server that keeps its values there has a secret.
 pub fn values(servers: &[McpServer]) -> Values {
-    if !servers
-        .iter()
-        .any(|server| server.enabled && !server.secrets.is_empty())
-    {
-        return Values::new();
+    nexus_desktop_mcp::mcp::saved_for(servers, &crate::keychain::vault())
+}
+
+/// What Code sessions start with: Settings' servers, then the approved, enabled plugins (plugin API v0, only with
+/// `NEXUS_DESKTOP_PLUGINS=1`).
+pub fn session_servers(settings: &nexus_desktop_core::settings::Settings) -> Vec<McpServer> {
+    let mut servers = settings.mcp_servers.clone();
+    if let Some(config) = nexus_desktop_core::settings::config_dir() {
+        let plugins = nexus_desktop_core::plugins::dir(&config);
+        servers.extend(nexus_desktop_core::plugins::session::servers(
+            &plugins,
+            &settings.plugins,
+            &settings.mcp_servers,
+        ));
     }
-    saved_values()
+    servers
 }
 
 /// Settings' `servers` as the background service takes them, in the sign-in and after each save: the enabled ones, with
@@ -145,6 +155,7 @@ mod tests {
             url: None,
             secrets: secrets.iter().map(|s| s.to_string()).collect(),
             tool_timeout_sec: None,
+            plugin: None,
         }
     }
 

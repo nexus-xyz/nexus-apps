@@ -24,6 +24,7 @@ fn local(name: &str, secrets: &[&str]) -> McpServer {
         url: None,
         secrets: secrets.iter().map(|secret| secret.to_string()).collect(),
         tool_timeout_sec: None,
+        plugin: None,
     }
 }
 

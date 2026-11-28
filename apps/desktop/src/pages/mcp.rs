@@ -182,6 +182,7 @@ impl Draft {
                 url: Some(self.url.trim().to_string()),
                 secrets,
                 tool_timeout_sec: None,
+                plugin: None,
             }
         } else {
             McpServer {
@@ -198,6 +199,7 @@ impl Draft {
                 url: None,
                 secrets,
                 tool_timeout_sec: None,
+                plugin: None,
             }
         }
     }

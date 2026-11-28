@@ -45,12 +45,23 @@ pub fn values(vault: &Vault) -> Values {
 /// after each save: the enabled ones, with their values from the keychain. The keychain is read only when an enabled
 /// server has a secret, as at an agent's start.
 pub fn for_service(servers: &[McpServer], vault: &Vault) -> Handed {
-    let saved = if servers.iter().any(|s| s.enabled && !s.secrets.is_empty()) {
-        values(vault)
-    } else {
-        Values::new()
+    nexus_workbench::mcp_servers::handed(servers, &saved_for(servers, vault))
+}
+
+/// The saved values `servers` need: Settings' entry, read only when an enabled Settings server has a secret, and the
+/// plugins' own entry, read only when an enabled plugin has one.
+pub fn saved_for(servers: &[McpServer], vault: &Vault) -> Values {
+    let needs = |plugin: bool| {
+        servers
+            .iter()
+            .any(|s| s.enabled && !s.secrets.is_empty() && s.plugin.is_some() == plugin)
     };
-    nexus_workbench::mcp_servers::handed(servers, &saved)
+    let mut saved = if needs(false) { values(vault) } else { Values::new() };
+    if needs(true) {
+        // A plugin's id is never a Settings server's name (`nexus_desktop_core::plugins::session::servers`).
+        saved.extend(nexus_desktop_core::plugins::session::values(vault));
+    }
+    saved
 }
 
 fn valid_name(name: &str) -> bool {
@@ -269,6 +280,7 @@ mod tests {
             url: None,
             secrets: vec!["LINEAR_KEY".into()],
             tool_timeout_sec: None,
+            plugin: None,
         }
     }
 
@@ -281,6 +293,7 @@ mod tests {
             url: Some("https://mcp.example.test/mcp".into()),
             secrets: vec!["Authorization".into()],
             tool_timeout_sec: None,
+            plugin: None,
         }
     }
 
