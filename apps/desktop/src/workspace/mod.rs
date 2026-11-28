@@ -4290,8 +4290,7 @@ impl Render for Workspace {
         }
         // Files dragged out of the window, or dropped: the composer's drop outline goes.
         if self.file_drag && !cx.has_active_drag() {
-            self.file_drag = false;
-            cx.notify();
+            self.show_file_drag(false, cx);
         }
         let focused = self.composer.focus_handle(cx).is_focused(window);
         self.composer_focused = focused;
@@ -4405,15 +4404,12 @@ impl Render for Workspace {
             // Files dragged from a file manager: anywhere on the window, they attach to the composer on screen, as
             // in the Nexus app. A terminal takes a drop on itself first and types the paths.
             .on_drag_move(cx.listener(|this, _: &DragMoveEvent<ExternalPaths>, _, cx| {
-                let shown = this.composer_shown();
-                if this.file_drag != shown {
-                    this.file_drag = shown;
-                    cx.notify();
-                }
+                let shown = this.composer_shown() || this.side_chat_takes_drop();
+                this.show_file_drag(shown, cx);
             }))
             .on_drop(cx.listener(|this, paths: &ExternalPaths, _, cx| {
-                this.file_drag = false;
-                if this.side.side_chat_visible
+                this.show_file_drag(false, cx);
+                if this.side_chat_takes_drop()
                     && let Some(chat) = this.open_side_chat()
                 {
                     chat.update(cx, |chat, cx| chat.attach_paths(paths.paths().to_vec(), cx));

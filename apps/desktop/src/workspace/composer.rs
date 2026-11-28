@@ -369,7 +369,9 @@ pub(super) fn composer_note_line(note: SharedString, link: Option<impl IntoEleme
 
 impl Workspace {
     pub(super) fn render_composer(&self, palette: Palette, cx: &mut Context<Self>) -> impl IntoElement {
-        let focused = self.composer_focused || self.file_drag;
+        // Dragged files go to the side chat while it shows: its composer draws the outline then (`show_file_drag`).
+        let dragging = self.file_drag && !self.side_chat_takes_drop();
+        let focused = self.composer_focused || dragging;
         // Focused, or with files dragged over the window, the ring turns from the hairline to a neutral ink.
         let note = self
             .mic_note
@@ -686,27 +688,15 @@ impl Workspace {
             .children(self.render_chat_skills(palette, cx))
             .children(slash)
             .children(mention)
-            .when(self.file_drag, |frame| {
-                // `.composer-drop`: what a drop does, over the box while files are dragged over the window.
-                frame.child(
-                    div()
-                        .absolute()
-                        .inset_0()
-                        .rounded(px(RADIUS))
-                        .border_1()
-                        .border_color(palette.foreground)
-                        .bg(palette.raised.opacity(0.92))
-                        .flex()
-                        .items_center()
-                        .justify_center()
-                        .text_size(px(13.5))
-                        .text_color(palette.foreground)
-                        .child(if matches!(self.view, View::Chat) {
-                            tr("Drop images or files to attach them")
-                        } else {
-                            tr("Drop files to attach them")
-                        }),
-                )
+            .when(dragging, |frame| {
+                frame.child(drop_overlay(
+                    if matches!(self.view, View::Chat) {
+                        tr("Drop images or files to attach them")
+                    } else {
+                        tr("Drop files to attach them")
+                    },
+                    palette,
+                ))
             });
         // Chat only, above the box: whether Nexus can pay the next call. A Code session runs on its agent's
         // own plan.
@@ -1163,6 +1153,24 @@ impl Workspace {
             .on_click(cx.listener(|this, _, window, cx| this.stop(window, cx)))
             .into_any_element()
     }
+}
+
+/// `.composer-drop`: what a drop does, over a composer's box while files are dragged over the window. The session's
+/// and the side chat's composers draw the same one.
+pub(super) fn drop_overlay(label: impl Into<SharedString>, palette: Palette) -> Div {
+    div()
+        .absolute()
+        .inset_0()
+        .rounded(px(RADIUS))
+        .border_1()
+        .border_color(palette.foreground)
+        .bg(palette.raised.opacity(0.92))
+        .flex()
+        .items_center()
+        .justify_center()
+        .text_size(px(13.5))
+        .text_color(palette.foreground)
+        .child(label.into())
 }
 
 /// A row over the composer's text (a note, the queue, the attachments): it opens and closes in height

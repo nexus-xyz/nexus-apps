@@ -73,38 +73,23 @@ impl Render for SideChat {
                     cx.stop_propagation();
                     return;
                 }
+                // As in the session, Esc closes what is open and never reaches a running turn's Stop: Stop is its
+                // button, or Mod+. (`session_keys.rs`).
                 if event.keystroke.key.as_str() == "escape"
-                    && (this.focused(window, cx)
-                        || this.menu_open
-                        || this.deleting
-                        || this.settings.is_some()
-                        || this.attach_open)
-                {
-                    if this.menu_open
+                    && (this.menu_open
                         || this.deleting
                         || this.rewrite.is_some()
                         || this.settings.is_some()
-                        || this.attach_open
-                    {
-                        this.menu_open = false;
-                        this.deleting = false;
-                        this.rewrite = None;
-                        this.settings = None;
-                        this.attach_open = false;
-                        this.input.focus_handle(cx).focus(window, cx);
-                        cx.stop_propagation();
-                        cx.notify();
-                        return;
-                    }
-                    this.command(
-                        "wb_interrupt",
-                        json!({"threadId":this.summary.id}),
-                        false,
-                        None,
-                        window,
-                        cx,
-                    );
+                        || this.attach_open)
+                {
+                    this.menu_open = false;
+                    this.deleting = false;
+                    this.rewrite = None;
+                    this.settings = None;
+                    this.attach_open = false;
+                    this.input.focus_handle(cx).focus(window, cx);
                     cx.stop_propagation();
+                    cx.notify();
                 }
             }))
             .child(head)
