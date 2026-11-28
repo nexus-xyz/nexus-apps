@@ -90,7 +90,7 @@ async fn a_lead_starts_a_subsession_in_another_trusted_project() {
         "the other project's default is lower"
     );
     let worktree = c.worktree.clone().unwrap_or_else(|| panic!("a worktree"));
-    let common = std::process::Command::new("git")
+    let common = nexus_workbench::process::command("git")
         .args([
             "-C",
             &worktree.path,
