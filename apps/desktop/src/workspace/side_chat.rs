@@ -4,6 +4,7 @@ mod composer;
 mod controls;
 mod creation;
 mod dock;
+mod echo;
 mod history;
 mod message_composer;
 mod operations;
@@ -71,6 +72,10 @@ pub(super) struct SideChat {
     outbox: std::collections::VecDeque<operations::Outgoing>,
     /// The sent message's files while they go up in pieces (`uploads.rs`).
     uploading: Option<crate::attachments::Draft>,
+    /// Sent messages the history shows before a read brings them (`echo.rs`).
+    echo: Vec<echo::Echo>,
+    /// Wakes the read loop at once, as a send lands.
+    wake: Option<futures::channel::mpsc::UnboundedSender<()>>,
     answers: Vec<Entity<InputState>>,
     request: Option<String>,
     permission_reason: Entity<InputState>,
@@ -164,6 +169,8 @@ impl SideChat {
             draft: Default::default(),
             outbox: Default::default(),
             uploading: None,
+            echo: vec![],
+            wake: None,
             answers: vec![],
             request: None,
             permission_reason: cx.new(|cx| InputState::new(window, cx).placeholder("Reason (optional)")),
@@ -195,6 +202,8 @@ impl SideChat {
         if self.poll.is_some() {
             return;
         }
+        let (wake, mut woken) = futures::channel::mpsc::unbounded::<()>();
+        self.wake = Some(wake);
         self.poll = Some(cx.spawn_in(window, async move |this, cx| {
             loop {
                 let reads = this.update(cx, |this, _| {
@@ -245,7 +254,13 @@ impl SideChat {
                 {
                     break;
                 }
-                cx.background_executor().timer(Duration::from_secs(2)).await;
+                // The next read in two seconds, or at once when a send lands (`wake`).
+                let mut timer = std::pin::pin!(cx.background_executor().timer(Duration::from_secs(2)));
+                if let futures::future::Either::Right((None, _)) =
+                    futures::future::select(timer.as_mut(), futures::StreamExt::next(&mut woken)).await
+                {
+                    timer.await;
+                }
             }
         }));
     }
@@ -333,6 +348,7 @@ impl SideChat {
         self.preserve_gone_rewrite(window, cx);
         self.follow_secret(window, cx);
         self.start_partials(window, cx);
+        self.echo_read();
         // A restored side chat waits for its first read before its line moves on.
         self.flush_outbox(window, cx);
     }

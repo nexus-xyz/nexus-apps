@@ -23,6 +23,7 @@ struct Data {
     draft: crate::attachments::Draft,
     outbox: std::collections::VecDeque<operations::Outgoing>,
     uploading: Option<crate::attachments::Draft>,
+    echo: Vec<echo::Echo>,
     revision: u64,
     rewrite: Option<(i64, String, String)>,
     brought_back: bool,
@@ -46,11 +47,14 @@ impl Drop for RetainedChat {
     }
 }
 impl RetainedChat {
+    /// A side chat just made. `sent`: the first message, which landed: it shows before the first read.
+    #[allow(clippy::too_many_arguments)]
     pub(super) fn created(
         summary: ThreadSummary,
         parent_title: String,
         source: crate::workspace::runs::Source,
         input: String,
+        sent: Option<String>,
         problem: Option<String>,
         guard: Rc<dyn Fn() -> bool>,
         partial: bool,
@@ -71,6 +75,7 @@ impl RetainedChat {
                 draft: Default::default(),
                 outbox: Default::default(),
                 uploading: None,
+                echo: sent.map(echo::Echo::landed).into_iter().collect(),
                 revision: 0,
                 rewrite: None,
                 brought_back: false,
@@ -164,6 +169,7 @@ impl SideChat {
             draft: std::mem::take(&mut self.draft),
             outbox: std::mem::take(&mut self.outbox),
             uploading: self.uploading.take(),
+            echo: std::mem::take(&mut self.echo),
             revision: self.draft_revision,
             rewrite: self
                 .rewrite
@@ -217,6 +223,7 @@ impl SideChat {
         chat.outbox = data.outbox;
         // The chips follow an upload still running; a finished one's answer clears it (`apply_commands`).
         chat.uploading = data.uploading;
+        chat.echo = data.echo;
         chat.brought_back = data.brought_back;
         chat.problem = data.problem;
         chat.note = data.note;

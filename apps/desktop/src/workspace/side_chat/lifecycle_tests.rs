@@ -982,11 +982,7 @@ fn side_chat_native_restored_send_click_uses_fresh_source_and_response_updates_d
     write.answer.send(Ok(json!(true))).unwrap();
     cx.run_until_parked();
     chat.read_with(cx, |chat, cx| assert_eq!(chat.input.read(cx).value().as_ref(), ""));
-    chat.update_in(cx, |chat, window, cx| {
-        chat.active(false, window, cx);
-        chat.active(true, window, cx);
-    });
-    cx.run_until_parked();
+    // The landed send reads at once (`echo.rs`): no wait for the next poll.
     let mut running = summary("native-side", "parent");
     running.status = nexus_workbench::event::ThreadStatus::Running;
     rpc.take("wb_thread_events").answer.send(Ok(json!([]))).unwrap();

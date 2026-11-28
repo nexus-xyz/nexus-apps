@@ -62,6 +62,51 @@ fn a_sent_message_leaves_the_composer_at_once_and_the_next_waits_its_turn(cx: &m
     });
 }
 
+/// The sent message shows in the history before any read; a landed send reads at once, and the read's own message
+/// takes the bubble's place.
+#[gpui_kit::test]
+fn a_sent_message_shows_at_once_and_the_landed_send_reads_it(cx: &mut TestAppContext) {
+    use nexus_workbench::event::{StoredEvent, WbEvent};
+    let rpc = Rpc::default();
+    let (chat, cx) = chat(cx, &rpc);
+    chat.update_in(cx, |chat, window, cx| chat.active(true, window, cx));
+    cx.run_until_parked();
+    rpc.poll("send-side", "parent");
+    cx.run_until_parked();
+    type_and_send(&chat, cx, "show me now", false);
+    chat.read_with(cx, |chat, _| assert_eq!(chat.echo_texts(), ["show me now"]));
+    rpc.take("wb_send_files").answer.send(Ok(json!(true))).unwrap();
+    cx.run_until_parked();
+    // No two-second wait: the landed send woke the read.
+    let user = StoredEvent {
+        thread_id: "send-side".into(),
+        seq: 1,
+        at: 110,
+        event: WbEvent::User {
+            text: "show me now".into(),
+            from: None,
+            images: vec![],
+        },
+    };
+    rpc.take("wb_thread_events")
+        .answer
+        .send(Ok(serde_json::to_value(vec![user]).unwrap()))
+        .unwrap();
+    rpc.take("wb_overview")
+        .answer
+        .send(Ok(json!({"threads":[summary("send-side","parent")]})))
+        .unwrap();
+    cx.run_until_parked();
+    chat.read_with(cx, |chat, _| {
+        assert!(chat.echo.is_empty(), "the stored message took the bubble's place");
+        assert!(
+            chat.blocks
+                .iter()
+                .any(|block| matches!(block.inner(), crate::code::Block::User { .. }))
+        );
+    });
+}
+
 #[gpui_kit::test]
 fn a_refused_message_comes_back_ahead_of_what_was_typed_since(cx: &mut TestAppContext) {
     let rpc = Rpc::default();
@@ -81,6 +126,7 @@ fn a_refused_message_comes_back_ahead_of_what_was_typed_since(cx: &mut TestAppCo
     chat.read_with(cx, |chat, cx| {
         assert_eq!(chat.input.read(cx).value().as_ref(), "refused\n\ntyped since");
         assert_eq!(chat.draft.files.iter().map(|file| file.id).collect::<Vec<_>>(), [7, 8]);
+        assert!(chat.echo.is_empty(), "a refused message leaves the history");
         assert_eq!(
             chat.problem.as_deref(),
             Some("The host refused it. The message was not sent; it is back in the composer.")

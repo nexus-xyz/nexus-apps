@@ -182,16 +182,18 @@ impl Workspace {
             Ok((summary, error)) => {
                 let parent = created.parent;
                 let id = summary.id.clone();
-                let input = if error.is_some() {
-                    created.prompt.unwrap_or_default()
+                // A first message that went shows at once; one that did not waits in the composer.
+                let (input, sent) = if error.is_some() {
+                    (created.prompt.unwrap_or_default(), None)
                 } else {
-                    created.draft
+                    (created.draft, created.prompt)
                 };
                 let saved = super::retention::RetainedChat::created(
                     summary,
                     created.title,
                     created.source,
                     input,
+                    sent,
                     error,
                     self.side_chat_guard(),
                     !self.side.side_chat_creation.parked,

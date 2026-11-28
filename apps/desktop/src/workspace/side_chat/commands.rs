@@ -58,11 +58,20 @@ impl SideChat {
         }
         match result {
             Err(error) => match effect {
-                Effect::Send { text, draft } => self.unsent(text, draft, error, window, cx),
+                Effect::Send { text, draft } => {
+                    self.echo_settled(&text, false);
+                    self.unsent(text, draft, error, window, cx);
+                }
                 _ => self.problem = Some(error),
             },
             Ok(value) => match effect {
-                Effect::Send { .. } => {}
+                Effect::Send { text, .. } => {
+                    // The store has the message now: read it at once rather than at the next poll.
+                    self.echo_settled(&text, true);
+                    if let Some(wake) = &self.wake {
+                        let _ = wake.unbounded_send(());
+                    }
+                }
                 Effect::Command {
                     close,
                     note,
@@ -123,6 +132,8 @@ impl SideChat {
         self.brought_back = false;
         self.problem = None;
         self.note = None;
+        self.echo_sent(&text, queued);
+        self.scroll.to_end();
         self.outbox.push_back(Outgoing { text, draft, queued });
         self.flush_outbox(window, cx);
         cx.notify();
@@ -174,6 +185,7 @@ impl SideChat {
         },cx);
         if !self.sending {
             // The send could not start: the message goes back, never lost.
+            self.echo_settled(&back, false);
             self.unsent(back, sent, "The side chat is unavailable.".into(), window, cx);
             return;
         }
