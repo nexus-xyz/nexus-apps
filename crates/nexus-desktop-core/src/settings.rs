@@ -536,6 +536,10 @@ pub struct CloudAccountSetting {
     /// this, a device with no token leaves the one another device wrote.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub claude_cleared: bool,
+    /// Gateway keeps the token saved here: the machines get it from Gateway, not from this device. With
+    /// `claude_cleared`, a removal Gateway has not confirmed yet: the next connect asks again.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub claude_on_gateway: bool,
     /// The GitHub login the saved token belongs to, and when it was saved.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub github_user: Option<String>,

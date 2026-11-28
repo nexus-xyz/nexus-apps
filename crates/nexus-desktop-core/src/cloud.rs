@@ -59,9 +59,11 @@ pub fn claude_saved(account: &mut CloudAccountSetting, token: &str, at: i64) {
     account.claude_hint = Some(hint(token, 10));
     account.claude_saved_at = Some(at);
     account.claude_cleared = false;
+    account.claude_on_gateway = false;
 }
 
-/// The Claude setup token was removed here: the next connect removes it from the machines too.
+/// The Claude setup token was removed here: the next connect removes it from the machines too. `claude_on_gateway`
+/// stays until Gateway confirms its removal.
 pub fn claude_cleared(account: &mut CloudAccountSetting) {
     account.claude_hint = None;
     account.claude_saved_at = None;

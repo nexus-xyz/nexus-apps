@@ -207,6 +207,9 @@ pub fn error(error: ClientError) -> Error {
 /// The create's header with the person's own GitHub token: Gateway's `warm::GITHUB_TOKEN_HEADER`.
 const GITHUB_TOKEN_HEADER: &str = "x-nexus-github-token";
 
+/// Where Gateway keeps the person's Claude setup token: write-only, never read back.
+const CLAUDE_TOKEN_PATH: &str = "/v1/secrets/me/claude-token";
+
 /// The cloud machines API of the Gateway the app is signed in to.
 #[derive(Clone)]
 pub struct GatewayCloud {
@@ -310,6 +313,35 @@ impl GatewayCloud {
             link.headers.push(("user-agent".into(), agent.clone()));
         }
         Ok(link)
+    }
+
+    /// Keeps the person's Claude setup token on Gateway: every cloud machine of theirs gets it from there,
+    /// whichever device started it. False when this Gateway does not keep it yet (it answers 404).
+    pub async fn put_claude_token(&self, token: &str) -> Result<bool> {
+        let body = json!({ "token": token.trim() });
+        match self
+            .client
+            .call_with(Method::PUT, CLAUDE_TOKEN_PATH, &[], Some(body))
+            .await
+            .map_err(error)
+        {
+            Ok(_) => Ok(true),
+            Err(Error::NotFound) => Ok(false),
+            Err(error) => Err(error),
+        }
+    }
+
+    /// Removes the person's Claude setup token from Gateway. A 404 (none kept, or a Gateway that keeps none) is done.
+    pub async fn delete_claude_token(&self) -> Result<()> {
+        match self
+            .client
+            .call_with(Method::DELETE, CLAUDE_TOKEN_PATH, &[], None)
+            .await
+            .map_err(error)
+        {
+            Ok(_) | Err(Error::NotFound) => Ok(()),
+            Err(error) => Err(error),
+        }
     }
 
     async fn action(&self, id: &str, action: &'static str) -> Result<()> {

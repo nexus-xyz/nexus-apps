@@ -19,6 +19,9 @@
 //! - Cloud session history: [`FakeGateway::store_history`] stores a thread's events as the machine would
 //!   send them, and `GET …/{id}/history/{thread}/events` pages them (`after`, `before`, `limit`) as Gateway does.
 //!   [`FakeGateway::set_history_enabled`] is the organization's `cloudHistory` switch.
+//! - The person's Claude token: `PUT` and `DELETE /v1/secrets/me/claude-token` answer 404 until
+//!   [`FakeGateway::keep_claude_token`], as a Gateway that keeps no token does. [`FakeGateway::claude_token`]
+//!   says what it keeps. These calls are not in [`FakeGateway::calls`].
 
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::convert::Infallible;
@@ -93,6 +96,8 @@ struct Shared {
     history: Mutex<HashMap<(String, String), BTreeMap<i64, Value>>>,
     /// The organization's `cloudHistory`.
     history_off: AtomicBool,
+    /// The person's Claude token: None while the route is off (404), Some(None) when on with none kept.
+    claude_token: Mutex<Option<Option<String>>>,
 }
 
 /// A running fake Gateway. Dropping it stops the server.
@@ -155,6 +160,7 @@ impl FakeGateway {
             next: AtomicU64::new(1),
             history: Mutex::new(HashMap::new()),
             history_off: AtomicBool::new(false),
+            claude_token: Mutex::new(None),
         });
         let serving = shared.clone();
         let task = tokio::spawn(async move {
@@ -234,6 +240,22 @@ impl FakeGateway {
         self.shared.history_off.store(!enabled, Ordering::SeqCst);
     }
 
+    /// Turns on `/v1/secrets/me/claude-token`, with no token kept yet.
+    pub fn keep_claude_token(&self) {
+        if let Ok(mut slot) = self.shared.claude_token.lock() {
+            *slot = Some(None);
+        }
+    }
+
+    /// The Claude token the person keeps here, if any.
+    pub fn claude_token(&self) -> Option<String> {
+        self.shared
+            .claude_token
+            .lock()
+            .ok()
+            .and_then(|slot| slot.clone().flatten())
+    }
+
     /// boat's id for Gateway's machine `id`.
     pub fn boat_id(&self, id: &str) -> Option<String> {
         self.shared.machines.lock().ok()?.get(id).and_then(|r| r.boat.clone())
@@ -246,6 +268,32 @@ impl FakeGateway {
         {
             record.stop_reason = reason.map(String::from);
         }
+    }
+}
+
+/// `PUT` or `DELETE /v1/secrets/me/claude-token` for the person (any of [`GatewayConfig::tokens`]).
+fn claude_token(shared: &Shared, method: &str, token: Option<&str>, body: &Value) -> Response<Full<Bytes>> {
+    if !token.is_some_and(|t| shared.config.tokens.iter().any(|known| known == t)) {
+        return reply(401, refusal(401, "unauthorized", "Sign in again.").1);
+    }
+    let Ok(mut slot) = shared.claude_token.lock() else {
+        return reply(500, json!({}));
+    };
+    let Some(kept) = slot.as_mut() else {
+        return reply(404, refusal(404, "not_found", "No such route.").1);
+    };
+    match method {
+        "PUT" => {
+            *kept = body.get("token").and_then(Value::as_str).map(String::from);
+            reply(200, json!({ "set": kept.is_some() }))
+        }
+        "DELETE" => {
+            *kept = None;
+            let mut response = Response::new(Full::new(Bytes::new()));
+            *response.status_mut() = StatusCode::NO_CONTENT;
+            response
+        }
+        _ => reply(405, refusal(405, "method_not_allowed", "Not here.").1),
     }
 }
 
@@ -276,6 +324,9 @@ async fn handle(shared: &Shared, request: Request<Incoming>) -> Response<Full<By
         Err(_) => return reply(413, refusal(413, "body_too_large", "Too large.").1),
     };
     let body: Value = serde_json::from_slice(&body).unwrap_or(Value::Null);
+    if path == "/v1/secrets/me/claude-token" {
+        return claude_token(shared, &method, token.as_deref(), &body);
+    }
     let Some(route) = path.strip_prefix("/v1/cloud/machines") else {
         return reply(404, refusal(404, "not_found", "No such route.").1);
     };
