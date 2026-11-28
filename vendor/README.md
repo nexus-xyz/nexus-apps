@@ -105,6 +105,8 @@ entries that name them. Every other change has a comment that starts with "Nexus
   20 wakeups a second for the life of the app. The crate's `Cargo.toml` adds `libc` for `poll`.
 - `gpui-pre-macos/src/window.rs`: three calls to `Option::map_or_default` become `.map(f).unwrap_or_default()`.
   `map_or_default` is unstable on the pinned Rust (1.97), so the macOS build failed without this.
+- `gpui-pre-macos/src/window.rs`: a window with no title bar gets `NSWindowStyleMask::Resizable` when
+  `is_resizable` is set. Upstream drops it, so the panel did not resize from its edges on macOS.
 - `gpui-pre-apple/src/shaders.metal` and `metal_renderer.rs`: a surface can also be a one-plane BGRA pixel buffer
   (`kCVPixelFormatType_32BGRA`), a web page's frame. Its own pipeline (`surface_bgra_fragment`) samples it as
   `BGRA8Unorm`, as an image's bytes. A surface the renderer can't draw is skipped, logged once per format. Upstream
