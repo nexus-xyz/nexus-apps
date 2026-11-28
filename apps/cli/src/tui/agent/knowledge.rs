@@ -702,10 +702,15 @@ mod tests {
     fn the_desktop_sessions_topic_says_which_tool_and_when_to_archive() {
         let sessions = topic_text("desktop-sessions");
         for phrase in [
-            "| \"subsession\", \"spawn\", \"delegate\", or words that are unclear | Use `start_session`.",
-            "| \"new session\", \"separate session\", \"independent\" | Start an independent session.",
-            "| \"hand off\", \"hand over\" | Start an independent session, and leave this session as it is |",
-            "| Work in another project | Start an independent session in that project |",
+            "Ask whether the person wants a result back through you, or owns the new session; the noun they use does \
+             not decide.",
+            "| Work you coordinate or need a result from, in any wording, even \"new session\" | Use `start_session`.",
+            "| The person says it is independent or theirs, or hands it over | Run `nexus sessions start`.",
+            "| Another project | Run `nexus sessions start` with `--project`. For its result, ask for a report to \
+             `$NEXUS_SESSION_ID`, or wait |",
+            "\"independent\", \"I own it\", \"I'll take it from here\", \"don't wait for it\", \"no need to report back\"",
+            "When the words are unclear, use `start_session`, and say which tool you chose and why.",
+            "`start_session` can't reach another project yet.",
             "`nexus sessions start \"<prompt>\" --project <owner/repo or the project's folder>`",
             "It does not take the project's name.",
             "To hand work over without replacing this session, first commit your work on its branch.",
@@ -725,6 +730,11 @@ mod tests {
         ] {
             assert!(sessions.contains(phrase), "desktop-sessions.md lacks: {phrase}");
         }
+        // "New session" is coordinated work by default: no row sends it to `nexus sessions start`.
+        assert!(
+            !sessions.lines().any(|line| line.starts_with("| \"new session\"")),
+            "{sessions}"
+        );
     }
 
     #[test]

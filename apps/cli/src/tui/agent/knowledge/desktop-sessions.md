@@ -12,28 +12,31 @@ Read this before you start, stop, archive or hand off a Code session of Nexus fo
   `nexus sessions name` or the app's `/name` sets a unique name for Claude Code's SendMessage.
 - It needs Outside access (macOS, Linux): Settings › MCP servers. Each client asks once.
 
-## Which tool the person's words ask for
+## Which tool to use
 
-| The person says | What you do |
+Ask whether the person wants a result back through you, or owns the new session; the noun they use does not decide.
+
+| The work | What you do |
 | --- | --- |
-| "subsession", "spawn", "delegate", or words that are unclear | Use `start_session`. It starts a linked subsession, and its result comes back to you |
-| "new session", "separate session", "independent" | Start an independent session. Do nothing more unless the person asks |
-| "hand off", "hand over" | Start an independent session, and leave this session as it is |
-| Work in another project | Start an independent session in that project |
+| Work you coordinate or need a result from, in any wording, even "new session" | Use `start_session`. It starts a linked subsession, and its result comes back to you |
+| The person says it is independent or theirs, or hands it over | Run `nexus sessions start`. Do nothing more unless the person asks |
+| Another project | Run `nexus sessions start` with `--project`. For its result, ask for a report to `$NEXUS_SESSION_ID`, or wait |
 
+- Independent means the person says so: "independent", "I own it", "I'll take it from here", "don't wait for it", "no need to report back".
+  "Hand off" and "hand over" count too.
+- When the words are unclear, use `start_session`, and say which tool you chose and why.
+- `start_session` can't reach another project yet. Use `nexus sessions start` there, even for work you coordinate.
 - Start an independent session with `nexus sessions start "<prompt>" --project <owner/repo or the project's folder>`.
   From a worktree, always pass --project: a bare `nexus sessions start` finds no project there.
   `--project` takes a project's id, a folder inside it, or its GitHub owner/repo. It does not take the project's name.
 - To hand work over without replacing this session, first commit your work on its branch.
   Then name the branch in the new session's prompt. It does not get your worktree or uncommitted changes.
-- When the words were unclear, say which tool you chose and why.
 - Use `handoff_session` only when the person asks to replace or archive this session.
   It archives this session and moves its worktree to the new session.
-- `start_session` works only in this project.
 
-## Get an independent session's result
+## Get the result of a session you started with `nexus sessions start`
 
-Do this only when the person needs the result.
+Do this only when you need the result.
 
 - Put your own id (`$NEXUS_SESSION_ID`) in its prompt, and ask it to report with `nexus sessions send <id> "<report>"`.
   Keep this to one or two sentences of the prompt.

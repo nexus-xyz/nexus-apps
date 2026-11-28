@@ -52,7 +52,7 @@ pub const TERMINAL_GUIDANCE: &str = include_str!("terminal/instructions.txt").tr
 /// `sessions` commands, through the app's Outside access. No tool of its own. Said to every agent whose prompt the
 /// workbench builds, with or without the subsession tools; an agent with its own prompt (`Instructions::OwnPrompt`:
 /// OpenCode, Cursor, Nexus) does not get it. When to archive or hand off is in the subsession tools' own text.
-pub const SESSIONS_GUIDANCE: &str = "To reach another Nexus for desktop session, run `nexus sessions list`, then `nexus sessions send <name> \"<message>\"`. For a new, separate or independent session, run `nexus sessions start \"<prompt>\" --project <owner/repo or the project's folder>`. From a worktree, always pass --project. To hand work over without replacing this session, first commit your work on its branch, then start one the same way and name the branch in its prompt. When the person needs its result, ask in its prompt for a report to `$NEXUS_SESSION_ID` with `nexus sessions send`, or run `nexus sessions wait <id>`.";
+pub const SESSIONS_GUIDANCE: &str = "To reach another Code session, run `nexus sessions list`, then `nexus sessions send <name> \"<message>\"`. Use start_session, when you have it, for coordinated work, even if the person says \"new session\". Otherwise, or for another project or a session the person owns, run `nexus sessions start \"<prompt>\" --project <owner/repo or the project's folder>`. From a worktree, always pass --project. To hand work over without replacing this session, first commit your work on its branch and name the branch in its prompt. For its result, ask in its prompt for a report to `$NEXUS_SESSION_ID`, or run `nexus sessions wait <id>`.";
 
 /// What the workbench adds to every agent's system prompt: Claude Code's `--append-system-prompt`, Codex's
 /// `developerInstructions`. The commit trailer's note holds with or without the hook (only some accounts get it), so every session gets it.
@@ -572,9 +572,11 @@ mod tests {
     #[test]
     fn every_agent_is_told_how_to_start_an_independent_session_and_get_its_result() {
         for phrase in [
-            "For a new, separate or independent session, run `nexus sessions start \"<prompt>\" --project",
+            "Use start_session, when you have it, for coordinated work, even if the person says \"new session\".",
+            "Otherwise, or for another project or a session the person owns, run `nexus sessions start \"<prompt>\" \
+             --project",
             "To hand work over without replacing this session, first commit your work on its branch",
-            "ask in its prompt for a report to `$NEXUS_SESSION_ID` with `nexus sessions send`",
+            "ask in its prompt for a report to `$NEXUS_SESSION_ID`",
             "`nexus sessions wait <id>`",
         ] {
             assert!(SESSIONS_GUIDANCE.contains(phrase), "SESSIONS_GUIDANCE lacks: {phrase}");
