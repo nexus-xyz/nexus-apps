@@ -2288,11 +2288,11 @@ impl Workbench {
         self.project(project_id)
     }
 
-    /// Removes the project from the list and archives its sessions. A subsession another project's session started
-    /// here stops first ([`linked::cross_project`]).
+    /// Removes the project from the list and archives its sessions. Then a subsession another project's session
+    /// started here stops ([`linked::cross_project`]).
     pub fn remove_project(&self, project_id: &str) -> Result<()> {
+        self.remove_project_row(project_id)?;
         self.stop_cross_project_children(project_id);
-        self.store().remove_project(project_id)?;
         self.inner.host.emit(Emit::Projects(self.projects()?));
         Ok(())
     }

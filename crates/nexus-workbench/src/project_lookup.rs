@@ -28,22 +28,42 @@ pub fn in_sight(project: &Project) -> Result<&Project, String> {
 }
 
 /// The project `query` names: its id, an absolute path inside it (the deepest project wins), GitHub `owner/repo`, or
-/// its name in any case. An archived project is found too: [`in_sight`] refuses it with its own reason.
+/// its name in any case. Open projects are looked at first, by folder, then repository, then name: an archived one
+/// never makes a match ambiguous or hides an open one. Only when no open project matches is an archived one found,
+/// and [`in_sight`] then refuses it with its own reason.
 pub fn find_project<'a>(projects: &'a [Project], query: &str) -> Result<&'a Project, String> {
     let query = query.trim();
     if let Some(project) = projects.iter().find(|project| project.id == query) {
         return Ok(project);
     }
+    let (open, archived): (Vec<&Project>, Vec<&Project>) = projects.iter().partition(|project| !project.archived);
+    for candidates in [&open, &archived] {
+        if let Some(found) = matching(candidates, query) {
+            return found;
+        }
+    }
+    if std::path::Path::new(query).is_absolute() {
+        return Err(format!(
+            "No project in Nexus holds {query}. Add its folder in the app first."
+        ));
+    }
+    Err(format!(
+        "No open project is named {query} or is its repository. Give its folder, GitHub owner/repo or id."
+    ))
+}
+
+/// The project among `candidates` that `query` names by folder, repository or name; None when none does.
+fn matching<'a>(candidates: &[&'a Project], query: &str) -> Option<Result<&'a Project, String>> {
     let path = std::path::Path::new(query);
     if path.is_absolute() {
-        return projects
+        return candidates
             .iter()
             .filter(|project| path.starts_with(&project.path))
             .max_by_key(|project| project.path.len())
-            .ok_or_else(|| format!("No project in Nexus holds {query}. Add its folder in the app first."));
+            .map(|project| Ok(*project));
     }
     let wanted = query.to_lowercase();
-    let repository: Vec<&Project> = projects
+    let repository: Vec<&Project> = candidates
         .iter()
         .filter(|project| {
             project
@@ -51,20 +71,17 @@ pub fn find_project<'a>(projects: &'a [Project], query: &str) -> Result<&'a Proj
                 .iter()
                 .any(|remote| github_repo(remote).as_deref() == Some(&wanted))
         })
+        .copied()
         .collect();
     if !repository.is_empty() {
-        return one(repository, &format!("More than one project is {query}"));
+        return Some(one(repository, &format!("More than one project is {query}")));
     }
-    let named: Vec<&Project> = projects
+    let named: Vec<&Project> = candidates
         .iter()
         .filter(|project| !query.is_empty() && project.name.to_lowercase() == wanted)
+        .copied()
         .collect();
-    if named.is_empty() {
-        return Err(format!(
-            "No open project is named {query} or is its repository. Give its folder, GitHub owner/repo or id."
-        ));
-    }
-    one(named, &format!("More than one project is named {query}"))
+    (!named.is_empty()).then(|| one(named, &format!("More than one project is named {query}")))
 }
 
 /// The only project in `found`, else `many` with their folders.
@@ -171,6 +188,64 @@ mod tests {
             "No open project is named mytest or is its repository. Give its folder, GitHub owner/repo or id."
         );
         assert!(find_project(&projects(), "").is_err());
+    }
+
+    fn archived(mut project: Project) -> Project {
+        project.archived = true;
+        project
+    }
+
+    /// An open and an archived clone of one repository, or two projects of one name: the open one, with no ambiguity.
+    #[test]
+    fn an_open_project_wins_over_an_archived_one() {
+        let clones = [
+            archived(project(
+                "old",
+                "site",
+                "/home/a/old/site",
+                &["git@github.com:acme/site.git"],
+            )),
+            project("new", "site", "/home/a/new/site", &["https://github.com/acme/site"]),
+        ];
+        assert_eq!(id(open_project(&clones, "acme/site")), Ok("new".into()));
+        assert_eq!(id(open_project(&clones, "site")), Ok("new".into()));
+        // An archived project's repository does not hide an open project's name.
+        let both = [
+            archived(project("a", "tools", "/home/a/tools", &["git@github.com:acme/web.git"])),
+            project("b", "acme/web", "/home/a/web", &[]),
+        ];
+        assert_eq!(id(open_project(&both, "acme/web")), Ok("b".into()));
+        // Nor does an archived project deeper in a folder hide the open one that holds it.
+        let nested = [
+            project("top", "top", "/home/a/top", &[]),
+            archived(project("sub", "sub", "/home/a/top/sub", &[])),
+        ];
+        assert_eq!(id(open_project(&nested, "/home/a/top/sub/x")), Ok("top".into()));
+    }
+
+    /// Only when the one match is archived is the project called archived.
+    #[test]
+    fn archived_is_said_only_when_the_only_match_is_archived() {
+        let only = [archived(project(
+            "old",
+            "site",
+            "/home/a/site",
+            &["git@github.com:acme/site.git"],
+        ))];
+        for query in ["acme/site", "site", "/home/a/site/src"] {
+            assert_eq!(
+                id(open_project(&only, query)),
+                Err("The project site is archived in Nexus. Unarchive it in the app first.".into()),
+                "{query}"
+            );
+        }
+        assert_eq!(
+            id(open_project(&only, "missing")),
+            Err(
+                "No open project is named missing or is its repository. Give its folder, GitHub owner/repo or id."
+                    .into()
+            )
+        );
     }
 
     #[test]

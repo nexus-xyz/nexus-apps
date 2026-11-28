@@ -9,7 +9,7 @@
 use super::{OrchCode, OrchError, refuse};
 use crate::Workbench;
 use crate::event::{PermissionMode, Project, ThreadSummary};
-use crate::project_lookup::open_project;
+use crate::project_lookup::{find_project, open_project};
 
 /// Why a cross-project subsession can't start one of its own.
 pub(crate) const NO_START: &str =
@@ -46,33 +46,36 @@ pub(crate) struct ChildProject {
 
 impl Workbench {
     /// The project a child of `parent` runs in: the one `asked` names, else the parent's. The parent's own project
-    /// named is an ordinary child. Another project must be open and in sight (`project_not_open`), the feature on
-    /// (`cross_project_off`), and the project trusted (`project_untrusted`).
+    /// named is an ordinary child. Another project needs the feature on (`cross_project_off`), checked first so the
+    /// refusal names no other project's folder; it must be open and in sight (`project_not_open`) and trusted
+    /// (`project_untrusted`).
     pub(crate) fn child_project(&self, parent: &ThreadSummary, asked: Option<&str>) -> Result<ChildProject, OrchError> {
-        let own = || -> Result<ChildProject, OrchError> {
-            let project = self
-                .store()
-                .project(&parent.project_id)?
-                .ok_or_else(|| "This session's project is no longer open.".to_string())?;
-            Ok(ChildProject {
-                project,
-                cross: false,
-                mode: None,
-            })
+        let own = self
+            .store()
+            .project(&parent.project_id)?
+            .ok_or_else(|| "This session's project is no longer open.".to_string())?;
+        let own = ChildProject {
+            project: own,
+            cross: false,
+            mode: None,
         };
         let Some(asked) = asked.map(str::trim).filter(|asked| !asked.is_empty()) else {
-            return own();
+            return Ok(own);
         };
+        if !self.config().cross_project_on {
+            // Only the parent's own project is looked at.
+            return match find_project(std::slice::from_ref(&own.project), asked) {
+                Ok(_) => Ok(own),
+                Err(_) => refuse(OrchCode::CrossProjectOff, OFF),
+            };
+        }
         let projects = self.store().projects()?;
         let project = match open_project(&projects, asked) {
             Ok(project) => project.clone(),
             Err(message) => return refuse(OrchCode::ProjectNotOpen, message),
         };
         if project.id == parent.project_id {
-            return own();
-        }
-        if !self.config().cross_project_on {
-            return refuse(OrchCode::CrossProjectOff, OFF);
+            return Ok(own);
         }
         if self.store().claude_trust(&project.id)? != Some(true) {
             return refuse(OrchCode::ProjectUntrusted, untrusted(&project));
@@ -85,8 +88,30 @@ impl Workbench {
         })
     }
 
-    /// Stops each active subsession that a session in another project started in `project_id`, before the person
-    /// removes that project. Its parent then gets a stopped result and waits no longer on a session out of sight.
+    /// Why child `id` must not start in `project`: the project was removed from Nexus, or the child was archived (a
+    /// removal archives its project's sessions). None when it may start. Its setup reads this before it makes a
+    /// worktree, so a child admitted just before a removal never works out of sight.
+    pub(crate) fn start_gone(&self, id: &str, project: &Project) -> crate::Result<Option<String>> {
+        if self.store().project(&project.id)?.is_none() {
+            return Ok(Some(format!(
+                "The project {} was removed from Nexus, so this subsession did not start.",
+                project.name
+            )));
+        }
+        let archived = self.reader().thread(id)?.is_some_and(|record| record.summary.archived);
+        Ok(archived.then(|| "This subsession was archived before it started.".to_string()))
+    }
+
+    /// Removes the project's row and archives its sessions under the trees' lock, which admits children: a start
+    /// that names the project either ends before (its child is archived, then stopped by
+    /// [`Workbench::stop_cross_project_children`]) or finds no project.
+    pub(crate) fn remove_project_row(&self, project_id: &str) -> crate::Result<()> {
+        let _admissions = self.trees();
+        self.store().remove_project(project_id)
+    }
+
+    /// Stops each active subsession in this organization that a session in another project started in `project_id`,
+    /// once the person removed that project. Its parent then gets a stopped result and waits no longer on a session out of sight.
     pub(crate) fn stop_cross_project_children(&self, project_id: &str) {
         let linked = match self.store().linked_threads() {
             Ok(linked) => linked,
@@ -98,6 +123,8 @@ impl Workbench {
         let active = linked
             .into_iter()
             .filter(|record| record.summary.cross_project && record.summary.project_id == project_id)
+            // Another organization's sessions are not this workbench's to stop.
+            .filter(|record| self.in_scope(&record.scope))
             .filter(|record| self.active(record));
         for record in active {
             if let Err(error) = self.stop(&record.summary.id) {
@@ -106,3 +133,7 @@ impl Workbench {
         }
     }
 }
+
+#[cfg(test)]
+#[path = "cross_project_tests.rs"]
+mod tests;

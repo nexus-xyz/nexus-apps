@@ -671,6 +671,8 @@ export interface ThreadSummary {
   groupId?: string | null;
   /** 0 (absent) for a session the person started; its parent's depth + 1 for a linked one. */
   depth?: number;
+  /** A subsession in another project than its parent's (`start_session` with `project`): a leaf, whose agent gets no subsession tools and can't hand off. Absent: not one. */
+  crossProject?: boolean;
   /** Its agent may start, message, wait for and stop linked sessions. Absent: off. */
   orchestration?: boolean;
   /** The linked sessions its agent's open wait covers. Absent: none, or an older core. Never stored. */
@@ -689,7 +691,7 @@ export interface ThreadSummary {
   crewSpendTrip?: { capUsd: number; spentUsd: number };
   /** Its turn is over and a background sub-agent (or a turn its agent owes) still holds it. Never stored. */
   inBackground?: boolean;
-  /** It is at the deepest level linked sessions go: its agent gets no tools, and its orchestration can't be turned on. Never stored. */
+  /** It is at the deepest level linked sessions go, or a subsession in another project (`crossProject`): its agent gets no tools, and its orchestration can't be turned on. Never stored. */
   atDepthLimit?: boolean;
 }
 export type SessionStartPreference = "ask" | "new" | "here";

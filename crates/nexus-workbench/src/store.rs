@@ -1573,14 +1573,16 @@ impl Store {
         Ok(())
     }
 
-    /// Delete promotes every descendant to a root, with its halt cleared and its worktree kept.
+    /// Delete promotes every descendant to a root, with its halt cleared and its worktree kept. A root is no
+    /// cross-project subsession: it is the person's own session in its project.
     pub fn free_children(&self, parent_id: &str) -> Result<()> {
         self.db
             .execute(
                 "with recursive crew(id) as (select id from threads where parent_thread_id = ?1
              union select t.id from threads t join crew c on t.parent_thread_id = c.id)
              update threads set parent_thread_id = null, depth = 0, halt = null,
-             spawned_by = null, group_id = null, delivered_seq = 0 where id in (select id from crew)",
+             spawned_by = null, group_id = null, delivered_seq = 0, cross_project = 0
+             where id in (select id from crew)",
                 [parent_id],
             )
             .map_err(sql)?;

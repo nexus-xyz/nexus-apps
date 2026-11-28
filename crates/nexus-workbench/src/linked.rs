@@ -429,8 +429,8 @@ impl Workbench {
     /// prompt, title or key (`bad_input`); past the depth (`depth_limit`), the parent's active children or every
     /// active linked session (`children_limit`), the parent's worktrees (`worktrees_limit`); a paused tree (`paused`)
     /// or past the tree's starts (`starts_limit`); another agent than the parent's with cross-agent subsessions off
-    /// (`agent_not_allowed`); a `project` that is not open or is archived (`project_not_open`), another project with
-    /// cross-project subsessions off (`cross_project_off`) or one not trusted (`project_untrusted`); a mode the agent
+    /// (`agent_not_allowed`); a `project` other than its own with cross-project subsessions off (`cross_project_off`),
+    /// one that is not open or is archived (`project_not_open`) or one not trusted (`project_untrusted`); a mode the agent
     /// does not offer (`bad_input`); no list prices at all (`unpriced_model`); no worktrees here
     /// (`worktrees_unavailable`). A halt on the parent or on any session above it is refused too (`halted`), after its
     /// organization, and checked again just before the row is saved.
@@ -772,7 +772,8 @@ impl Workbench {
     }
 
     /// The child's worktree, its setup script, then its first prompt from `from` (None: the person's). Any failure before its agent
-    /// runs ends it with a failed turn. `native_id` tells this child from a session saved under its id after it was
+    /// runs ends it with a failed turn: a project removed or a child archived before its worktree too
+    /// ([`Workbench::start_gone`]). `native_id` tells this child from a session saved under its id after it was
     /// deleted (a keyed retry's), which this setup never touches. A child stopped, halted or deleted meanwhile keeps its
     /// worktree and sends nothing; one whose tree paused meanwhile ends as stopped.
     async fn set_up_child(
@@ -786,6 +787,9 @@ impl Workbench {
     ) {
         let made = async {
             let _update_activity = UpdateActivity::begin(self)?;
+            if let Some(reason) = self.start_gone(&id, &project)? {
+                return Err(reason);
+            }
             let worktree = self
                 .make_worktree(&project, &id, &prompt, NewWorktree::default())
                 .await?;
@@ -795,7 +799,10 @@ impl Workbench {
                 ours = record.native_id == native_id;
                 if ours {
                     record.summary.worktree = Some(worktree.clone());
-                    ended = record.summary.status != ThreadStatus::Starting || record.halt.is_some();
+                    // Archived meanwhile: its project was removed, say.
+                    ended = record.summary.status != ThreadStatus::Starting
+                        || record.halt.is_some()
+                        || record.summary.archived;
                 }
             });
             let summary = match saved {
