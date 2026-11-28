@@ -161,7 +161,7 @@ impl Workspace {
         let mut card = v_flex().id("agent-switch-confirmation").debug_selector(|| "agent-switch-confirmation".into()).w_full().p(px(16.)).gap(px(10.))
             .rounded(px(16.)).bg(palette.raised).border_1().border_color(palette.border).text_sm()
             .child(div().font_weight(FontWeight::MEDIUM).child(heading))
-            .child("Share this session's original request and recent text messages with the new provider. Your files and conversation history stay here.")
+            .child("Share this session's original request, recent messages, commands and changed files with the new provider. An agent this session used before continues its own conversation and gets only what it missed. Your files and conversation history stay here.")
             .child(div().text_color(palette.muted).child(context))
             .child("The current agent and its sub-agents stop. Your next message continues with the new agent.");
         if !switch.busy {

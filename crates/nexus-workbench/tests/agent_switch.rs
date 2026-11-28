@@ -98,9 +98,9 @@ async fn switching_both_directions_keeps_one_thread_worktree_and_history_and_rea
         .expect("fixture")
         .insert("FAKE_AGENT_INPUT_RECORD".into(), capture.to_string_lossy().into());
     let api = api(&s, true, true);
-    for (at, from, to) in [
-        (2, SessionAgent::Claude, SessionAgent::Codex),
-        (3, SessionAgent::Codex, SessionAgent::Claude),
+    for (at, from, to, goes_back) in [
+        (2, SessionAgent::Claude, SessionAgent::Codex, false),
+        (3, SessionAgent::Codex, SessionAgent::Claude, true),
     ] {
         let choice = target(from, to);
         let result = switch(&api, &source.id, &choice)
@@ -110,7 +110,9 @@ async fn switching_both_directions_keeps_one_thread_worktree_and_history_and_rea
         assert_eq!(result["agent"], to.as_str());
         let record = saved(&s, &source.id);
         assert_ne!(record.native_id, original.native_id);
-        assert!(!record.native_started && record.fork_from.is_none());
+        assert!(!record.native_started);
+        // Back to Claude: it goes on from its own first conversation, as a fork of it.
+        assert_eq!(record.fork_from, goes_back.then(|| original.native_id.clone()));
         assert_eq!(record.summary.worktree, source.worktree);
         assert_eq!(record.summary.title, source.title);
         assert_eq!(record.summary.permission_mode, source.permission_mode);
@@ -123,7 +125,13 @@ async fn switching_both_directions_keeps_one_thread_worktree_and_history_and_rea
         s.workbench.send(&source.id, "Continue").await.expect("next message");
         let events = wait_for(&s.workbench, &source.id, |events| turn_ends(events).len() == at).await;
         let input = std::fs::read_to_string(&capture).expect("actual protocol input");
-        assert!(input.contains("TASK_MARKER") && input.contains("Continue"));
+        assert!(input.contains("Continue"));
+        // A fresh agent is told the original request; one going back already has it, and is told what it missed.
+        if goes_back {
+            assert!(input.contains("You are back on this Nexus task"));
+        } else {
+            assert!(input.contains("TASK_MARKER"));
+        }
         assert!(
             events
                 .iter()
@@ -137,6 +145,11 @@ async fn switching_both_directions_keeps_one_thread_worktree_and_history_and_rea
             PathBuf::from(&cwd)
         );
     }
+    // Claude went on from its own conversation: the fake names a fork of `<id>` `<id>-forked`.
+    assert_eq!(
+        saved(&s, &source.id).native_id,
+        format!("{}-forked", original.native_id)
+    );
     assert!(saved(&s, &source.id).summary.cost_usd >= source.cost_usd);
     s.workbench.shutdown().await;
 }
