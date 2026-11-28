@@ -17,7 +17,7 @@ use crate::style::{col, flex, kv, list, pairs, right, rows_of};
 /// Folders a deploy never sends: version control, dependencies Vercel installs, and build output it makes.
 pub const SKIPPED_DIRS: [&str; 5] = [".git", "node_modules", ".vercel", ".next", ".nexus"];
 
-/// What Gateway takes in one deploy (`nexus-gateway/src/apps/mod.rs`).
+/// The most files and bytes Gateway takes in one deploy.
 pub const MAX_FILES: usize = 5_000;
 pub const MAX_BYTES: usize = 20_000_000;
 
