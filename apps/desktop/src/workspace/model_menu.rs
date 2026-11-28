@@ -562,6 +562,7 @@ mod tests {
             name: name.into(),
             efforts: Vec::new(),
             resolved_id: resolved.map(Into::into),
+            fast: false,
         };
         let models = vec![
             model("default", "Default (recommended)", Some("claude-opus-5-5")),

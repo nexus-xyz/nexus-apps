@@ -8,6 +8,9 @@ use serde_json::Value;
 use crate::models::{Effort, Model};
 use crate::output;
 
+/// Codex's service tier for its fast speed, as `turn/start`'s `serviceTier` takes it.
+pub const FAST_TIER: &str = "priority";
+
 /// None on older binaries, invalid output or a timeout: callers retain the Gateway policy as their fallback.
 pub async fn discover(program: &Path, path: &str) -> Option<Vec<Model>> {
     discover_with_env(program, path, None).await
@@ -65,11 +68,19 @@ fn parse(text: &str) -> Option<Vec<Model>> {
             .flatten()
             .filter_map(|level| level.get("effort").and_then(Value::as_str).and_then(Effort::parse))
             .collect();
+        // Codex 0.171 names its fast speed `priority` ("Fast") in `service_tiers`.
+        let fast = entry
+            .get("service_tiers")
+            .and_then(Value::as_array)
+            .into_iter()
+            .flatten()
+            .any(|tier| tier.get("id").and_then(Value::as_str) == Some(FAST_TIER));
         models.push(Model {
             id: id.into(),
             name: entry.get("display_name").and_then(Value::as_str).unwrap_or(id).into(),
             efforts,
             resolved_id: None,
+            fast,
         });
     }
     Some(models)
@@ -84,7 +95,8 @@ mod tests {
         let models = parse(
             r#"{"models":[
             {"slug":"gpt-6-astra","display_name":"GPT-6 Astra","visibility":"list","priority":3,
-             "supported_reasoning_levels":[{"effort":"xhigh"},{"effort":"max"},{"effort":"ultra"}]},
+             "supported_reasoning_levels":[{"effort":"xhigh"},{"effort":"max"},{"effort":"ultra"}],
+             "service_tiers":[{"id":"priority","name":"Fast","description":"2x speed, increased usage"}]},
             {"slug":"hidden","visibility":"hide","priority":0},
             {"slug":"gpt-6.1-sol","visibility":"list","priority":1,
              "supported_reasoning_levels":[{"effort":"low"},{"effort":"ultra"}]},
@@ -106,6 +118,11 @@ mod tests {
         assert_eq!(models[1].name, "GPT-6.1 Terra");
         assert_eq!(models[2].efforts, [Effort::Xhigh, Effort::Max, Effort::Ultra]);
         assert_eq!(models[3].efforts, [Effort::Disabled, Effort::Minimal]);
+        // Only a model with a `priority` tier is fast.
+        assert_eq!(
+            models.iter().map(|model| model.fast).collect::<Vec<_>>(),
+            [false, false, true, false]
+        );
     }
 
     #[cfg(unix)]

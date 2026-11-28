@@ -427,8 +427,8 @@ pub struct ThreadSummary {
     /// None: the model's default. Sessions saved before effort existed read as None.
     #[serde(default)]
     pub effort: Option<Effort>,
-    /// Claude Code's fast mode (`fastMode`): faster output at a higher price, on the models that have it
-    /// (`fast_mode::supports`). False on sessions saved before it existed; a session without it writes the same bytes.
+    /// Fast mode: Claude Code's `fastMode`, or Codex's `priority` service tier (`driver::fast_allowed`). Faster output
+    /// at a higher price, on the models that have it. False on sessions saved before it existed; a session without it writes the same bytes.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub fast: bool,
     pub via: Via,

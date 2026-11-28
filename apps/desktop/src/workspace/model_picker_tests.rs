@@ -74,6 +74,7 @@ fn agent(agent: SessionAgent, models: &[&str]) -> AgentInfo {
                     id: (*id).into(),
                     name: (*id).into(),
                     resolved_id: None,
+                    fast: false,
                     efforts: Vec::new(),
                 })
                 .collect(),

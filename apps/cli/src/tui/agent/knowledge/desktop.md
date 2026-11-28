@@ -10,7 +10,7 @@ Chats restore saved images and files. **Retry attachments** retries missing ones
 
 - A project is a local or server folder, or a cloned repository. Add a project lists folders as the person types.
 - Sessions run one agent at a time. GPUI uses main worktrees unless defaults override them.
-- GPUI's model picker switches Claude Code and Codex, with a context and payer confirmation.
+- GPUI's model picker switches Claude Code and Codex, confirming context and payer. Speed sets fast mode; Codex's needs a ChatGPT plan.
 - Worktree moves include uncommitted changes.
 - Permission modes set approvals. Your modes follow `agent`.
 - Settings › App can archive sessions whose PR merged.
@@ -57,7 +57,7 @@ Your prompt lists the available MCP servers.
 
 - Full tool names are `mcp__<server>__<tool>`: `mcp__nexus_app__terminal_run`.
 - `terminal_run` runs a command in the session's Terminal tab, with its own exit status. Use it for a server that keeps running.
-- Asked to use the Browser tab, say you have no browser tools yet. Claude Code and Codex sessions do.
+- Asked to use the Browser tab, say you have no browser tools yet.
 
 ## Subsessions
 

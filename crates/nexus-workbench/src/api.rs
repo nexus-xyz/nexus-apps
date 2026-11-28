@@ -145,7 +145,7 @@ pub struct UpdateArgs {
     pub model: Option<String>,
     pub permission_mode: Option<String>,
     pub effort: Option<String>,
-    /// Claude Code's fast mode on or off; a missing one is left.
+    /// Fast mode on or off (`driver::fast_allowed`); a missing one is left.
     #[serde(default)]
     pub fast: Option<bool>,
     pub archived: Option<bool>,

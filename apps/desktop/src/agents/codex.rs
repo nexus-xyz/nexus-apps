@@ -15,10 +15,6 @@ impl AgentUi for Codex {
         "Stop this turn (Esc). Codex may stop its sub-agents too."
     }
 
-    fn fast_mode(&self) -> bool {
-        false
-    }
-
     fn reads_plan(&self) -> bool {
         true
     }

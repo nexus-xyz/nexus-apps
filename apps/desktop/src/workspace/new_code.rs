@@ -3108,6 +3108,50 @@ impl Workspace {
             );
         }
 
+        // Speed: an open session's fast mode, on a model that has one (`effort::has_fast`).
+        if let Some(session) = self
+            .code_session()
+            .filter(|session| in_session && session.agent == row.agent)
+            && super::code_dock::effort::has_fast(
+                row.agent,
+                session.via,
+                &self.agent_catalog(row.agent),
+                row.model.as_deref(),
+            )
+        {
+            let fast = session.fast_shown();
+            let off = session
+                .connection
+                .as_ref()
+                .and_then(|connection| connection.fast_off.as_deref());
+            let hint = super::code_dock::fast_hint(row.agent, fast.then_some(off).flatten());
+            let buttons = [(false, "Standard"), (true, "Fast")].map(|(on, name)| {
+                let row = row.clone();
+                segment(
+                    SharedString::from(if on {
+                        "launch-speed-fast"
+                    } else {
+                        "launch-speed-standard"
+                    }),
+                    h_flex()
+                        .gap(px(4.))
+                        .when(on, |content| content.child(Icon::new(Lucide::Zap).size(px(14.))))
+                        .child(name)
+                        .into_any_element(),
+                    fast == on,
+                    true,
+                )
+                .on_click(cx.listener(move |this, _, _, cx| this.pick_panel_fast(&row, on, cx)))
+            });
+            pane = pane.child(
+                v_flex()
+                    .gap(px(6.))
+                    .child(section("Speed"))
+                    .child(track().children(buttons))
+                    .child(div().text_size(px(12.)).text_color(palette.faint).child(hint)),
+            );
+        }
+
         // Permissions: one icon per mode, and the picked one's name and meaning under them.
         let mode_agent = self
             .code_session()
@@ -3165,6 +3209,20 @@ impl Workspace {
             self.code_form.remember_mode();
             cx.notify();
         }
+    }
+
+    /// A Speed pick in an open session's model panel. Fast mode belongs to a model that has it, so on a row that is not
+    /// the session's model it moves the session there too, as Reasoning does. The panel stays open.
+    fn pick_panel_fast(&mut self, row: &LaunchRow, on: bool, cx: &mut Context<Self>) {
+        let (model, effort) = self.panel_session_model(row);
+        if model.is_some() {
+            self.update_session(model, effort, None, cx);
+        }
+        self.set_session_fast(on, cx);
+        if let View::Code(view) = &mut self.view {
+            view.dock.menu = Some(super::code_dock::Menu::Model);
+        }
+        cx.notify();
     }
 
     /// What an open session's panel control sends. A Reasoning level belongs to the highlighted row's model, so it

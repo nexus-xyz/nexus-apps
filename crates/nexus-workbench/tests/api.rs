@@ -153,6 +153,7 @@ fn one_model(id: &str) -> Vec<nexus_workbench::agent_models::Model> {
         name: id.into(),
         efforts: Vec::new(),
         resolved_id: None,
+        fast: false,
     }]
 }
 

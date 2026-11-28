@@ -160,7 +160,7 @@ pub struct CodeSession {
     pub mode: PermissionMode,
     /// None: the model's default effort.
     pub effort: Option<Effort>,
-    /// Claude Code's fast mode, as saved.
+    /// Fast mode, as saved.
     pub fast: bool,
     /// Pinned from its menu: first in its project.
     pub pinned: bool,

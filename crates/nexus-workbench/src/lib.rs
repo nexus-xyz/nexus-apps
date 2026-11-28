@@ -578,7 +578,7 @@ pub struct ThreadPatch {
     pub permission_mode: Option<PermissionMode>,
     /// Some(None): back to the model's default.
     pub effort: Option<Option<Effort>>,
-    /// Claude Code's fast mode on or off.
+    /// Fast mode on or off (`driver::fast_allowed`).
     pub fast: Option<bool>,
     pub archived: Option<bool>,
     /// Whether its agent may start linked sessions.
@@ -7102,9 +7102,11 @@ impl Workbench {
         if patch.orchestration == Some(true) {
             self.check_orchestration(thread_id)?;
         }
-        // Codex's service tier is not priced on Gateway yet (`nexus-routing`'s `service_tier` bound).
-        if patch.fast == Some(true) && self.record(thread_id)?.summary.agent != SessionAgent::Claude {
-            return Err("Fast mode is for Claude Code sessions only.".into());
+        if patch.fast == Some(true) {
+            let summary = self.record(thread_id)?.summary;
+            if !driver::fast_allowed(summary.agent, summary.via) {
+                return Err("Fast mode is for Claude Code, and for Codex on your ChatGPT plan.".into());
+            }
         }
         if let Some(Some(name)) = &patch.name {
             self.check_name(name, Some(thread_id))?;
