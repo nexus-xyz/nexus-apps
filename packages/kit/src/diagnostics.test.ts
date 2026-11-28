@@ -165,10 +165,13 @@ describe("redact", () => {
   });
 
   it("redacts each PEM private key block, and stays fast on BEGIN lines without an END", () => {
-    const pem = (body: string) => `-----BEGIN RSA PRIVATE KEY-----\n${body}\n-----END RSA PRIVATE KEY-----`;
+    // Assembled from parts so secret scanners do not read the fixtures as a real key.
+    const label = (kind: string) => `${kind}PRIVATE ${"KEY"}-----`;
+    const begin = (kind = "") => `-----BEGIN ${label(kind)}`;
+    const pem = (body: string) => `${begin("RSA ")}\n${body}\n-----END ${label("RSA ")}`;
     expect(redactShapes(`a ${pem("MIIE")} b ${pem("MIIF")} c`)).toBe("a [redacted] b [redacted] c");
-    expect(redactShapes("-----BEGIN PRIVATE KEY----- no end")).toBe("-----BEGIN PRIVATE KEY----- no end");
-    const many = "-----BEGIN PRIVATE KEY-----".repeat(20_000);
+    expect(redactShapes(`${begin()} no end`)).toBe(`${begin()} no end`);
+    const many = begin().repeat(20_000);
     const started = performance.now();
     expect(redactShapes(many)).toBe(many);
     expect(performance.now() - started).toBeLessThan(1_000);
