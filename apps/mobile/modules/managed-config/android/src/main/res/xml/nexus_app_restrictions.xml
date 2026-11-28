@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The key an EMM may set for Nexus: the same as iOS's AppConfig key. It is optional. -->
+<restrictions xmlns:android="http://schemas.android.com/apk/res/android">
+  <restriction
+    android:key="org"
+    android:title="@string/nexus_managed_org_title"
+    android:description="@string/nexus_managed_org_description"
+    android:restrictionType="string" />
+</restrictions>

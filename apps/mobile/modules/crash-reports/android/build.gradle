@@ -1,0 +1,16 @@
+// The app's own module: Android's native crashes, ANRs and Java crashes. Expo autolinks it from `modules/`.
+plugins {
+  id 'com.android.library'
+  id 'expo-module-gradle-plugin'
+}
+
+group = 'xyz.nexus'
+version = '1.0.0'
+
+android {
+  namespace "expo.modules.crashreports"
+  defaultConfig {
+    versionCode 1
+    versionName '1.0.0'
+  }
+}

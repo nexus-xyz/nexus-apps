@@ -8,7 +8,7 @@ tracked file:
 | gitleaks 8.30.1 | `gitleaks.toml` (gitleaks' default rules plus the allowlists here) | fails |
 | semgrep 1.186.0 | `semgrep.yml`, tested against `semgrep.rs` and `semgrep.ts` | fails |
 | trufflehog 3.100.0 | none, verified findings only | fails |
-| gitleaks | `blocklist.toml` (internal ticket ids, links, staff addresses, private repository paths) | fails |
+| gitleaks | `blocklist.toml` (internal ticket ids, links, staff addresses, private repository paths, the phone app's store accounts, app hosts) | fails |
 
 It then runs `leak_gate.py commits <base> <head>`: gitleaks with `gitleaks.toml` and `blocklist.toml` on the lines each
 of the pull request's commits adds. A secret that one commit adds and a later one removes is still in the history, so

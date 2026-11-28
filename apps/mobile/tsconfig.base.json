@@ -1,0 +1,19 @@
+{
+  // A copy of expo/tsconfig.base (SDK 58). tsconfig.json extends this file, not the package: the factory's vitest reads
+  // tsconfig.json for the app's tests and CI installs none of the app's packages, and Expo CLI only writes its own
+  // `extends` when there is none. Re-copy it from node_modules/expo/tsconfig.base.json on an SDK upgrade.
+  "compilerOptions": {
+    "allowJs": true,
+    "esModuleInterop": true,
+    "jsx": "react-jsx",
+    "lib": ["DOM", "ESNext"],
+    "module": "preserve",
+    "moduleDetection": "force",
+    "moduleResolution": "bundler",
+    "customConditions": ["react-native"],
+    "noEmit": true,
+    "resolveJsonModule": true,
+    "skipLibCheck": true,
+    "target": "ESNext"
+  }
+}

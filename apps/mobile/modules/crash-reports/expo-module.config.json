@@ -1,0 +1,10 @@
+{
+  "platforms": ["apple", "android"],
+  "apple": {
+    "modules": ["CrashReportsModule"],
+    "appDelegateSubscribers": ["CrashReportsAppDelegateSubscriber"]
+  },
+  "android": {
+    "modules": ["expo.modules.crashreports.CrashReportsModule"]
+  }
+}

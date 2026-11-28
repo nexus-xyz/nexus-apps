@@ -1,0 +1,34 @@
+{
+  "name": "@nexus/kit",
+  "version": "0.1.0",
+  "private": true,
+  "license": "MIT",
+  "description": "The product kit: module manifest type, the five verbs, and the typed Gateway client.",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./recipe-pages": "./src/recipe-pages.ts",
+    "./dictation": "./src/dictation.ts",
+    "./sheet": "./src/sheet.ts",
+    "./e2e": "./src/e2e.ts",
+    "./e2e-store": "./src/e2e-store.ts",
+    "./pairing": "./src/pairing.ts",
+    "./device-trust": "./src/device-trust.ts",
+    "./recovery": "./src/recovery.ts",
+    "./remote-control": "./src/remote-control.ts",
+    "./computer-sessions": "./src/computer-sessions.ts",
+    "./computer-settings": "./src/computer-settings.ts",
+    "./phone-link": "./src/phone-link.ts",
+    "./cloud-session-helpers": "./src/cloud-session-helpers.ts",
+    "./session-history": "./src/session-history.ts",
+    "./synced-sessions": "./src/synced-sessions.ts",
+    "./synced-timeline": "./src/synced-timeline.ts",
+    "./synced-follow": "./src/synced-follow.ts",
+    "./synced-fixture": "./src/synced-fixture.ts",
+    "./request-sites": "./src/request-sites.ts",
+    "./package.json": "./package.json"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json"
+  }
+}
