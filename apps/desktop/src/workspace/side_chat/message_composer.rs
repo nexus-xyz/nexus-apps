@@ -12,7 +12,7 @@ use crate::workspace::composer::{
 };
 use gpui_kit::assets::IconName as Lucide;
 use gpui_kit::component::h_flex;
-use gpui_kit::component::input::Textarea;
+use gpui_kit::component::input::{Enter, IndentInline, MoveDown, MoveUp, Textarea};
 use gpui_kit::component::tooltip::Tooltip;
 use gpui_kit::prelude::*;
 use std::rc::Rc;
@@ -360,6 +360,31 @@ impl SideChat {
                     .child(toolbar_slot("side-queue-slot", busy && enabled, queue))
                     .child(toolbar_slot("side-send-slot", !busy || enabled, send)),
             );
-        composer_frame(shell, focused, p).into_any_element()
+        let menus = self.render_menus(window, p, cx);
+        composer_frame(shell, focused, p)
+            // Up, Down, Enter and Tab go to the "/" or "@" menu while one is open, before the text takes them, as the
+            // session composer's. Esc closes it (`render.rs`).
+            .capture_action(cx.listener(|this, _: &MoveUp, window, cx| {
+                if this.menu_move(false, window, cx) {
+                    cx.stop_propagation();
+                }
+            }))
+            .capture_action(cx.listener(|this, _: &MoveDown, window, cx| {
+                if this.menu_move(true, window, cx) {
+                    cx.stop_propagation();
+                }
+            }))
+            .capture_action(cx.listener(|this, action: &Enter, window, cx| {
+                if !action.shift && !action.secondary && this.menu_pick(true, window, cx) {
+                    cx.stop_propagation();
+                }
+            }))
+            .capture_action(cx.listener(|this, _: &IndentInline, window, cx| {
+                if this.menu_pick(false, window, cx) {
+                    cx.stop_propagation();
+                }
+            }))
+            .children(menus)
+            .into_any_element()
     }
 }

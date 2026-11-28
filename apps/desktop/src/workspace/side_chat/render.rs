@@ -66,6 +66,10 @@ impl Render for SideChat {
                 if this.paste_as_text(&event.keystroke, window, cx) {
                     cx.stop_propagation();
                 }
+                // Esc closes an open "/" or "@" menu before it does anything else (`menus.rs`).
+                if event.keystroke.key == "escape" && this.menu_dismiss(window, cx) {
+                    cx.stop_propagation();
+                }
             }))
             .on_key_down(cx.listener(|this, event: &KeyDownEvent, window, cx| {
                 if event.keystroke.key.as_str() == "escape" && this.renaming.is_some() {
