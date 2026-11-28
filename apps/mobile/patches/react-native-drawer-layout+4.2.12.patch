@@ -1,0 +1,62 @@
+diff --git a/node_modules/react-native-drawer-layout/lib/module/views/Drawer.native.js b/node_modules/react-native-drawer-layout/lib/module/views/Drawer.native.js
+--- a/node_modules/react-native-drawer-layout/lib/module/views/Drawer.native.js
++++ b/node_modules/react-native-drawer-layout/lib/module/views/Drawer.native.js
+@@ -16,3 +16,5 @@
+ const SWIPE_MIN_DISTANCE = 60;
+-const SWIPE_MIN_VELOCITY = 500;
++// Nexus phone app patch (patches/ in the app): a flick faster than 0.11 px/ms (110 px/s) opens or closes the drawer, as
++// Nexus Mobile's motion spec (M36) sets; the library's 500 px/s let a quick, short flick fall back.
++const SWIPE_MIN_VELOCITY = 110;
+ const PROGRESS_EPSILON = 0.05;
+@@ -144,7 +146,10 @@
+       velocity,
+-      stiffness: 1000,
+-      damping: 500,
+-      mass: 3,
++      // Nexus phone app patch (patches/ in the app): the library's spring (stiffness 1000, damping 500, mass 3) is
++      // overdamped and took over a second from a tap. This one is critically damped (ω ≈ 24.5, as Claude's iOS app
++      // measures): 88% of the way in 150 ms, no overshoot. Drop the patch once the library's own spring is that fast.
++      stiffness: 600,
++      damping: 49,
++      mass: 1,
+       overshootClamping: true,
+-      reduceMotion: ReduceMotion.Never
++      reduceMotion: ReduceMotion.System
+     }, finished => runOnJS(onAnimationEnd)(open, finished));
+@@ -204,3 +209,3 @@
+       runOnJS(onGestureFinish)();
+-    }).activeOffsetX([-SWIPE_MIN_OFFSET, SWIPE_MIN_OFFSET]).failOffsetY([-SWIPE_MIN_OFFSET, SWIPE_MIN_OFFSET]).hitSlop(hitSlop).enabled(drawerType !== 'permanent' && swipeEnabled);
++    }).activeOffsetX([-20, 20]).failOffsetY([-8, 8]).hitSlop(hitSlop).enabled(drawerType !== 'permanent' && swipeEnabled);
+     if (panGesture && configureGestureHandler) {
+diff --git a/node_modules/react-native-drawer-layout/src/views/Drawer.native.tsx b/node_modules/react-native-drawer-layout/src/views/Drawer.native.tsx
+--- a/node_modules/react-native-drawer-layout/src/views/Drawer.native.tsx
++++ b/node_modules/react-native-drawer-layout/src/views/Drawer.native.tsx
+@@ -38,3 +38,5 @@
+ const SWIPE_MIN_DISTANCE = 60;
+-const SWIPE_MIN_VELOCITY = 500;
++// Nexus phone app patch (patches/ in the app): a flick faster than 0.11 px/ms (110 px/s) opens or closes the drawer, as
++// Nexus Mobile's motion spec (M36) sets; the library's 500 px/s let a quick, short flick fall back.
++const SWIPE_MIN_VELOCITY = 110;
+ const PROGRESS_EPSILON = 0.05;
+@@ -202,7 +204,10 @@
+           velocity,
+-          stiffness: 1000,
+-          damping: 500,
+-          mass: 3,
++          // Nexus phone app patch (patches/ in the app): the library's spring (stiffness 1000, damping 500, mass 3) is
++          // overdamped and took over a second from a tap. This one is critically damped (ω ≈ 24.5, as Claude's iOS app
++          // measures): 88% of the way in 150 ms, no overshoot. Drop the patch once the library's own spring is that fast.
++          stiffness: 600,
++          damping: 49,
++          mass: 1,
+           overshootClamping: true,
+-          reduceMotion: ReduceMotion.Never,
++          reduceMotion: ReduceMotion.System,
+         },
+@@ -301,4 +306,4 @@
+       })
+-      .activeOffsetX([-SWIPE_MIN_OFFSET, SWIPE_MIN_OFFSET])
+-      .failOffsetY([-SWIPE_MIN_OFFSET, SWIPE_MIN_OFFSET])
++      .activeOffsetX([-20, 20])
++      .failOffsetY([-8, 8])
+       .hitSlop(hitSlop)

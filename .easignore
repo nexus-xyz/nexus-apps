@@ -1,0 +1,39 @@
+# What EAS Build uploads for the phone app (apps/mobile, .github/workflows/mobile-release.yml). EAS reads this file only
+# at the repository root, and it replaces every .gitignore. The app needs its own folder and @nexus/kit (packages/kit),
+# so nothing else is uploaded: the app installs from its own package-lock.json, and the kit is a tsconfig path and a
+# Metro watch folder with no dependencies.
+# No pattern ends in "/": eas-cli matches each path without a trailing slash, so a directory-only pattern never matches
+# the directory itself. Check a change with `eas build:inspect --stage archive`.
+/*
+!/apps
+/apps/*
+!/apps/mobile
+!/packages
+/packages/*
+!/packages/kit
+
+# The app's .gitignore, repeated because this file replaces it, and every .env file. EAS also uploads untracked files,
+# and a local .env can hold a sign-in for a local Gateway.
+node_modules
+.expo
+dist
+web-build
+expo-env.d.ts
+.kotlin
+*.orig.*
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+.metro-health-check*
+npm-debug.*
+yarn-debug.*
+yarn-error.*
+.DS_Store
+*.pem
+.env
+.env.*
+*.tsbuildinfo
+/apps/mobile/ios
+/apps/mobile/android

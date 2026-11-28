@@ -1,0 +1,388 @@
+{
+  "_doc": "Sheets both @nexus/kit (sheet.test.ts) and Gateway (nexus-state pages::sheet) accept or refuse, with the path of the first problem.",
+  "valid": [
+    {
+      "name": "one empty tab",
+      "sheet": {
+        "tabs": [
+          {
+            "id": "t1",
+            "name": "Sheet1"
+          }
+        ]
+      }
+    },
+    {
+      "name": "values, a formula and formats",
+      "sheet": {
+        "tabs": [
+          {
+            "id": "t1",
+            "name": "Sheet1",
+            "cells": {
+              "A1": {
+                "value": "Revenue",
+                "format": {
+                  "bold": true,
+                  "background": "#F4F4F0"
+                }
+              },
+              "B1": {
+                "value": 12.5
+              },
+              "C1": {
+                "value": true
+              },
+              "D1": {
+                "formula": "=SUM(B1:B9)",
+                "format": {
+                  "number": "currency",
+                  "currency": "EUR",
+                  "decimals": 0,
+                  "align": "right"
+                }
+              },
+              "E1": {
+                "format": {
+                  "italic": true
+                }
+              }
+            },
+            "columns": {
+              "A": 180,
+              "ZZ": 16
+            },
+            "frozen": {
+              "rows": 1,
+              "columns": 0
+            },
+            "dropdowns": [
+              {
+                "range": "C2:C40",
+                "options": [
+                  "Open",
+                  "Done"
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "two tabs and a quoted cross-tab formula",
+      "sheet": {
+        "tabs": [
+          {
+            "id": "t1",
+            "name": "Sheet1"
+          },
+          {
+            "id": "q3-plan_2",
+            "name": "Q3 plan",
+            "cells": {
+              "ZZ100000": {
+                "formula": "='Sheet1'!A1"
+              }
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "invalid": [
+    {
+      "name": "not an object",
+      "sheet": [],
+      "path": ""
+    },
+    {
+      "name": "no tabs",
+      "sheet": {
+        "tabs": []
+      },
+      "path": "tabs"
+    },
+    {
+      "name": "an unknown field",
+      "sheet": {
+        "tabs": [
+          {
+            "id": "t1",
+            "name": "Sheet1"
+          }
+        ],
+        "title": "x"
+      },
+      "path": ""
+    },
+    {
+      "name": "a tab without an id",
+      "sheet": {
+        "tabs": [
+          {
+            "name": "A"
+          }
+        ]
+      },
+      "path": "tabs[0].id"
+    },
+    {
+      "name": "two tabs with one id",
+      "sheet": {
+        "tabs": [
+          {
+            "id": "t1",
+            "name": "Sheet1"
+          },
+          {
+            "id": "t1",
+            "name": "Other"
+          }
+        ]
+      },
+      "path": "tabs[1].id"
+    },
+    {
+      "name": "two tabs with one name, ignoring case",
+      "sheet": {
+        "tabs": [
+          {
+            "id": "t1",
+            "name": "Sheet1"
+          },
+          {
+            "id": "t2",
+            "name": "sheet1"
+          }
+        ]
+      },
+      "path": "tabs[1].name"
+    },
+    {
+      "name": "a tab name with a colon",
+      "sheet": {
+        "tabs": [
+          {
+            "id": "t1",
+            "name": "a:b"
+          }
+        ]
+      },
+      "path": "tabs[0].name"
+    },
+    {
+      "name": "a lower-case address",
+      "sheet": {
+        "tabs": [
+          {
+            "id": "t1",
+            "name": "Sheet1",
+            "cells": {
+              "a1": {
+                "value": 1
+              }
+            }
+          }
+        ]
+      },
+      "path": "tabs[0].cells.a1"
+    },
+    {
+      "name": "a row past the last",
+      "sheet": {
+        "tabs": [
+          {
+            "id": "t1",
+            "name": "Sheet1",
+            "cells": {
+              "A100001": {
+                "value": 1
+              }
+            }
+          }
+        ]
+      },
+      "path": "tabs[0].cells.A100001"
+    },
+    {
+      "name": "a value and a formula",
+      "sheet": {
+        "tabs": [
+          {
+            "id": "t1",
+            "name": "Sheet1",
+            "cells": {
+              "A1": {
+                "value": 1,
+                "formula": "=1"
+              }
+            }
+          }
+        ]
+      },
+      "path": "tabs[0].cells.A1"
+    },
+    {
+      "name": "a formula without =",
+      "sheet": {
+        "tabs": [
+          {
+            "id": "t1",
+            "name": "Sheet1",
+            "cells": {
+              "A1": {
+                "formula": "SUM(A2)"
+              }
+            }
+          }
+        ]
+      },
+      "path": "tabs[0].cells.A1.formula"
+    },
+    {
+      "name": "a value that is a list",
+      "sheet": {
+        "tabs": [
+          {
+            "id": "t1",
+            "name": "Sheet1",
+            "cells": {
+              "A1": {
+                "value": [
+                  1
+                ]
+              }
+            }
+          }
+        ]
+      },
+      "path": "tabs[0].cells.A1.value"
+    },
+    {
+      "name": "a colour by name",
+      "sheet": {
+        "tabs": [
+          {
+            "id": "t1",
+            "name": "Sheet1",
+            "cells": {
+              "A1": {
+                "format": {
+                  "color": "red"
+                }
+              }
+            }
+          }
+        ]
+      },
+      "path": "tabs[0].cells.A1.format.color"
+    },
+    {
+      "name": "an unknown number format",
+      "sheet": {
+        "tabs": [
+          {
+            "id": "t1",
+            "name": "Sheet1",
+            "cells": {
+              "A1": {
+                "format": {
+                  "number": "money"
+                }
+              }
+            }
+          }
+        ]
+      },
+      "path": "tabs[0].cells.A1.format.number"
+    },
+    {
+      "name": "eleven decimals",
+      "sheet": {
+        "tabs": [
+          {
+            "id": "t1",
+            "name": "Sheet1",
+            "cells": {
+              "A1": {
+                "format": {
+                  "decimals": 11
+                }
+              }
+            }
+          }
+        ]
+      },
+      "path": "tabs[0].cells.A1.format.decimals"
+    },
+    {
+      "name": "a width of 2.5",
+      "sheet": {
+        "tabs": [
+          {
+            "id": "t1",
+            "name": "Sheet1",
+            "columns": {
+              "A": 2.5
+            }
+          }
+        ]
+      },
+      "path": "tabs[0].columns.A"
+    },
+    {
+      "name": "a dropdown with no options",
+      "sheet": {
+        "tabs": [
+          {
+            "id": "t1",
+            "name": "Sheet1",
+            "dropdowns": [
+              {
+                "range": "A1",
+                "options": []
+              }
+            ]
+          }
+        ]
+      },
+      "path": "tabs[0].dropdowns[0].options"
+    },
+    {
+      "name": "a dropdown on a bad range",
+      "sheet": {
+        "tabs": [
+          {
+            "id": "t1",
+            "name": "Sheet1",
+            "dropdowns": [
+              {
+                "range": "A1:B",
+                "options": [
+                  "x"
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "path": "tabs[0].dropdowns[0].range"
+    },
+    {
+      "name": "too many frozen rows",
+      "sheet": {
+        "tabs": [
+          {
+            "id": "t1",
+            "name": "Sheet1",
+            "frozen": {
+              "rows": 101
+            }
+          }
+        ]
+      },
+      "path": "tabs[0].frozen.rows"
+    }
+  ]
+}

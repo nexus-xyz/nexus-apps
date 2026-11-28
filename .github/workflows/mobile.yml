@@ -1,0 +1,127 @@
+# The phone app (apps/mobile) and the kit it bundles (packages/kit). Unsigned, no secrets: the kit's typecheck, the tests
+# of both (vitest at the repository root), the app's typecheck and its public Expo config, and an Android debug build
+# when a change can move the native build (dependencies, config, plugins, native modules, patches, targets).
+name: mobile
+
+on:
+  pull_request:
+    paths: ["apps/mobile/**", "packages/kit/**", "package.json", "package-lock.json", "vitest.config.ts", "tsconfig.base.json", ".github/workflows/mobile.yml"]
+  push:
+    branches: [main]
+    paths: ["apps/mobile/**", "packages/kit/**", "package.json", "package-lock.json", "vitest.config.ts", "tsconfig.base.json", ".github/workflows/mobile.yml"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mobile-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  EXPO_NO_TELEMETRY: "1"
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            apps/mobile/package-lock.json
+      # The root installs only the test tools. The app keeps its own dependencies (apps/mobile/package-lock.json).
+      - name: Install the test tools
+        run: npm ci --no-audit --no-fund
+      - name: kit typecheck
+        run: npm run typecheck:kit
+      - name: tests (kit and app)
+        run: npm test
+      - name: Install the app's dependencies
+        working-directory: apps/mobile
+        run: npm ci --no-audit --no-fund
+      - name: app typecheck
+        working-directory: apps/mobile
+        run: npm run typecheck
+      # The config a fork builds with: it resolves, and it names no store account and no host but nexus.inc's.
+      # Nexus's own come from the release workflow's variables.
+      - name: Expo config
+        working-directory: apps/mobile
+        run: |
+          npx --no-install expo config --type public --json > "$RUNNER_TEMP/expo-config.json"
+          jq -e '(.owner // null) == null and (.extra.eas.projectId // null) == null and (.ios.appleTeamId // null) == null
+            and (.extra.hosts == {}) and (.ios.associatedDomains | all(endswith(":nexus.inc")))' "$RUNNER_TEMP/expo-config.json"
+
+  android-debug:
+    needs: checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      # A pull request builds only when it touches what the native build reads. main always builds.
+      - name: Does this change move the native build?
+        id: native
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          build=true
+          if [ -n "$BASE_REF" ] && ! git diff --name-only "origin/$BASE_REF" HEAD -- \
+              apps/mobile/package.json apps/mobile/package-lock.json apps/mobile/app.json apps/mobile/app.config.ts \
+              apps/mobile/plugins apps/mobile/modules apps/mobile/patches apps/mobile/targets \
+              .github/workflows/mobile.yml | grep -q .; then
+            build=false
+            echo "No native change: no Android build." >> "$GITHUB_STEP_SUMMARY"
+          fi
+          echo "build=$build" >> "$GITHUB_OUTPUT"
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        if: steps.native.outputs.build == 'true'
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: apps/mobile/package-lock.json
+      - uses: actions/setup-java@c5195efecf7bdfc987ee8bae7a71cb8b11521c00 # v4.7.1
+        if: steps.native.outputs.build == 'true'
+        with:
+          distribution: temurin
+          java-version: "17"
+      # main writes the cache, every other ref only restores it.
+      - uses: actions/cache/restore@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
+        id: gradle-cache
+        if: steps.native.outputs.build == 'true'
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-mobile-debug-${{ runner.os }}-${{ hashFiles('apps/mobile/package-lock.json') }}
+          restore-keys: gradle-mobile-debug-${{ runner.os }}-
+      - name: Install the app's dependencies
+        if: steps.native.outputs.build == 'true'
+        working-directory: apps/mobile
+        run: npm ci --no-audit --no-fund
+      # android/ is generated and never committed. No store account: a placeholder application id.
+      - name: Generate android/
+        if: steps.native.outputs.build == 'true'
+        working-directory: apps/mobile
+        env:
+          NEXUS_MOBILE_ANDROID_PACKAGE: com.example.nexus
+        run: npx --no-install expo prebuild --platform android --no-install
+      # arm64-v8a only, as the release build: one ABI's native code is the slow part.
+      - name: Build the debug APK
+        if: steps.native.outputs.build == 'true'
+        working-directory: apps/mobile/android
+        run: ./gradlew assembleDebug --no-daemon -PreactNativeArchitectures=arm64-v8a
+      - uses: actions/cache/save@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
+        if: steps.native.outputs.build == 'true' && github.ref == 'refs/heads/main' && steps.gradle-cache.outputs.cache-hit != 'true'
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: ${{ steps.gradle-cache.outputs.cache-primary-key }}
