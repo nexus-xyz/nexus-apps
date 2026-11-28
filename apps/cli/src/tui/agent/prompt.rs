@@ -72,7 +72,7 @@ const NEXUS: &str = "What Nexus has. The words in brackets are its topics in nex
 - Coding agents, billing routes and shared memory. [coding-agents, plan-agents, shared-memory]\n\
 - Organizations, teams, roles, keys and the audit log. [organization, auth]\n\
 - Connectors, skills, the desktop app, and @nexus, the person's own assistant, which is not you. [connectors, \
-skills, desktop, assistant, slack-and-inbox, errands]\n\
+skills, desktop, desktop-sessions, assistant, slack-and-inbox, errands]\n\
 The nexus CLI reaches most of it. More topics: [overview], [session] for the terminal's keys and slash commands, \
 [agent] for your own tools and limits, [api], [errors], [status] for who you act as now, [commands] for every nexus \
 command, and the topic `nexus <command>`, such as `nexus pages share`, for one command's usage and flags.";
@@ -198,6 +198,7 @@ fn here(host: Host, servers: &[Server]) -> String {
                     .into(),
             );
             lines.push("- Read [desktop] before you use the app's tools or explain the app.".into());
+            lines.push("- Read [desktop-sessions] before you start, stop, archive or hand off a session.".into());
         }
         Host::Program => {
             lines.push("Here:".into());

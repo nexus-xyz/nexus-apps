@@ -45,6 +45,7 @@ The phone app for iPhone and Android is not released yet.
 | Routines and the inbox | `slack-and-inbox` |
 | The assistant's errands, and errands in projects | `errands` |
 | The desktop app and its Code sessions | `desktop` |
+| Code sessions from a script or another agent | `desktop-sessions` |
 | The terminal session and its keys | `session` |
 | Calling the API from code | `api` |
 | Error codes and their fixes | `errors` |
