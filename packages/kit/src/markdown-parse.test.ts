@@ -73,6 +73,14 @@ describe("parseMarkdownBlocks", () => {
     const [list] = parseMarkdownBlocks("- [x] Open Nexus on mobile\n- [ ] Send a test message\n- plain");
     expect(list).toMatchObject({ items: [{ text: "Open Nexus on mobile", checked: true }, { text: "Send a test message", checked: false }, { text: "plain" }] });
   });
+
+  it("reads an empty item, and stays fast on a long line of spaces that is not an item", () => {
+    expect(parseMarkdownBlocks("- one\n-   ")).toMatchObject([{ kind: "list", items: [{ text: "one" }, { text: "" }] }]);
+    const line = `* ${" ".repeat(50_000)}x\ry`;
+    const started = performance.now();
+    expect(parseMarkdownBlocks(line)).toEqual([{ kind: "paragraph", text: line }]);
+    expect(performance.now() - started).toBeLessThan(1_000);
+  });
 });
 
 describe("parseMarkdownInline", () => {

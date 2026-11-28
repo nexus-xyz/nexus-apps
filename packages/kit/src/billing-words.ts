@@ -177,7 +177,8 @@ export function usageLimitResetText(now = new Date()): string {
  * words, the reason when known, and what is kept). Grey, not red: red is only for refusals and destructive actions.
  */
 export function billingStaleNote(error: string): string {
-  const reason = error.trim().replace(/[.\s]+$/, "");
+  let reason = error.trim();
+  while (reason.endsWith(".")) reason = reason.slice(0, -1).trimEnd();
   return `Billing didn't refresh.${reason ? ` ${reason.charAt(0).toUpperCase()}${reason.slice(1)}.` : ""} The figures shown are from the last time it loaded.`;
 }
 

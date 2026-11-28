@@ -237,7 +237,9 @@ export async function openSyncedEvent(keys: ThreadKeys, event: SyncedEvent): Pro
  * adapter is not wired yet and its engine encodes that way today.
  */
 export function sealedBytes(text: string): Uint8Array<ArrayBuffer> | undefined {
-  return fromB64u(text.replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, ""));
+  let end = text.length;
+  while (end > 0 && text[end - 1] === "=") end--;
+  return fromB64u(text.slice(0, end).replace(/\+/g, "-").replace(/\//g, "_"));
 }
 
 /** nexus-workbench's `Plaintext`, version 1; `undefined` for anything else. */

@@ -1,6 +1,6 @@
 import type { DiagnosticReport } from "./api";
 import { describe, expect, it } from "vitest";
-import { enqueue, fromCrash, fromError, frames, MAX_PENDING, redact, type Device } from "./diagnostics";
+import { enqueue, fromCrash, fromError, frames, MAX_PENDING, redact, redactShapes, type Device } from "./diagnostics";
 
 const device: Device = { appVersion: "0.1.0", appBuild: "7", platform: "ios", osVersion: "26.1" };
 const now = new Date("2026-10-27T18:04:05.123Z");
@@ -162,6 +162,16 @@ describe("redact", () => {
     expect(redact("x-api-key:nx_abcdefghijklmnopqrst used")).toBe("x-api-key:[redacted] used");
     expect(redact("an 'unclosed quote runs to the end")).toBe("an [quoted]");
     expect(redact("it doesn't keep session 4f9c2a7e1b3d5f60718293a4b5c6d7e8")).toBe("it doesn't keep session [redacted]");
+  });
+
+  it("redacts each PEM private key block, and stays fast on BEGIN lines without an END", () => {
+    const pem = (body: string) => `-----BEGIN RSA PRIVATE KEY-----\n${body}\n-----END RSA PRIVATE KEY-----`;
+    expect(redactShapes(`a ${pem("MIIE")} b ${pem("MIIF")} c`)).toBe("a [redacted] b [redacted] c");
+    expect(redactShapes("-----BEGIN PRIVATE KEY----- no end")).toBe("-----BEGIN PRIVATE KEY----- no end");
+    const many = "-----BEGIN PRIVATE KEY-----".repeat(20_000);
+    const started = performance.now();
+    expect(redactShapes(many)).toBe(many);
+    expect(performance.now() - started).toBeLessThan(1_000);
   });
 });
 

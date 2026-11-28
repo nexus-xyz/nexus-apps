@@ -66,7 +66,6 @@ const SECRET_SHAPES = [
   /\bsk-[A-Za-z0-9_-]{12,}/g,
   /\bgh[pousr]_[A-Za-z0-9]{16,}/g,
   /github_pat_[A-Za-z0-9_]{22,}/g,
-  /-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?-----END [A-Z ]*PRIVATE KEY-----/g,
   /\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}/g,
   /\b[rs]k_(?:live|test)_[A-Za-z0-9]{8,}/g,
   /\bwhsec_[A-Za-z0-9+/=_-]{8,}/g,
@@ -87,9 +86,29 @@ export const NATIVE_FRAME = /^[^()]{1,120} \+0x[0-9a-f]{1,16}$/;
 
 /** `text` with every match of the secret shapes replaced: for a stack frame, a code location and not prose. */
 export function redactShapes(text: string): string {
-  let shaped = text;
+  let shaped = redactPem(text);
   for (const shape of SECRET_SHAPES) shaped = shaped.replace(shape, REDACTED);
   return shaped;
+}
+
+const PEM_BEGIN = /-----BEGIN [A-Z ]*PRIVATE KEY-----/g;
+const PEM_END = /-----END [A-Z ]*PRIVATE KEY-----/g;
+
+/**
+ * `text` with each PEM private key block, from its BEGIN line to the first END line after it, replaced. One pass: a
+ * single lazy regex rescans to the end of the text from every BEGIN that has no END.
+ */
+function redactPem(text: string): string {
+  let out = "";
+  let from = 0;
+  PEM_BEGIN.lastIndex = 0;
+  for (let begin = PEM_BEGIN.exec(text); begin; begin = PEM_BEGIN.exec(text)) {
+    PEM_END.lastIndex = PEM_BEGIN.lastIndex;
+    if (!PEM_END.exec(text)) break;
+    out += text.slice(from, begin.index) + REDACTED;
+    from = PEM_BEGIN.lastIndex = PEM_END.lastIndex;
+  }
+  return out + text.slice(from);
 }
 
 /** `text` with every key, token, URL path and query, email, quoted span and file path replaced, cut at 200 characters. */

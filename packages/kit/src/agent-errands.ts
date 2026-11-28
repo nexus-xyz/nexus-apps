@@ -306,7 +306,8 @@ const REPO = /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})\/[A-Za-z0-9._-]{1,100}$/;
 const GITHUB_URL = /\bhttps?:\/\/(?:www\.)?github\.com\/([A-Za-z0-9][A-Za-z0-9-]{0,38})\/([A-Za-z0-9._-]{1,100})/i;
 /** "repo owner/name" or "repository owner/name", as a person writes it. A bare `a/b` is too often not one. */
 const NAMED_REPO = /\b(?:repo|repository)\s+`?([A-Za-z0-9][A-Za-z0-9-]{0,38})\/([A-Za-z0-9._-]{1,100})/i;
-const EMAIL = /[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g;
+/** An address's local part is at most 64 characters (RFC 5321); the bound keeps the scan linear. */
+const EMAIL = /[A-Za-z0-9._%+-]{1,64}@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g;
 /** Control characters other than the line break, which a draft drops anyway. */
 const CONTROL = /[\u0000-\u0009\u000b-\u001f\u007f-\u009f]/g;
 

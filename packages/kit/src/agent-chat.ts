@@ -785,7 +785,8 @@ export function isNo(words: string): boolean {
  * `assistant`: the Assistant's name, which the person may change; Nexus by default.
  */
 export function connectLine(connect: AgentConnect, assistant = "Nexus"): string {
-  const summary = connect.summary?.replace(/[.\s]+$/, "");
+  let summary = connect.summary?.trimEnd();
+  while (summary?.endsWith(".")) summary = summary.slice(0, -1).trimEnd();
   return summary ? `${summary}.` : connectorPurpose(connect.connector, assistant);
 }
 

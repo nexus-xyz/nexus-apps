@@ -57,7 +57,7 @@ const cells = (line: string) =>
 /** `---`, `***` or `___` (spaces allowed between), alone on its line. */
 const RULE = /^\s{0,3}([-*_])(?:\s*\1){2,}\s*$/;
 /** A list line: its indent, its marker and its text. */
-const LIST_ITEM = /^(\s*)([-*+]|\d+[.)])\s+(.*)$/;
+const LIST_ITEM = /^(\s*)([-*+]|\d+[.)])\s+(\S.*)?$/;
 const indentOf = (spaces: string) => spaces.replace(/\t/g, "    ").length;
 
 /**
