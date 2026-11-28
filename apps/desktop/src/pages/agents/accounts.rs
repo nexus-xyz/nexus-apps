@@ -17,8 +17,8 @@ use nexus_workbench::event::SessionAgent;
 use nexus_workbench::plans::{Limit, PlanUsage};
 
 use super::super::subscriptions::{
-    ACTIVE_NOTE, Group, LOW_LEFT, fold_key, folds, groups, limit_label, login_name, plan_name, resets_in, switches,
-    tightest, used_pct, vendor, window_label,
+    ACTIVE_NOTE, Group, LOW_LEFT, duplicates, fold_key, groups, limit_label, login_name, plan_name, resets_in,
+    row_folds, switches, tightest, used_pct, vendor, window_label,
 };
 use super::super::{Load, palette, row, ui};
 use super::sign_in_card::{self, Shown};
@@ -66,6 +66,8 @@ struct Seen {
     /// What the last removal did, under its agent's card.
     removed_note: Option<(SessionAgent, String)>,
     reduce_motion: bool,
+    /// The rows that copy a login an earlier row holds (`duplicates`).
+    copies: HashSet<String>,
 }
 
 impl Seen {
@@ -102,6 +104,10 @@ fn seen(page: &AgentsPage, cx: &App) -> Seen {
         Load::Ready(list) => list.iter().filter(|plan| plans.is_open(plan)).map(fold_key).collect(),
         _ => HashSet::new(),
     };
+    let copies = match &plans.plans {
+        Load::Ready(list) => duplicates(list),
+        _ => HashSet::new(),
+    };
     Seen {
         plans: plans.plans.clone(),
         waiting: plans.waiting.clone(),
@@ -119,6 +125,7 @@ fn seen(page: &AgentsPage, cx: &App) -> Seen {
         removed: plans.removed.keys().cloned().collect(),
         removed_note: plans.removed_note.clone(),
         reduce_motion: cx.reduce_motion(),
+        copies,
     }
 }
 
@@ -436,7 +443,10 @@ fn account_row(
     let id = |what: &str| row_id(what, &key);
     let pending = state == RowState::Pending;
     let writable = crate::desktop_settings::writable();
-    let detail = if plan.signed_in {
+    let copy = seen.copies.contains(&key);
+    let detail = if copy {
+        "Added twice: this login is already above".to_string()
+    } else if plan.signed_in {
         if plan.active && choosing {
             format!("{} · Active", plan_name(plan))
         } else {
@@ -479,7 +489,18 @@ fn account_row(
             })
     });
 
-    let main_action = if !plan.signed_in && plan.error.is_some() && seen.checking {
+    let main_action = if let (true, Some(account)) = (copy, plan.account.clone()) {
+        // Remove asks for a second press, as from the menu; it signs out only this copy's own login.
+        let plans = page.plans.clone();
+        Some(
+            ui::button(id("remove-copy"), "Remove copy", palette)
+                .on_click(move |_, _, cx| {
+                    cx.stop_propagation();
+                    plans.update(cx, |plans, cx| plans.remove(agent, Some(account.clone()), cx))
+                })
+                .into_any_element(),
+        )
+    } else if !plan.signed_in && plan.error.is_some() && seen.checking {
         Some(ui::disabled_button(id("check"), "Check again", palette).into_any_element())
     } else if !plan.signed_in && plan.error.is_some() {
         let plans = page.plans.clone();
@@ -516,11 +537,11 @@ fn account_row(
     } else {
         None
     };
-    let foldable = folds(plan);
+    let foldable = row_folds(plan, &seen.copies);
     // The summary follows the person's fold, not the removal's: a row that folds while it is removed keeps its
     // controls' widths.
     let open = foldable && seen.open.contains(&key);
-    let summary = (plan.signed_in && !open)
+    let summary = (plan.signed_in && !open && !copy)
         .then(|| tightest(plan))
         .flatten()
         .map(|limit| summary(limit, palette));
