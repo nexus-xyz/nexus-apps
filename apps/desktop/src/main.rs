@@ -485,7 +485,7 @@ mod tests {
     fn canon_keys_are_bound_when_on() {
         let keymap = Keymap::new(key_bindings_with(true));
         let stack = [KeyContext::parse("Workspace").unwrap()];
-        let is = |keys: &str, expected: &dyn Action| {
+        let is = |keys: &'static str, expected: &dyn Action| {
             let (bindings, _) = keymap.bindings_for_input(&[Keystroke::parse(keys).unwrap()], &stack);
             let found = bindings.first().unwrap_or_else(|| panic!("{keys} is not bound"));
             assert!(
