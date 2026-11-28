@@ -8,17 +8,38 @@ use nexus_workbench::crew_fold::AgentNode;
 use super::Workspace;
 use crate::code::CodeSession;
 
-/// The hover card's line: "Subsession of “Fix the login” in nexus-web". A parent the app no longer lists has no
-/// title or project to name.
+/// The most characters the hover card's line takes: it fits the card's three lines (`session_peek::PARENT_LINES`).
+pub(super) const LINE_BUDGET: usize = 90;
+/// A parent title keeps at least this many characters, however long the project's name.
+const TITLE_FLOOR: usize = 24;
+
+/// The hover card's line: "Subsession of “Fix the login” in nexus-web". The project comes last, so a long parent
+/// title is cut to fit [`LINE_BUDGET`], ending in "…", and the project always shows. A parent the app no longer lists
+/// has no title or project to name.
 pub(super) fn subsession_line(parent_title: Option<&str>, parent_project: Option<&str>) -> String {
+    let project = parent_project
+        .map(str::trim)
+        .filter(|name| !name.is_empty())
+        .unwrap_or("another project");
+    let fixed = "Subsession of “” in ".chars().count() + project.chars().count();
+    let budget = LINE_BUDGET.saturating_sub(fixed).max(TITLE_FLOOR);
     let parent = parent_title
         .map(str::trim)
         .filter(|title| !title.is_empty())
-        .map_or_else(|| "a session".to_string(), |title| format!("“{title}”"));
-    let project = parent_project
-        .filter(|name| !name.trim().is_empty())
-        .unwrap_or("another project");
+        .map_or_else(
+            || "a session".to_string(),
+            |title| format!("“{}”", shorten(title, budget)),
+        );
     format!("Subsession of {parent} in {project}")
+}
+
+/// `text` in at most `budget` characters: cut, it ends in "…".
+fn shorten(text: &str, budget: usize) -> String {
+    if text.chars().count() <= budget {
+        return text.to_string();
+    }
+    let kept: String = text.chars().take(budget.saturating_sub(1)).collect();
+    format!("{}…", kept.trim_end())
 }
 
 /// A crew node's project note, "in nexus-web", for a linked session outside the lead's project. None for every other
@@ -63,6 +84,23 @@ mod tests {
             subsession_line(Some("Fix the login"), Some("nexus-web")),
             "Subsession of “Fix the login” in nexus-web"
         );
+    }
+
+    #[test]
+    fn a_long_parent_title_is_cut_and_the_project_always_shows() {
+        // 80 characters, the longest title `start_session` takes, and a longer one a person typed.
+        let longest = "Move the gateway's invite codes to the audited routes and check every deploy now";
+        assert_eq!(longest.chars().count(), 80);
+        let typed = "Move the gateway's invite codes to the audited routes ".repeat(4);
+        for title in [longest, typed.as_str()] {
+            for project in ["nexus-web", "a-rather-long-project-name-for-the-gateway"] {
+                let line = subsession_line(Some(title), Some(project));
+                assert!(line.ends_with(&format!("…” in {project}")), "{line}");
+                assert!(line.chars().count() <= LINE_BUDGET, "{line}");
+            }
+        }
+        let short = subsession_line(Some("Fix the login"), Some("nexus-web"));
+        assert!(!short.contains('…'), "a short title stays whole: {short}");
     }
 
     #[test]

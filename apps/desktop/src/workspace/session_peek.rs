@@ -310,11 +310,12 @@ impl Workspace {
     }
 }
 
-/// Its most lines: a long parent title wraps to three lines, as the card's title does, and ends in an ellipsis after.
+/// Its most lines. The text builder cuts a long parent title so the line fits them with its project shown
+/// (`cross_project::LINE_BUDGET`); the clamp and its ellipsis only guard against an unusually wide font.
 const PARENT_LINES: usize = 3;
 
 /// A cross-project subsession's parent line (`cross_project::subsession_line`). It wraps, unlike the card's other
-/// lines: the parent's title is the part a reader needs whole. The icon stays level with the first line.
+/// lines, so the parent's title and project read whole. The icon stays level with the first line.
 fn parent_line(text: String, palette: Palette) -> Div {
     h_flex()
         .w_full()
@@ -334,6 +335,7 @@ fn parent_line(text: String, palette: Palette) -> Div {
                 .whitespace_normal()
                 .line_height(px(18.))
                 .line_clamp(PARENT_LINES)
+                .text_ellipsis()
                 .debug_selector(|| "session-peek-parent".into())
                 .child(text),
         )

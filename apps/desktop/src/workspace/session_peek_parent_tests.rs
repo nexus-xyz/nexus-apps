@@ -51,10 +51,25 @@ fn a_long_parent_title_wraps_inside_the_card(cx: &mut TestAppContext) {
     );
 }
 
+/// The text builder's longest lines fit the clamp, so the clamp never cuts the project at the end.
 #[gpui_kit::test]
-fn a_very_long_parent_title_stops_at_three_lines(cx: &mut TestAppContext) {
+fn the_longest_built_line_fits_three_lines(cx: &mut TestAppContext) {
     let title = "Move the gateway's invite codes to the audited routes ".repeat(6);
-    let text = super::super::cross_project::subsession_line(Some(&title), Some("nexus-web"));
+    let text =
+        super::super::cross_project::subsession_line(Some(&title), Some("a-rather-long-project-name-for-the-gateway"));
+    assert!(text.chars().count() <= super::super::cross_project::LINE_BUDGET);
+    assert!(text.ends_with("in a-rather-long-project-name-for-the-gateway"));
+    let (_, line) = drawn(&text, cx);
+    assert!(
+        line.size.height <= px(18. * PARENT_LINES as f32),
+        "at most {PARENT_LINES} lines: {line:?}"
+    );
+}
+
+/// Wider than the card's three lines, the clamp still holds.
+#[gpui_kit::test]
+fn an_unbuilt_overlong_line_stops_at_three_lines(cx: &mut TestAppContext) {
+    let text = "Move the gateway's invite codes to the audited routes ".repeat(6);
     let (_, line) = drawn(&text, cx);
     assert!(
         line.size.height <= px(18. * PARENT_LINES as f32),
