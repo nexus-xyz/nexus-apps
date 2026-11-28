@@ -8,7 +8,7 @@
 //! before `/end`.
 //!
 //! The rules both CLIs follow, and the cases that check them, are in
-//! `services/frontend/core/interfaces/antigravity-usage.json`. Any doubt makes the whole run's usage unknown: nothing
+//! `tests/fixtures/interfaces/antigravity-usage.json`. Any doubt makes the whole run's usage unknown: nothing
 //! is posted, and the session still ends.
 //!
 //! Any `agy` version is read, as the Claude Code and Codex readers read any version of theirs: `agy` updates itself
@@ -728,7 +728,7 @@ mod tests {
         }
     }
 
-    /// The body is the one nexus-gateway's tests/subscription_usage_days.rs posts for "two calls".
+    /// The body is the one Gateway's own tests post for "two calls".
     #[test]
     fn body_is_the_record_gateway_counts() {
         let records = [

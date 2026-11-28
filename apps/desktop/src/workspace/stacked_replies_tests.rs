@@ -10,7 +10,9 @@ use gpui_kit::{
 #[test]
 fn a_chip_stands_apart_from_the_composer_in_both_themes() {
     for choice in [ThemeChoice::Light, ThemeChoice::Dark] {
-        let palette = Palette::for_choice(choice, WindowAppearance::Light);
+        // Solid: lightness compares only opaque colors. See-through, both fills are ink at an alpha, and
+        // `for_choice` is see-through where the desktop blurs (macOS, Windows), solid on Linux.
+        let palette = Palette::for_choice(choice, WindowAppearance::Light).solid();
         // The composer's box is `raised`; the old chip fill (`hover`) was 0.008 off it in dark.
         let apart = (chip_fill(palette).l - palette.raised.l).abs();
         assert!(

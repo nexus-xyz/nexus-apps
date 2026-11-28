@@ -295,6 +295,7 @@ impl DesktopAppPage {
         let channel = match snapshot.channel {
             Some(nexus_desktop_updates::Channel::Internal) => "internal",
             Some(nexus_desktop_updates::Channel::Stable) => "stable",
+            Some(nexus_desktop_updates::Channel::Beta) => "beta",
             None => "unconfigured",
         };
         let mut detail = crate::updates::status(&snapshot, download.is_some());

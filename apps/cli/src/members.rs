@@ -382,7 +382,7 @@ fn removal_refused(error: Error) -> Error {
         (403, _) => "Ask an owner or admin of your organization.",
         (404, _) => "They are not a member now; `nexus members removed` lists who was removed.",
         (_, Some("not_configured")) => {
-            "Remove them in Nexus UI → Members, or ask whoever runs Nexus Gateway to set CLERK_SECRET_KEY (eng/DEPLOY.md)."
+            "Remove them in Nexus UI → Members, or ask whoever runs Nexus Gateway to configure its sign-in provider."
         }
         (_, Some("use_nexus_ui")) => {
             "This Gateway removes members of a sign-in provider organization only from Nexus UI → Members."
@@ -436,7 +436,7 @@ fn invitation_call(cmd: &Cmd, request: Value) -> Result<Value> {
         Ok(value) => Ok(value),
         Err(Error::Core(error)) if error.status == 501 => Err(CliError::hint(
             capitalize(&error.message),
-            "Or ask whoever runs Nexus Gateway to set CLERK_SECRET_KEY (eng/DEPLOY.md).",
+            "Or ask whoever runs Nexus Gateway to configure its sign-in provider.",
         )
         .into()),
         Err(Error::Core(error)) if error.code.as_deref() == Some("count_changed") => {

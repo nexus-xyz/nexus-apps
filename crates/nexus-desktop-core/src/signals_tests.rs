@@ -104,7 +104,7 @@ fn a_panic_names_its_crate_never_its_path() {
     );
     assert_eq!(
         panic_component(Some(
-            "/home/someone/nexus/eng/factory/rs/crates/nexus-client/src/client.rs:1:1"
+            "/home/someone/src/nexus-apps/crates/nexus-client/src/client.rs:1:1"
         )),
         "nexus-client"
     );
