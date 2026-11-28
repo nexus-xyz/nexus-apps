@@ -873,6 +873,12 @@ impl CodeReader {
         (projects, Ok(archived))
     }
 
+    /// The archived projects, by name: the sidebar's "Archived" group offers each one back.
+    pub fn archived_projects(&self) -> Result<Vec<ArchivedProject>, String> {
+        let projects = self.store().projects().map_err(|error| error.to_string())?;
+        Ok(archived_projects(projects))
+    }
+
     #[cfg(test)]
     pub fn projects(&self) -> Result<Vec<CodeProject>, String> {
         self.overview().0
@@ -1035,6 +1041,32 @@ pub fn project_order(a: &CodeProject, b: &CodeProject) -> std::cmp::Ordering {
         .cmp(&a.pinned)
         .then_with(|| b.added_at.cmp(&a.added_at))
         .then_with(|| a.id.cmp(&b.id))
+}
+
+/// An archived project, as the sidebar's "Archived" group lists it.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ArchivedProject {
+    pub id: String,
+    pub name: String,
+}
+
+/// The archived ones of `projects`, by name (then id, so equal names keep one order).
+pub fn archived_projects(projects: Vec<nexus_workbench::event::Project>) -> Vec<ArchivedProject> {
+    let mut archived: Vec<ArchivedProject> = projects
+        .into_iter()
+        .filter(|project| project.archived)
+        .map(|project| ArchivedProject {
+            id: project.id,
+            name: project.name,
+        })
+        .collect();
+    archived.sort_by(|a, b| {
+        a.name
+            .to_lowercase()
+            .cmp(&b.name.to_lowercase())
+            .then_with(|| a.id.cmp(&b.id))
+    });
+    archived
 }
 
 /// `projects` with their sessions out of `threads`, in [`project_order`] with their sessions in [`place_order`];
@@ -2000,6 +2032,38 @@ mod tests {
 
     fn ordered_project(id: &str) -> nexus_workbench::event::Project {
         serde_json::from_value(json!({ "id": id, "name": id, "path": ".", "branch": null, "addedAt": 1 })).unwrap()
+    }
+
+    #[test]
+    fn archived_projects_leave_the_list_and_wait_in_the_archive_by_name() {
+        let project = |id: &str, name: &str, archived: bool| -> nexus_workbench::event::Project {
+            serde_json::from_value(
+                json!({ "id": id, "name": name, "path": ".", "branch": null, "addedAt": 1, "archived": archived }),
+            )
+            .unwrap()
+        };
+        let projects = || {
+            vec![
+                project("p1", "web", true),
+                project("p2", "api", false),
+                project("p3", "Docs", true),
+            ]
+        };
+        let listed: Vec<String> = group(projects(), [], None).into_iter().map(|p| p.id).collect();
+        assert_eq!(listed, ["p2"]);
+        assert_eq!(
+            archived_projects(projects()),
+            [
+                ArchivedProject {
+                    id: "p3".into(),
+                    name: "Docs".into()
+                },
+                ArchivedProject {
+                    id: "p1".into(),
+                    name: "web".into()
+                },
+            ]
+        );
     }
 
     #[test]

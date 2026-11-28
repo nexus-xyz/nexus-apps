@@ -35,6 +35,7 @@ impl Workspace {
         self.sessions_error = None;
         self.projects.clear();
         self.archived_code.clear();
+        self.archived_projects.clear();
         self.archived_chats = None;
         self.inbox = 0;
         self.inbox_state = inbox_view::InboxState::new();
