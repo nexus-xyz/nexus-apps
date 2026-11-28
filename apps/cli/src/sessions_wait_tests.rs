@@ -76,6 +76,37 @@ fn stops_after_three_failed_reads() {
     report(outcome, 2, "session t_abc could not be read: third");
 }
 
+fn app_gone() -> Read {
+    Err(CliError {
+        code: Some("desktop_unavailable"),
+        ..CliError::new("gone")
+    })
+}
+
+#[test]
+fn an_app_restart_after_a_read_is_retried() {
+    let (outcome, elapsed) = run(
+        [
+            shown("running", Some("running")),
+            app_gone(),
+            app_gone(),
+            shown("idle", Some("completed")),
+        ],
+        100,
+    );
+    assert_eq!(elapsed, Duration::from_millis(30));
+    report(outcome, 0, "session t_abc finished");
+    let (outcome, _) = run([shown("running", None), app_gone(), app_gone(), app_gone()], 100);
+    report(outcome, 2, "session t_abc could not be read: gone");
+}
+
+#[test]
+fn a_missing_app_before_any_read_ends_the_wait() {
+    let (outcome, elapsed) = run([app_gone()], 100);
+    assert_eq!(elapsed, Duration::ZERO);
+    report(outcome, 2, "session t_abc could not be read: gone");
+}
+
 #[test]
 fn reports_approval_from_the_session_or_idle_turn() {
     for poll in [shown("approval", None), shown("idle", Some("approval"))] {

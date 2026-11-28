@@ -83,6 +83,12 @@ pub(crate) fn ends_wait(error: &CliError) -> bool {
         Some(DESKTOP_UNAVAILABLE | ACCESS_REFUSED | SESSION_NOT_FOUND | SESSION_TITLE_AMBIGUOUS)
     )
 }
+
+/// The app is not running or its outside access is off. After a read succeeded, the app may be restarting.
+pub(crate) fn app_unavailable(error: &CliError) -> bool {
+    error.code == Some(DESKTOP_UNAVAILABLE)
+}
+
 /// How long a request for access waits: the app's prompt waits two minutes for the person.
 const CONNECT_WAIT: Duration = Duration::from_secs(130);
 /// How long a call waits: a start waits up to 90 seconds for the app's window.

@@ -5,7 +5,7 @@ use serde_json::{Value, json};
 use crate::args::Args;
 use crate::error::{CliError, Result, hint_text, to_cli_error, usage};
 use crate::safe_text::safe_text;
-use crate::sessions::{CLIENT, Desktop, ends_wait, session_of};
+use crate::sessions::{CLIENT, Desktop, app_unavailable, ends_wait, session_of};
 use crate::style::Style;
 use crate::{Context, Io};
 
@@ -90,6 +90,7 @@ fn wait(
     elapsed: impl Fn() -> Duration,
 ) -> Outcome {
     let mut was_busy = false;
+    let mut was_read = false;
     let mut failed_reads = 0;
     let mut final_done = false;
     loop {
@@ -101,11 +102,15 @@ fn wait(
             Ok(Poll::Exit(outcome)) => return outcome,
             Ok(next) => {
                 was_busy |= next == Poll::Busy;
+                was_read = true;
                 failed_reads = 0;
             }
             Err(error) => {
                 failed_reads += 1;
-                if ends_wait(&error) || failed_reads == 3 {
+                // An app that answered once and then went away may be restarting, for example for an update: it
+                // counts as a failed read, not as the end of the wait.
+                let restarting = was_read && app_unavailable(&error);
+                if (ends_wait(&error) && !restarting) || failed_reads == 3 {
                     return Outcome::Unreadable(error);
                 }
             }
