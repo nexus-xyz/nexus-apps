@@ -127,6 +127,7 @@ fn producer() -> Arc<Live> {
             browser: Default::default(),
             resend: None,
             transcript: None,
+            paused: false,
         }),
     })
 }

@@ -98,8 +98,9 @@ impl SideChat {
                         .rewrite
                         .as_ref()
                         .is_some_and(|edit| edit.seq == seq && edit.input.read(cx).value().as_ref() == text)
+                        && let Some(rewrite) = self.rewrite.take()
                     {
-                        self.rewrite = None;
+                        rewrite.saved();
                     }
                 }
                 Effect::Secret => self.secret.update(cx, |input, cx| input.set_value("", window, cx)),

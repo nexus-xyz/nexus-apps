@@ -601,6 +601,16 @@ impl Engine {
         }
     }
 
+    pub async fn queue_hold(&self, thread_id: String, seq: i64, on: bool) -> Result<(), String> {
+        match &self.service {
+            Some(remote) => {
+                let args = json!({ "threadId": thread_id, "seq": seq, "on": on });
+                Self::relay::<Value>(remote, "wb_queue_hold", args).await.map(drop)
+            }
+            None => self.api.queue_hold(thread_id, seq, on).await,
+        }
+    }
+
     pub async fn queue_steer(&self, thread_id: String, seq: i64) -> Result<(), String> {
         match &self.service {
             Some(remote) => {

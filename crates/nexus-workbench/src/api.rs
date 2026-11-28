@@ -262,6 +262,7 @@ pub const COMMANDS: &[&str] = &[
     "wb_queue_cancel",
     "wb_queue_edit",
     "wb_queue_move",
+    "wb_queue_hold",
     "wb_queue_steer",
     "wb_interrupt",
     "wb_task_stop",
@@ -688,6 +689,14 @@ struct QueueMoveArgs {
     seq: i64,
     #[serde(default)]
     before: Option<i64>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct QueueHoldArgs {
+    thread_id: String,
+    seq: i64,
+    on: bool,
 }
 
 impl Api {
@@ -1203,6 +1212,10 @@ impl Api {
             "wb_queue_move" => {
                 let a: QueueMoveArgs = args_of(name, args)?;
                 json(self.queue_move(a.thread_id, a.seq, a.before).await)
+            }
+            "wb_queue_hold" => {
+                let a: QueueHoldArgs = args_of(name, args)?;
+                json(self.queue_hold(a.thread_id, a.seq, a.on).await)
             }
             "wb_queue_steer" => {
                 let a: SeqArgs = args_of(name, args)?;
@@ -2326,6 +2339,12 @@ impl Api {
     pub async fn queue_move(&self, thread_id: String, seq: i64, before: Option<i64>) -> Result<()> {
         let wb = self.wb.clone();
         blocking(move || wb.queue_move(&thread_id, seq, before)).await
+    }
+
+    /// Holds the queue while the person rewrites a queued message (`on`), or lets it go (`queue_hold.rs`).
+    pub async fn queue_hold(&self, thread_id: String, seq: i64, on: bool) -> Result<()> {
+        let wb = self.wb.clone();
+        blocking(move || wb.queue_hold(&thread_id, seq, on)).await
     }
 
     /// Sends a queued message into the running turn now ("Send now").

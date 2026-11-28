@@ -25,6 +25,21 @@ pub(super) struct Rewrite {
     pub seq: i64,
     pub from: String,
     pub input: Entity<TextareaState>,
+    /// The side thread's queue holds while the rewrite is open (`queue_hold.rs`). Dropped only once the save
+    /// answered, so letting go never races the new text.
+    hold: crate::workspace::queue_hold::QueueHold,
+}
+
+impl Rewrite {
+    pub(super) fn new(chat: &SideChat, seq: i64, from: String, input: Entity<TextareaState>) -> Rewrite {
+        let hold = crate::workspace::queue_hold::QueueHold::new(chat.runs.clone(), chat.summary.id.clone(), seq);
+        Rewrite { seq, from, input, hold }
+    }
+
+    /// The save answered: `wb_queue_edit` let the queue go, so closing the rewrite says nothing more.
+    pub(super) fn saved(self) {
+        self.hold.edited();
+    }
 }
 
 fn catalog(value: &Value, agent: SessionAgent) -> Vec<Choice> {
@@ -126,7 +141,7 @@ impl SideChat {
         let input = cx.new(|cx| TextareaState::new(window, cx).auto_grow(1, 6).submit_on_enter(false));
         input.update(cx, |input, cx| input.set_value(text.clone(), window, cx));
         input.focus_handle(cx).focus(window, cx);
-        self.rewrite = Some(Rewrite { seq, from: text, input });
+        self.rewrite = Some(Rewrite::new(self, seq, text, input));
         cx.notify();
     }
     pub(super) fn preserve_gone_rewrite(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -342,7 +357,19 @@ impl SideChat {
                     .border_color(p.faint)
                     .bg(p.raised)
                     .text_size(px(13.))
-                    .child(div().text_color(p.faint).child("Queued"))
+                    // Nothing in the queue goes while the rewrite is open (`queue_hold.rs`).
+                    .child(
+                        div()
+                            .id(("side-queued-paused", ix))
+                            .text_color(p.faint)
+                            .child("Paused")
+                            .tooltip(|window, cx| {
+                                gpui_kit::component::tooltip::Tooltip::new(
+                                    "The queue waits while you edit. Save or Cancel lets it go on.",
+                                )
+                                .build(window, cx)
+                            }),
+                    )
                     .child(
                         div()
                             .flex_1()

@@ -231,7 +231,7 @@ impl SideChat {
         if let Some((seq, from, edited)) = data.rewrite {
             let input = cx.new(|cx| TextareaState::new(window, cx).auto_grow(1, 6).submit_on_enter(false));
             input.update(cx, |input, cx| input.set_value(edited, window, cx));
-            chat.rewrite = Some(composer::Rewrite { seq, from, input });
+            chat.rewrite = Some(composer::Rewrite::new(&chat, seq, from, input));
         }
         // The list takes the retained rows now, so the reader's row is there to go back to.
         chat.sync_history(crate::palette::Palette::for_choice(

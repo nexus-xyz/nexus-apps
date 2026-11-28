@@ -1345,6 +1345,7 @@ async fn every_shared_command_takes_the_contracts_arguments() {
         ("wb_queue_cancel", json!({ "threadId": t, "seq": 2 })),
         ("wb_queue_edit", json!({ "threadId": t, "seq": 2, "text": "x" })),
         ("wb_queue_move", json!({ "threadId": t, "seq": 2, "before": null })),
+        ("wb_queue_hold", json!({ "threadId": t, "seq": 2, "on": true })),
         ("wb_queue_steer", json!({ "threadId": t, "seq": 2 })),
         ("wb_interrupt", json!({ "threadId": t })),
         ("wb_task_stop", json!({ "threadId": t, "taskId": "a1" })),

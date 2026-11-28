@@ -113,7 +113,7 @@ impl Workspace {
                 queue.resume();
             });
             self.commit_gateway_queues(cx);
-            self.send_first_queued(cx);
+            self.send_first_queued(true, cx);
         }
     }
 
@@ -128,12 +128,13 @@ impl Workspace {
         self.chat_queue.queues.update(&key, |queue| queue.resume());
         self.commit_gateway_queues(cx);
         if !self.chat_busy() {
-            self.send_first_queued(cx);
+            self.send_first_queued(false, cx);
         }
         cx.notify();
     }
 
-    fn send_first_queued(&mut self, cx: &mut Context<Self>) {
+    /// The first queued message goes; `now`: the person sent it now, so a rewrite of another one does not hold it.
+    fn send_first_queued(&mut self, now: bool, cx: &mut Context<Self>) {
         if !self.ensure_gateway_execution(cx) {
             return;
         }
@@ -142,7 +143,8 @@ impl Workspace {
         }
         self.refresh_gateway_queues(cx);
         let key = self.queue_key();
-        if let Some(item) = self.chat_queue.queues.update(&key, |queue| queue.take()) {
+        let take = |queue: &mut chat_queue::Queue<Draft>| if now { queue.take_now() } else { queue.take() };
+        if let Some(item) = self.chat_queue.queues.update(&key, take) {
             self.commit_gateway_queues(cx);
             self.send_queued(item, cx);
         }
@@ -196,6 +198,7 @@ impl Workspace {
     pub(super) fn chat_queue_leave(&mut self) {
         self.chat_queue.editing = None;
         let key = self.queue_key();
+        self.chat_queue.queues.update(&key, |queue| queue.set_editing(None));
         if let Some((_, item)) = self.chat_queue.sent.take() {
             self.chat_queue.queues.update(&key, |queue| queue.put_back(item));
         }
@@ -213,6 +216,12 @@ impl Workspace {
         self.sync_gateway_chat(window, cx);
         self.refresh_gateway_queues(cx);
         self.chat_queue.editing = Some(seq);
+        // Nothing in the queue goes while the person rewrites (`Queue::set_editing`).
+        let key = self.queue_key();
+        self.chat_queue
+            .queues
+            .update(&key, |queue| queue.set_editing(Some(seq)));
+        self.commit_gateway_queues(cx);
         self.chat_queue.edit.update(cx, |state, cx| {
             state.set_value(text, window, cx);
             state.focus(window, cx);
@@ -245,9 +254,29 @@ impl Workspace {
             self.chat_queue.queues.update(&key, |queue| queue.edit(seq, text));
             self.commit_gateway_queues(cx);
         }
-        self.chat_queue.editing = None;
+        self.end_chat_rewrite(cx);
         self.focus_composer(window, cx);
         cx.notify();
+    }
+
+    /// The rewrite closed (saved or cancelled): the queue goes on. An answer that ended meanwhile left its next
+    /// message waiting, so it goes now.
+    fn end_chat_rewrite(&mut self, cx: &mut Context<Self>) {
+        self.chat_queue.editing = None;
+        let key = self.queue_key();
+        if self
+            .chat_queue
+            .queues
+            .get(&key)
+            .is_none_or(|queue| queue.editing().is_none())
+        {
+            return;
+        }
+        self.chat_queue.queues.update(&key, |queue| queue.set_editing(None));
+        self.commit_gateway_queues(cx);
+        if self.asking.is_none() && !self.chat_busy() {
+            self.send_first_queued(false, cx);
+        }
     }
 
     pub(super) fn gateway_rewrite_text(&self, cx: &App) -> String {
@@ -291,7 +320,9 @@ impl Workspace {
             .get(&self.queue_key())
             .filter(|queue| !queue.is_empty())?;
         let held = queue.held();
-        if !held && self.asking.is_none() && !self.chat_busy() {
+        // A rewrite pauses the queue: it stays on screen after the answer ends, waiting for Save or Cancel.
+        let paused = queue.editing().is_some();
+        if !held && !paused && self.asking.is_none() && !self.chat_busy() {
             return None;
         }
         let count = queue.items().len();
@@ -322,7 +353,7 @@ impl Workspace {
                     .child(
                         text_button(("chat-queued-cancel", ix), "Cancel", false, palette).on_click(cx.listener(
                             |this, _, window, cx| {
-                                this.chat_queue.editing = None;
+                                this.end_chat_rewrite(cx);
                                 this.focus_composer(window, cx);
                                 cx.notify();
                             },
@@ -401,6 +432,13 @@ impl Workspace {
                             let key = this.queue_key();
                             this.chat_queue.queues.update(&key, |queue| queue.remove(seq));
                             this.commit_gateway_queues(cx);
+                            // The message being rewritten went: its pause goes with it, and the queue goes on.
+                            if this.chat_queue.editing == Some(seq) {
+                                this.chat_queue.editing = None;
+                                if this.asking.is_none() && !this.chat_busy() {
+                                    this.send_first_queued(false, cx);
+                                }
+                            }
                             this.focus_composer(window, cx);
                             cx.notify();
                         })),
@@ -412,9 +450,20 @@ impl Workspace {
             .text_size(px(12.))
             .text_color(palette.muted)
             .child(glyph(Lucide::ListOrdered, palette.faint))
-            .child(format!("{} · {count}", if held { "Held" } else { "Queued" }))
+            .child(format!(
+                "{} · {count}",
+                if held {
+                    "Held"
+                } else if paused {
+                    "Paused"
+                } else {
+                    "Queued"
+                }
+            ))
             .child(div().text_color(palette.faint).child(if held {
                 "the last answer did not finish, so these wait for you"
+            } else if paused {
+                "nothing goes while you edit; Save or Cancel lets the queue go on"
             } else {
                 "sent in order when this answer ends"
             }))

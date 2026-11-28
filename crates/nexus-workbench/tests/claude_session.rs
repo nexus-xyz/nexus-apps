@@ -3487,6 +3487,82 @@ async fn a_queued_message_moved_in_the_queue_reaches_the_agent_in_its_new_order(
     let _ = std::fs::remove_dir_all(&s.root);
 }
 
+#[tokio::test]
+async fn a_queue_held_for_a_rewrite_waits_and_goes_on_once_it_is_saved() {
+    let s = setup("queue-hold");
+    let (id, seqs) = busy_with_queue(&s, &["first recall", "second recall"]).await;
+    // The person starts rewriting the second message: the queue holds, even for the first.
+    s.workbench
+        .queue_hold(&id, seqs[1], true)
+        .unwrap_or_else(|e| panic!("{e}"));
+    s.workbench.interrupt(&id).unwrap_or_else(|e| panic!("{e}"));
+    let events = wait_for(&s.workbench, &id, |e| turn_ends(e).len() == 1).await;
+    assert_eq!(turn_ends(&events), [TurnStatus::Interrupted]);
+    tokio::time::sleep(Duration::from_millis(300)).await;
+    assert_eq!(
+        turn_ends(&s.workbench.events(&id, 0).unwrap_or_default()).len(),
+        1,
+        "no queued message starts while one is being rewritten"
+    );
+    assert_eq!(
+        thread(&s.workbench, &id).status,
+        ThreadStatus::Idle,
+        "a paused queue reads as idle"
+    );
+    // Still waiting: it can be rewritten, and the save lets the queue go on.
+    s.workbench
+        .queue_edit(&id, seqs[1], "rewritten recall")
+        .unwrap_or_else(|e| panic!("{e}"));
+    let events = wait_for(&s.workbench, &id, |e| turn_ends(e).len() == 3).await;
+    let heard: Vec<String> = texts(&events)
+        .iter()
+        .filter_map(|text| text.split_once("Heard: ").map(|(_, heard)| heard.to_string()))
+        .collect();
+    assert_eq!(heard, ["first recall", "rewritten recall"]);
+    assert_turns_nest(&events);
+    s.workbench.shutdown().await;
+    let _ = std::fs::remove_dir_all(&s.root);
+}
+
+#[tokio::test]
+async fn a_paused_queue_sends_a_message_sent_now_and_holds_again_after_it() {
+    let s = setup("queue-hold-steer");
+    let (id, seqs) = busy_with_queue(&s, &["first recall", "second recall"]).await;
+    s.workbench
+        .queue_hold(&id, seqs[0], true)
+        .unwrap_or_else(|e| panic!("{e}"));
+    s.workbench.interrupt(&id).unwrap_or_else(|e| panic!("{e}"));
+    wait_for(&s.workbench, &id, |e| turn_ends(e).len() == 1).await;
+    tokio::time::sleep(Duration::from_millis(300)).await;
+    // Send now on the second: it starts although the first is still being rewritten.
+    s.workbench.queue_steer(&id, seqs[1]).unwrap_or_else(|e| panic!("{e}"));
+    let events = wait_for(&s.workbench, &id, |e| turn_ends(e).len() == 2).await;
+    assert!(
+        texts(&events)
+            .last()
+            .is_some_and(|t| t.ends_with("Heard: second recall"))
+    );
+    tokio::time::sleep(Duration::from_millis(300)).await;
+    assert_eq!(
+        turn_ends(&s.workbench.events(&id, 0).unwrap_or_default()).len(),
+        2,
+        "the first still waits for its rewrite"
+    );
+    // Cancel the rewrite: the first goes as it was.
+    s.workbench
+        .queue_hold(&id, seqs[0], false)
+        .unwrap_or_else(|e| panic!("{e}"));
+    let events = wait_for(&s.workbench, &id, |e| turn_ends(e).len() == 3).await;
+    assert!(
+        texts(&events)
+            .last()
+            .is_some_and(|t| t.ends_with("Heard: first recall"))
+    );
+    assert_eq!(thread(&s.workbench, &id).status, ThreadStatus::Idle);
+    s.workbench.shutdown().await;
+    let _ = std::fs::remove_dir_all(&s.root);
+}
+
 fn notices(events: &[StoredEvent]) -> Vec<String> {
     events
         .iter()
