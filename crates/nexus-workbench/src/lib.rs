@@ -445,8 +445,8 @@ pub struct Config {
     /// `orchestration` column is not read.
     pub subsessions: bool,
     pub subsessions_first_start: session_choice::Preference,
-    /// "Disable cross-agent subsessions" ([`Subsessions::cross_agent_off`]): `start_session` and `schedule_session`
-    /// refuse another agent than the caller's, on every route.
+    /// "Enable cross-agent subsessions" turned off ([`Subsessions::cross_agent_off`]): `start_session` and
+    /// `schedule_session` refuse another agent than the caller's, on every route.
     pub cross_agent_off: bool,
     /// "Enable cross-project subsessions" ([`Subsessions::cross_project_on`]): `start_session` may start a subsession
     /// in another project open here ([`linked::cross_project`]). On by default.

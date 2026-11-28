@@ -402,12 +402,15 @@ impl Workspace {
             )
             .child(div().text_color(p.muted).child(status(node)))
             .child(format!(
-                "{} steps · {} · {}",
+                "{} steps · {} · {}{}",
                 node.steps,
                 crew_fold::elapsed(elapsed.max(0)),
                 node.cost_usd
                     .map(|cost| format!("${cost:.2}"))
-                    .unwrap_or_else(|| "—".into())
+                    .unwrap_or_else(|| "—".into()),
+                self.crew_project_note(node)
+                    .map(|note| format!(" · {note}"))
+                    .unwrap_or_default()
             ))
             .when(node.kind != AgentKind::Lead, |panel| {
                 panel.child(div().text_color(p.muted).child(node.title.clone()))

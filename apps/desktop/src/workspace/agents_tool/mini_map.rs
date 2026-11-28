@@ -258,7 +258,10 @@ impl Workspace {
             } else {
                 crew_fold::first_line(&node.title, 60)
             };
-            let tip = format!("{name} · {}", status(node));
+            let tip = match self.crew_project_note(node) {
+                Some(note) => format!("{name} · {} · {note}", status(node)),
+                None => format!("{name} · {}", status(node)),
+            };
             let selected = cursor == Some(id.as_str());
             content = content.child(
                 div()

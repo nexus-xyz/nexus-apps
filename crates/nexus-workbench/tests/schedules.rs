@@ -500,7 +500,7 @@ async fn an_agent_schedules_within_its_own_sessions_limits() {
 }
 
 /// A schedule for another agent takes that agent's default model, never the caller's, and an agent Gateway has no
-/// route for runs on the person's own sign-in. With "Disable cross-agent subsessions" on, another agent is refused.
+/// route for runs on the person's own sign-in. With "Enable cross-agent subsessions" off, another agent is refused.
 #[tokio::test]
 async fn a_schedule_for_another_agent_never_carries_the_callers_model() {
     let s = setup("schedule-other-agent", Limits::default());
@@ -558,7 +558,9 @@ async fn a_schedule_for_another_agent_never_carries_the_callers_model() {
         .unwrap_or_else(|| panic!("scheduled another agent"));
     assert_eq!(refused.code, OrchCode::AgentNotAllowed);
     assert!(
-        refused.message.contains("Disable cross-agent subsessions"),
+        refused
+            .message
+            .contains("turned off \"Enable cross-agent subsessions\""),
         "{}",
         refused.message
     );

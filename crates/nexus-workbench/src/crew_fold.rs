@@ -127,6 +127,9 @@ pub struct AgentNode {
     /// Ids of the nodes it started, in the order the log showed them start.
     pub children: Vec<String>,
     pub run_id: Option<String>,
+    /// The project a linked session runs in, when it is not the lead's: a cross-project subsession or one under it.
+    /// A project id; None for every other node.
+    pub project: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -1600,6 +1603,7 @@ impl FoldState {
             parent_id: n.parent.map(|parent| self.arena[parent].id.clone()),
             children: n.children.iter().map(|&child| self.arena[child].id.clone()).collect(),
             run_id: n.run_id.clone(),
+            project: None,
         }
     }
 

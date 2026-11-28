@@ -3,14 +3,16 @@ use super::*;
 use crate::event::{ThreadStatus, ThreadSummary};
 
 impl Crew {
-    /// Include descendants from this host and project. Cycles and unrelated sessions never enter the tree.
+    /// Include descendants from this host. A child joins when it is in its parent's project, or when it is a
+    /// cross-project subsession (`ThreadSummary::cross_project`), whose own subtree then follows the same rule. A link
+    /// to another project without that flag, a cycle and an unrelated session never enter the tree.
     pub fn with_linked_sessions(&self, root: Option<&ThreadSummary>, summaries: &[ThreadSummary]) -> Self {
         let Some(root) = root else {
             return self.clone();
         };
         let mut crew = self.clone();
         let mut children: HashMap<&str, Vec<&ThreadSummary>> = HashMap::new();
-        for summary in summaries.iter().filter(|summary| summary.project_id == root.project_id) {
+        for summary in summaries {
             if let Some(parent) = summary.parent_thread_id.as_deref() {
                 children.entry(parent).or_default().push(summary);
             }
@@ -19,13 +21,13 @@ impl Crew {
             children.sort_by(|a, b| a.created_at.cmp(&b.created_at).then(a.id.cmp(&b.id)));
         }
         let mut seen = std::collections::HashSet::from([root.id.as_str()]);
-        let mut pending = vec![(root.id.as_str(), self.lead().id.clone(), 0)];
+        let mut pending = vec![(root.id.as_str(), root.project_id.as_str(), self.lead().id.clone(), 0)];
         let mut at = 0;
         while at < pending.len() {
-            let (thread, parent_id, depth) = pending[at].clone();
+            let (thread, project, parent_id, depth) = pending[at].clone();
             at += 1;
             for child in children.get(thread).into_iter().flatten() {
-                if !seen.insert(child.id.as_str()) {
+                if (child.project_id != project && !child.cross_project) || !seen.insert(child.id.as_str()) {
                     continue;
                 }
                 let id = format!("session:{}", child.id);
@@ -66,6 +68,7 @@ impl Crew {
                 node.parent_id = Some(parent_id.clone());
                 node.children.clear();
                 node.run_id = None;
+                node.project = (child.project_id != root.project_id).then(|| child.project_id.clone());
                 if node.status.is_live() {
                     crew.counts.agents_running += 1;
                 }
@@ -85,7 +88,7 @@ impl Crew {
                 }
                 crew.names.insert(id.clone(), crew.nodes.len());
                 crew.nodes.push(node);
-                pending.push((child.id.as_str(), id, depth + 1));
+                pending.push((child.id.as_str(), child.project_id.as_str(), id, depth + 1));
             }
         }
         crew
@@ -120,6 +123,48 @@ mod tests {
         );
         assert!(crew.resolve("session:other").is_none());
         assert_eq!(base.counts.total, 0);
+    }
+    fn cross(id: &str, parent: &str, project: &str, status: &str) -> ThreadSummary {
+        ThreadSummary {
+            cross_project: true,
+            ..summary(id, Some(parent), project, status)
+        }
+    }
+    #[test]
+    fn a_cross_project_child_brings_its_subtree_and_unrelated_projects_stay_out() {
+        let root = summary("root", None, "p", "running");
+        let sessions = [
+            root.clone(),
+            cross("away", "root", "q", "running"),
+            summary("near", Some("away"), "q", "approval"),
+            cross("far", "near", "r", "idle"),
+            // A link to another project without the flag, its child, and a session of another project with no link.
+            summary("stray", Some("root"), "q", "running"),
+            summary("under-stray", Some("stray"), "q", "running"),
+            summary("unrelated", None, "q", "running"),
+        ];
+        let crew = fold_crew(&[], SessionAgent::Claude).with_linked_sessions(Some(&root), &sessions);
+        let node = |id: &str| crew.resolve(id).unwrap_or_else(|| panic!("{id} in the crew"));
+        assert_eq!(node("session:away").parent_id.as_deref(), Some(LEAD_ID));
+        assert_eq!(node("session:near").parent_id.as_deref(), Some("session:away"));
+        assert_eq!(node("session:far").parent_id.as_deref(), Some("session:near"));
+        assert_eq!(node("session:far").depth, 3);
+        let projects = ["session:away", "session:near", "session:far"].map(|id| node(id).project.clone());
+        assert_eq!(projects, [Some("q".into()), Some("q".into()), Some("r".into())]);
+        for id in ["session:stray", "session:under-stray", "session:unrelated"] {
+            assert!(crew.resolve(id).is_none(), "{id} stays out");
+        }
+        assert_eq!(
+            (crew.counts.total, crew.counts.agents_running, crew.counts.needs),
+            (3, 2, 1)
+        );
+    }
+    #[test]
+    fn a_child_in_the_leads_project_names_no_project() {
+        let root = summary("root", None, "p", "running");
+        let crew = fold_crew(&[], SessionAgent::Claude)
+            .with_linked_sessions(Some(&root), &[summary("child", Some("root"), "p", "idle")]);
+        assert_eq!(crew.resolve("session:child").map(|n| n.project.clone()), Some(None));
     }
     #[test]
     fn cycles_do_not_duplicate_the_root_or_a_member() {

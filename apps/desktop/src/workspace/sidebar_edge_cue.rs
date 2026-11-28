@@ -473,7 +473,7 @@ impl Workspace {
             .filter(|session| !session.archived && !session.settled && session.snoozed_until.is_none())
     }
 
-    fn project_name(&self, id: &str) -> SharedString {
+    pub(super) fn project_name(&self, id: &str) -> SharedString {
         self.projects
             .iter()
             .find(|project| project.id == id)

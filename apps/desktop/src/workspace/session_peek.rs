@@ -1,5 +1,6 @@
 //! The card a Code session's sidebar row shows once the pointer rests on it (Codex's thread hover card): the whole
-//! title, its age and state, where it works (project, server, branch), the agent and model, and its pull request.
+//! title, its age and state, its parent when that is in another project (`cross_project.rs`), where it works (project,
+//! server, branch), the agent and model, and its pull request.
 //! It opens beside the sidebar, level with the row, so the list under the pointer stays in sight.
 //!
 //! The first card waits out [`DELAY`], so passing over the list opens nothing. Once one shows, the next row's card
@@ -254,6 +255,7 @@ impl Workspace {
         let pull = crate::pr_watch::summary(&session.id)
             .and_then(|(watch, summary)| super::session_peek_pull::body(&watch, &summary, palette));
         let has_pull = pull.is_some();
+        let parent = self.cross_project_line(session);
         let content = v_flex()
             .w_full()
             .flex_none()
@@ -293,6 +295,7 @@ impl Workspace {
             .child(
                 v_flex()
                     .gap(px(6.))
+                    .when_some(parent, |lines, parent| lines.child(parent_line(parent, palette)))
                     .when_some(project, |lines, project| lines.child(line(Lucide::Folder, project)))
                     .when_some(machine, |lines, machine| lines.child(line(Lucide::Server, machine)))
                     .when_some(session.branch.clone(), |lines, branch| {
@@ -305,6 +308,37 @@ impl Workspace {
             });
         frame(content, has_pull, palette, window)
     }
+}
+
+/// Its most lines. The text builder cuts a long parent title so the line fits them with its project shown
+/// (`cross_project::LINE_BUDGET`); the clamp and its ellipsis only guard against an unusually wide font.
+const PARENT_LINES: usize = 3;
+
+/// A cross-project subsession's parent line (`cross_project::subsession_line`). It wraps, unlike the card's other
+/// lines, so the parent's title and project read whole. The icon stays level with the first line.
+fn parent_line(text: String, palette: Palette) -> Div {
+    h_flex()
+        .w_full()
+        .min_w(px(0.))
+        .items_start()
+        .gap(px(8.))
+        .child(
+            div()
+                .mt(px(2.))
+                .flex_none()
+                .child(glyph(Lucide::Workflow, palette.faint).size(px(14.))),
+        )
+        .child(
+            div()
+                .flex_1()
+                .min_w(px(0.))
+                .whitespace_normal()
+                .line_height(px(18.))
+                .line_clamp(PARENT_LINES)
+                .text_ellipsis()
+                .debug_selector(|| "session-peek-parent".into())
+                .child(text),
+        )
 }
 
 pub(super) fn frame(content: Div, has_pull: bool, palette: Palette, window: &Window) -> Stateful<Div> {
@@ -324,6 +358,10 @@ pub(super) fn frame(content: Div, has_pull: bool, palette: Palette, window: &Win
         .debug_selector(|| "session-peek-card".into())
         .child(content)
 }
+
+#[cfg(test)]
+#[path = "session_peek_parent_tests.rs"]
+mod parent_tests;
 
 #[cfg(test)]
 mod tests {
