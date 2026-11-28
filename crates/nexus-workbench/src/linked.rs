@@ -110,6 +110,9 @@ pub struct Subsessions {
     /// "Disable cross-agent subsessions": a subsession runs only its parent's agent, on every route
     /// ([`Config::cross_agent_off`](crate::Config::cross_agent_off)). Off by default.
     pub cross_agent_off: bool,
+    /// "Enable cross-project subsessions": `start_session` may start a subsession in another project open here
+    /// ([`Config::cross_project_on`](crate::Config::cross_project_on), [`cross_project`]). On by default.
+    pub cross_project_on: bool,
 }
 
 impl Default for Subsessions {
@@ -119,6 +122,7 @@ impl Default for Subsessions {
             first_start: crate::session_choice::Preference::Ask,
             limits: Limits::default(),
             cross_agent_off: false,
+            cross_project_on: true,
         }
     }
 }
@@ -335,6 +339,7 @@ impl Workbench {
         {
             let mut config = self.inner.config.lock().unwrap_or_else(|p| p.into_inner());
             config.cross_agent_off = subsessions.cross_agent_off;
+            config.cross_project_on = subsessions.cross_project_on;
             config.subsessions = subsessions.on;
             config.subsessions_first_start = subsessions.first_start;
         }

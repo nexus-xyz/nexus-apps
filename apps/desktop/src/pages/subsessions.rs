@@ -382,6 +382,14 @@ impl Render for SubsessionsPage {
                     |settings, on| settings.disable_cross_agent_subsessions = on,
                     cx,
                 ))
+                .child(self.on_off(
+                    "subsessions-cross-project",
+                    "Enable cross-project subsessions",
+                    "Let a subsession run in another open, trusted project.",
+                    self.settings.cross_project_subsessions_on(),
+                    |settings, on| settings.cross_project_subsessions = Some(on),
+                    cx,
+                ))
                 .child(self.first_start(palette, cx))
                 .child(self.on_off(
                     "subsessions-limits",

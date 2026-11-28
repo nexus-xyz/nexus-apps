@@ -448,8 +448,8 @@ pub struct Config {
     /// "Disable cross-agent subsessions" ([`Subsessions::cross_agent_off`]): `start_session` and `schedule_session`
     /// refuse another agent than the caller's, on every route.
     pub cross_agent_off: bool,
-    /// "Enable cross-project subsessions": `start_session` may start a subsession in another project open here
-    /// ([`linked::cross_project`]). On by default.
+    /// "Enable cross-project subsessions" ([`Subsessions::cross_project_on`]): `start_session` may start a subsession
+    /// in another project open here ([`linked::cross_project`]). On by default.
     pub cross_project_on: bool,
     /// The deadlines of the agents' MCP server ([`orchestra`]).
     pub orchestra_timing: orchestra::Timing,
@@ -490,7 +490,7 @@ impl Default for Config {
             subsessions: Subsessions::default().on,
             subsessions_first_start: Subsessions::default().first_start,
             cross_agent_off: Subsessions::default().cross_agent_off,
-            cross_project_on: true,
+            cross_project_on: Subsessions::default().cross_project_on,
             orchestra_timing: orchestra::Timing::default(),
             terminal: false,
             remote_pairing_preview: computer::remote_pairing_preview(),

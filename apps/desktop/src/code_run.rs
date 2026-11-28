@@ -765,6 +765,7 @@ impl CodeRunner {
             subsessions: settings.subsessions_on(),
             subsessions_first_start: settings.subsessions().first_start,
             cross_agent_off: settings.subsessions().cross_agent_off,
+            cross_project_on: settings.subsessions().cross_project_on,
             worktrees: Some(worktrees),
             reviews: Some(reviews),
             accounts: Some(data.join("accounts")),

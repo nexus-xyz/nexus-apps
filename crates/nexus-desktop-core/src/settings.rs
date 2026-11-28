@@ -163,6 +163,10 @@ pub struct Settings {
     /// and written only when on.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub disable_cross_agent_subsessions: bool,
+    /// "Enable cross-project subsessions": a subsession may run in another project open on this computer. Default true
+    /// ([`Settings::cross_project_subsessions_on`]); written only once the person changed it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cross_project_subsessions: Option<bool>,
     /// The Gateways signed in to before, other than the current one (`gateway_url`, whose organization and kind are
     /// `org` and `kind`). Settings lists them to switch back without signing in again.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -671,6 +675,11 @@ impl Settings {
         self.subsessions.unwrap_or(true)
     }
 
+    /// Cross-project subsessions: on unless the person turned them off.
+    pub fn cross_project_subsessions_on(&self) -> bool {
+        self.cross_project_subsessions.unwrap_or(true)
+    }
+
     /// The switch and the limits, as the engine applies them (`Workbench::set_subsessions`).
     pub fn subsessions(&self) -> Subsessions {
         Subsessions {
@@ -678,6 +687,7 @@ impl Settings {
             first_start: self.subsessions_first_start.unwrap_or_default(),
             limits: self.linked_limits(),
             cross_agent_off: self.disable_cross_agent_subsessions,
+            cross_project_on: self.cross_project_subsessions_on(),
         }
     }
 }
@@ -1074,6 +1084,31 @@ mod tests {
         );
     }
 
+    /// Cross-project subsessions are on in a file written before the switch, reach the engine, and round-trip. Only a
+    /// choice the person made is written.
+    #[test]
+    fn cross_project_subsessions_are_on_unless_turned_off() {
+        let older: Settings = serde_json::from_str(r#"{"subsessions":true}"#).expect("a file without the switch reads");
+        assert!(older.cross_project_subsessions_on() && older.subsessions().cross_project_on);
+        assert_eq!(
+            serde_json::to_value(&older).expect("the settings serialize"),
+            serde_json::json!({ "subsessions": true }),
+            "nothing is written for the switch never touched"
+        );
+        for on in [false, true] {
+            let set = Settings {
+                cross_project_subsessions: Some(on),
+                ..Settings::default()
+            };
+            let saved = serde_json::to_value(&set).expect("the settings serialize");
+            assert_eq!(saved, serde_json::json!({ "crossProjectSubsessions": on }));
+            let again: Settings = serde_json::from_value(saved).expect("the setting reads");
+            assert_eq!(again, set, "it round-trips");
+            assert_eq!(again.subsessions().cross_project_on, on);
+            assert!(again.subsessions().on, "the switch does not turn subsessions off");
+        }
+    }
+
     /// Subsessions are on in a file written before the switch, and only a choice the person made is written.
     #[test]
     fn subsessions_are_on_unless_turned_off() {
@@ -1087,6 +1122,7 @@ mod tests {
                 first_start: Preference::Ask,
                 limits: older.linked_limits(),
                 cross_agent_off: false,
+                cross_project_on: true,
             }
         );
         assert_eq!(
