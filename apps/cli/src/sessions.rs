@@ -15,7 +15,12 @@ use crate::Context;
 use crate::args::Args;
 use crate::error::{CliError, Error, Result, usage};
 use crate::json::pretty;
+use crate::sessions_wait;
 use crate::style::{Style, pad_end};
+
+#[path = "sessions_desktop.rs"]
+mod desktop;
+pub use desktop::{Desktop, exchange};
 
 pub const SESSIONS_COMMANDS: &[(&str, &str)] = &[
     (
@@ -25,6 +30,10 @@ pub const SESSIONS_COMMANDS: &[(&str, &str)] = &[
     (
         "show <id|name|title> [--turns N] [--json]",
         "A session's status and its latest turns: each prompt, the agent's last answer and how the turn ended. Name a session by its id (a word starting with t_), or by its name or exact title among the newest 200; a name past those goes to the app's own lookup",
+    ),
+    (
+        sessions_wait::USAGE,
+        "Wait for a session to finish, stop, fail or need approval. The default timeout is 1800 seconds. It can run up to 3 seconds past --timeout for one last check.",
     ),
     (
         "start \"<prompt>\" [--project P] [--agent A] [--model M] [--mode M] [--worktree] [--folder] [--name N] [--json]",
@@ -56,12 +65,30 @@ pub const SESSIONS_COMMANDS: &[(&str, &str)] = &[
     ),
 ];
 
-const CLIENT: &str = "nexus CLI";
+pub(crate) const CLIENT: &str = "nexus CLI";
 const NOT_RUNNING: &str = "Nexus for desktop is not running, or its outside access is off.";
 const NOT_RUNNING_HINT: &str = "Open Nexus and turn on Settings › MCP servers › Outside access.";
 const REVOKE_HINT: &str = "Revoke it in Nexus too: Settings › MCP servers › Outside access.";
 /// What the app answers a request with no access, or with revoked access.
 const NO_ACCESS: i64 = -32001;
+const DESKTOP_UNAVAILABLE: &str = "desktop_unavailable";
+const ACCESS_REFUSED: &str = "desktop_access_refused";
+const SESSION_NOT_FOUND: &str = "session_not_found";
+const SESSION_TITLE_AMBIGUOUS: &str = "session_title_ambiguous";
+const NO_ANSWER: &str = "Nexus for desktop did not answer in time.";
+
+pub(crate) fn ends_wait(error: &CliError) -> bool {
+    matches!(
+        error.code,
+        Some(DESKTOP_UNAVAILABLE | ACCESS_REFUSED | SESSION_NOT_FOUND | SESSION_TITLE_AMBIGUOUS)
+    )
+}
+
+/// The app is not running or its outside access is off. After a read succeeded, the app may be restarting.
+pub(crate) fn app_unavailable(error: &CliError) -> bool {
+    error.code == Some(DESKTOP_UNAVAILABLE)
+}
+
 /// How long a request for access waits: the app's prompt waits two minutes for the person.
 const CONNECT_WAIT: Duration = Duration::from_secs(130);
 /// How long a call waits: a start waits up to 90 seconds for the app's window.
@@ -153,106 +180,6 @@ fn write_private(path: &Path, text: &str) -> std::io::Result<()> {
     file.write_all(b"\n")
 }
 
-/// One request line to the app and its one reply line.
-#[cfg(unix)]
-pub fn exchange(path: &Path, request: &Value, wait: Duration) -> Result<Value> {
-    use std::io::{BufRead, BufReader, Write};
-    let not_running = || CliError::hint(NOT_RUNNING, NOT_RUNNING_HINT);
-    let mut stream = std::os::unix::net::UnixStream::connect(path).map_err(|_| not_running())?;
-    let _ = stream.set_read_timeout(Some(wait));
-    let _ = stream.set_write_timeout(Some(Duration::from_secs(5)));
-    writeln!(stream, "{request}").map_err(|_| not_running())?;
-    let mut line = String::new();
-    BufReader::new(stream)
-        .read_line(&mut line)
-        .map_err(|_| CliError::new("Nexus for desktop did not answer in time."))?;
-    serde_json::from_str(&line).map_err(|_| CliError::new("Nexus for desktop's answer did not read.").into())
-}
-
-#[cfg(not(unix))]
-pub fn exchange(_: &Path, _: &Value, _: Duration) -> Result<Value> {
-    Err(CliError::new("Outside access needs Nexus for desktop on macOS or Linux.").into())
-}
-
-/// A connection to the app as one client: its socket, its name, and its token once granted.
-pub struct Desktop<'a> {
-    ctx: &'a Context,
-    path: PathBuf,
-    client: String,
-}
-
-impl<'a> Desktop<'a> {
-    pub fn new(ctx: &'a Context, client: &str) -> Result<Desktop<'a>> {
-        let path =
-            socket(ctx).ok_or_else(|| CliError::new("Outside access needs Nexus for desktop on macOS or Linux."))?;
-        Ok(Desktop {
-            ctx,
-            path,
-            client: client.to_string(),
-        })
-    }
-
-    /// Asks the app for access (`read` or `act`); the person answers in the app. Saves and returns the token.
-    pub fn connect(&self, scope: &str) -> Result<(String, String)> {
-        self.ctx.io.err(&format!(
-            "Approve “{}” in Nexus for desktop: it asks you now.",
-            self.client
-        ));
-        let reply = exchange(
-            &self.path,
-            &json!({"client": self.client, "connect": scope}),
-            CONNECT_WAIT,
-        )?;
-        let (Some(token), Some(granted)) = (reply["token"].as_str(), reply["scope"].as_str()) else {
-            let why = reply["error"]["message"].as_str().unwrap_or("no answer");
-            return Err(CliError::new(format!("Nexus for desktop did not grant access: {why}")).into());
-        };
-        save_token(self.ctx, &self.client, Some(token))?;
-        Ok((token.to_string(), granted.to_string()))
-    }
-
-    pub fn forget(&self) -> Result<()> {
-        save_token(self.ctx, &self.client, None)
-    }
-
-    /// Sends one MCP message with the saved token, asking for access first when there is none, and once more when the
-    /// app no longer knows the token (revoked).
-    pub fn send(&self, message: &Value) -> Result<Value> {
-        let saved = saved_token(self.ctx, &self.client);
-        let fresh = saved.is_none();
-        let token = match saved {
-            Some(token) => token,
-            None => self.connect("act")?.0,
-        };
-        let reply = exchange(&self.path, &json!({"token": token, "message": message}), CALL_WAIT)?;
-        if reply["error"]["code"].as_i64() != Some(NO_ACCESS) {
-            return Ok(reply);
-        }
-        self.forget()?;
-        if fresh {
-            return Ok(reply);
-        }
-        let token = self.connect("act")?.0;
-        exchange(&self.path, &json!({"token": token, "message": message}), CALL_WAIT)
-    }
-
-    /// Calls tool `name`: its structured answer, or its error as the CLI's.
-    pub fn call(&self, name: &str, arguments: Value) -> Result<Value> {
-        let reply = self.send(&json!({
-            "jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": {"name": name, "arguments": arguments}
-        }))?;
-        if let Some(message) = reply["error"]["message"].as_str() {
-            return Err(CliError::new(message).into());
-        }
-        let result = &reply["result"];
-        if result["isError"] == true {
-            let text = result["content"][0]["text"].as_str().unwrap_or("The tool failed.");
-            return Err(CliError::new(text).into());
-        }
-        Ok(result["structuredContent"].clone())
-    }
-}
-
 /// The text of argument `word`, or stdin when it is `-`.
 fn text_of(ctx: &Context, word: Option<&String>, what: &str, usage_line: &str) -> Result<String> {
     let text = match word.map(String::as_str) {
@@ -266,6 +193,10 @@ fn text_of(ctx: &Context, word: Option<&String>, what: &str, usage_line: &str) -
     Ok(text)
 }
 
+fn session_not_found(message: &str, word: &str) -> bool {
+    message == format!("No session {word}.")
+}
+
 /// The session `word` names: its id, else its name in any case, else its exact title. A word that starts with `t_` is
 /// an id and goes to the app as it is, with no list: so a title that starts with `t_` is read as an id (a name never
 /// starts with `t_`). Any other word is first the name of one of the newest 200 sessions. A name is unique ignoring
@@ -273,7 +204,7 @@ fn text_of(ctx: &Context, word: Option<&String>, what: &str, usage_line: &str) -
 /// trimmed), the app's own lookup (id, then name, among all its sessions) runs first, because a name wins over a
 /// title: its session when it finds one, the title's only on its "No session" answer. When nothing matches, `word`
 /// goes to the app as it is. Several sessions with that title are refused with their ids.
-fn session_of(desktop: &Desktop, word: &str) -> Result<String> {
+pub(crate) fn session_of(desktop: &Desktop, word: &str) -> Result<String> {
     if word.starts_with(ID_PREFIX) {
         return Ok(word.to_string());
     }
@@ -281,19 +212,18 @@ fn session_of(desktop: &Desktop, word: &str) -> Result<String> {
         .call("list_sessions", json!({"archived": true, "limit": TITLE_LIMIT}))
         .map_err(|error| {
             // Keep the cause's hint: "not running" still says how to turn outside access on.
-            let hint = match &error {
-                Error::Cli(error) => error.hint.clone(),
-                _ => None,
-            };
-            let cause = message_of(&error);
-            let message = format!(
-                "Could not look up the title “{word}”: {}. Name the session by its id.",
-                cause.trim_end_matches('.')
-            );
-            Error::from(CliError {
-                hint,
-                ..CliError::new(message)
-            })
+            if let Error::Cli(cause) = &error {
+                if cause.code == Some(ACCESS_REFUSED) {
+                    return error;
+                }
+                let message = title_lookup_error(word, &cause.message);
+                return CliError {
+                    message,
+                    ..cause.clone()
+                }
+                .into();
+            }
+            CliError::new(title_lookup_error(word, &message_of(&error))).into()
         })?;
     let sessions = listed["sessions"].as_array().cloned().unwrap_or_default();
     if let Some(id) = sessions
@@ -323,18 +253,29 @@ fn session_of(desktop: &Desktop, word: &str) -> Result<String> {
                 return Ok(id.to_string());
             }
         }
-        Err(error) if message_of(&error) == format!("No session {word}.") => {}
+        Err(error) if session_not_found(&message_of(&error), word) => {}
         Err(error) => return Err(error),
     }
     match ids.as_slice() {
         [id] => Ok((*id).to_string()),
-        _ => Err(CliError::new(format!(
-            "{} sessions are titled “{word}”: {}. Name one by its id.",
-            ids.len(),
-            ids.join(", ")
-        ))
-        .into()),
+        _ => Err(desktop
+            .cli_error(
+                format!(
+                    "{} sessions are titled “{word}”: {}. Name one by its id.",
+                    ids.len(),
+                    ids.join(", ")
+                ),
+                SESSION_TITLE_AMBIGUOUS,
+            )
+            .into()),
     }
+}
+
+fn title_lookup_error(word: &str, cause: &str) -> String {
+    format!(
+        "Could not look up the title “{word}”: {}. Name the session by its id.",
+        cause.trim_end_matches('.')
+    )
 }
 
 fn number(args: &Args, name: &str) -> Result<Option<u64>> {
@@ -350,7 +291,7 @@ fn number(args: &Args, name: &str) -> Result<Option<u64>> {
 pub fn sessions_help(style: &Style) -> Vec<String> {
     let mut lines = vec![
         format!(
-            "{}  nexus sessions [list|show|start|send|stop|name|connect|disconnect|mcp]",
+            "{}  nexus sessions [list|show|wait|start|send|stop|name|connect|disconnect|mcp]",
             style.bold("Usage")
         ),
         String::new(),
@@ -418,8 +359,8 @@ pub fn sessions_command(rest: &[String], ctx: &Context, args: &Args, json: bool,
         "help" => {
             if json {
                 return print(&json!({
-                    "usage": "nexus sessions [list|show|start|send|stop|name|connect|disconnect|mcp]",
-                    "commands": ["list", "show", "start", "send", "stop", "name", "connect", "disconnect", "mcp"],
+                    "usage": "nexus sessions [list|show|wait|start|send|stop|name|connect|disconnect|mcp]",
+                    "commands": ["list", "show", "wait", "start", "send", "stop", "name", "connect", "disconnect", "mcp"],
                 }));
             }
             for line in sessions_help(style) {
@@ -500,6 +441,10 @@ pub fn sessions_command(rest: &[String], ctx: &Context, args: &Args, json: bool,
                 }
             }
             Ok(0)
+        }
+        "wait" => {
+            let word = word_of(sessions_wait::COMMAND)?;
+            sessions_wait::command(ctx, style, word, args)
         }
         "start" => {
             const USAGE: &str =
@@ -609,7 +554,7 @@ pub fn sessions_command(rest: &[String], ctx: &Context, args: &Args, json: bool,
         }
         other => usage(
             format!("Unknown sessions command: {other}."),
-            Some("nexus sessions [list|show|start|send|stop|name|connect|disconnect|mcp]"),
+            Some("nexus sessions [list|show|wait|start|send|stop|name|connect|disconnect|mcp]"),
         ),
     }
 }
@@ -663,3 +608,7 @@ fn message_of(error: &Error) -> String {
         Error::Transport(error) => format!("{error:?}"),
     }
 }
+
+#[cfg(all(test, unix))]
+#[path = "sessions_desktop_tests.rs"]
+mod sessions_wait_desktop_tests;

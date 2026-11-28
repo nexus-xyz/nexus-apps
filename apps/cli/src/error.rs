@@ -292,9 +292,14 @@ pub fn error_text(style: &Style, error: &CliError) -> String {
         code(style, &safe_text(&error.message))
     );
     if let Some(hint) = &error.hint {
-        text.push_str(&format!("\n  {} {}", style.arrow, code(style, &safe_text(hint))));
+        text.push('\n');
+        text.push_str(&hint_text(style, hint));
     }
     text
+}
+
+pub(crate) fn hint_text(style: &Style, hint: &str) -> String {
+    format!("  {} {}", style.arrow, code(style, &safe_text(hint)))
 }
 
 #[cfg(test)]

@@ -3659,13 +3659,14 @@
     },
     {
       "name": "sessions",
-      "usage": "nexus sessions [list|show|start|send|stop|name|connect|disconnect|mcp] [--json]",
-      "description": "Code sessions in Nexus for desktop, on this computer: list, read, start, name, message and stop them from a script or another agent. Turn on Outside access in the app first; each client asks you once",
+      "usage": "nexus sessions [list|show|wait|start|send|stop|name|connect|disconnect|mcp] [--json]",
+      "description": "List, start, read, name, message, wait for or stop local Code sessions from a script or another agent. Turn on Outside access in the app first. Each client asks once.",
       "examples": [
         "nexus sessions list",
         "nexus sessions start --project . \"Find why the tests are slow\"",
         "nexus sessions send <id> \"Now fix it\"",
         "nexus sessions show <id>",
+        "nexus sessions wait <id>",
         "nexus sessions mcp --name \"Claude Code\""
       ],
       "subcommands": [
@@ -3708,6 +3709,19 @@
             {
               "name": "--json",
               "description": "Print only JSON on stdout"
+            }
+          ],
+          "examples": []
+        },
+        {
+          "name": "sessions wait",
+          "usage": "nexus sessions wait <id|name|title> [--timeout S]",
+          "description": "Wait for a session to finish, stop, fail or need approval. The default timeout is 1800 seconds. It can run up to 3 seconds past --timeout for one last check.",
+          "flags": [
+            {
+              "name": "--timeout",
+              "value": "<S>",
+              "description": "Wait up to this many seconds (default 1800)"
             }
           ],
           "examples": []

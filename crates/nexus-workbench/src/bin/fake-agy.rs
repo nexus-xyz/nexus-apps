@@ -18,6 +18,13 @@ use serde_json::{Value, json};
 const ASK: &str = "agy-ask";
 
 fn main() {
+    if let Ok(path) = std::env::var("FAKE_LAUNCH_RECORD") {
+        let session_id = std::env::var("NEXUS_SESSION_ID").ok();
+        let staged = format!("{path}.tmp");
+        std::fs::write(&staged, json!({"env": {"NEXUS_SESSION_ID": session_id}}).to_string())
+            .expect("write launch record");
+        std::fs::rename(staged, path).expect("save launch record");
+    }
     let cursor_dir = std::env::var("FAKE_CURSOR_DIR").ok();
     let cursor = cursor_dir.is_some();
     let folder = std::path::PathBuf::from(

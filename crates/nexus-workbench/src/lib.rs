@@ -5238,6 +5238,7 @@ impl Workbench {
                 return fail(self, UNSAVED.into(), Some(error));
             }
         }
+        launch.spawn.env.insert("NEXUS_SESSION_ID".into(), thread_id.clone());
         let started = Instant::now();
         let spawned = if live.saved_provider {
             local_provider::while_allowed(self.inner.host.as_ref(), || process::spawn(&launch.spawn))

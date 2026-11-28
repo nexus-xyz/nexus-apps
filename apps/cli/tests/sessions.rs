@@ -19,6 +19,7 @@ struct Seen {
     calls: Vec<Value>,
     valid: HashSet<String>,
     issued: usize,
+    revoke_after_show: bool,
     /// What `list_sessions` answers.
     sessions: Vec<Value>,
     /// When set, `list_sessions` fails with this text.
@@ -105,6 +106,9 @@ fn fake_app(dir: &Path, deny: bool, scope: Option<&'static str>) -> (PathBuf, Ar
                     }
                 }
             };
+            if seen.revoke_after_show && request["message"]["params"]["name"] == "show_session" {
+                seen.valid.clear();
+            }
             drop(seen);
             let _ = writeln!(stream, "{reply}");
         }
@@ -623,3 +627,5 @@ fn relays_mcp_messages_and_answers_initialize_itself() {
     assert_eq!(seen.calls.len(), 1);
     assert_eq!(seen.calls[0]["method"], "tools/list");
 }
+
+mod wait;

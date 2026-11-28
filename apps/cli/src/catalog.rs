@@ -1077,7 +1077,7 @@ pub fn help_groups() -> Vec<HelpGroup> {
                 "Screen recordings from Nexus for Mac (⌥⇧S): nexus claude --recording latest starts on one",
             ),
             (
-                "sessions [list|show|start|send|stop]",
+                "sessions [list|show|wait|start|send|stop]",
                 "Code sessions in Nexus for desktop, from scripts and other agents (turn on Outside access in the app)",
             ),
             (
@@ -1780,6 +1780,7 @@ const FLAG_TEXT: &[(&str, &str)] = &[
     ("sessions --archived", "Archived sessions too"),
     ("sessions --limit", "At most this many sessions (1 to 200, default 50)"),
     ("sessions --turns", "How many of the latest turns (1 to 20, default 3)"),
+    ("sessions --timeout", "Wait up to this many seconds (default 1800)"),
     ("sessions --model", "The model; default: the project's"),
     (
         "sessions --mode",
@@ -2966,13 +2967,14 @@ pub fn command_catalog(version: &str) -> Value {
         )],
         ..lit(
             "sessions",
-            "nexus sessions [list|show|start|send|stop|name|connect|disconnect|mcp] [--json]",
-            "Code sessions in Nexus for desktop, on this computer: list, read, start, name, message and stop them from a script or another agent. Turn on Outside access in the app first; each client asks you once",
+            "nexus sessions [list|show|wait|start|send|stop|name|connect|disconnect|mcp] [--json]",
+            "List, start, read, name, message, wait for or stop local Code sessions from a script or another agent. Turn on Outside access in the app first. Each client asks once.",
             &[
                 "nexus sessions list",
                 "nexus sessions start --project . \"Find why the tests are slow\"",
                 "nexus sessions send <id> \"Now fix it\"",
                 "nexus sessions show <id>",
+                "nexus sessions wait <id>",
                 "nexus sessions mcp --name \"Claude Code\"",
             ],
         )

@@ -63,6 +63,7 @@ pub mod search;
 pub mod service_accounts;
 pub mod session_log;
 pub mod sessions;
+mod sessions_wait;
 mod shared_memory;
 pub mod skill_errors;
 pub mod skill_library;
