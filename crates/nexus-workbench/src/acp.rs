@@ -21,6 +21,8 @@ pub use crate::harness::legacy_acp_args as args;
 pub struct Profile {
     pub name: Cow<'static, str>,
     pub sign_in: Option<Cow<'static, str>>,
+    /// When set, refuse to open if the agent advertises any competing sign-in method.
+    pub subscription_auth: Option<SubscriptionAuth>,
     pub sign_in_help: Cow<'static, str>,
     pub meta: fn() -> Value,
     pub modes: Option<ModeMapping>,
@@ -33,12 +35,36 @@ pub struct Profile {
     pub own_turn_quiet: Duration,
 }
 
+/// Methods a personal subscription session may advertise at initialization.
+pub struct SubscriptionAuth {
+    pub required: &'static str,
+    pub optional: &'static [&'static str],
+}
+
+impl SubscriptionAuth {
+    fn accepts(&self, advertised: &Value) -> bool {
+        let Some(methods) = advertised.as_array() else {
+            return false;
+        };
+        methods
+            .iter()
+            .any(|method| method["id"].as_str() == Some(self.required))
+            && methods.iter().all(|method| {
+                method["id"]
+                    .as_str()
+                    .is_some_and(|id| id == self.required || self.optional.contains(&id))
+            })
+    }
+}
+
 #[derive(Clone, Copy)]
 pub struct ModeMapping {
     pub native: fn(PermissionMode) -> Option<&'static str>,
     pub observed: fn(Option<&str>) -> Option<PermissionMode>,
     /// Require a known opening mode and a successful switch before releasing the first prompt.
     pub confirm_opening: bool,
+    /// Some agents omit the opening mode. Require an explicit set_mode acknowledgement instead.
+    pub accepts_unreported_opening: bool,
     /// Selects a native mode using any available Auto evidence.
     /// Returning the original mode after a refusal means there is no fallback.
     pub requested: fn(PermissionMode, Option<bool>) -> Option<&'static str>,
@@ -460,13 +486,16 @@ impl Driver {
             .and_then(Value::as_str)
             .map(String::from)
             .or_else(|| current("mode"));
+        let observed = self
+            .profile
+            .modes
+            .and_then(|modes| (modes.observed)(opened_in.as_deref()));
         if let Some(modes) = self.profile.modes {
-            let observed = (modes.observed)(opened_in.as_deref());
             if modes.confirm_opening {
                 if (modes.requested)(self.mode, self.auto_offered).is_none() {
                     return self.refuse_opening_mode("This mode is unavailable.");
                 }
-                if observed.is_none() {
+                if observed.is_none() && !modes.accepts_unreported_opening {
                     return self.refuse_opening_mode("The agent did not report a supported mode.");
                 }
             }
@@ -492,7 +521,8 @@ impl Driver {
             settings.extend(self.set_option(asked, "model", &model));
         }
         if let Some(modes) = self.profile.modes
-            && (modes.requested)(self.mode, self.auto_offered) != (modes.native)(self.in_force.1)
+            && ((modes.accepts_unreported_opening && observed.is_none())
+                || (modes.requested)(self.mode, self.auto_offered) != (modes.native)(self.in_force.1))
         {
             settings.extend(self.set_mode(self.mode, None));
         }
@@ -737,6 +767,17 @@ impl Driver {
         let result = message.get("result").cloned().unwrap_or(Value::Null);
         match (asked, error) {
             (Asked::Initialize, None) => {
+                if let Some(auth) = &self.profile.subscription_auth {
+                    if !auth.accepts(&result["authMethods"]) {
+                        return Driver::fail(format!(
+                            "{} could not verify subscription-only authentication. Check the Grok model and API key settings.",
+                            self.profile.name
+                        ));
+                    }
+                    if self.resume && result.pointer("/agentCapabilities/loadSession") != Some(&Value::Bool(true)) {
+                        return Driver::fail(format!("{} does not support loading this session.", self.profile.name));
+                    }
+                }
                 self.version = result
                     .pointer("/agentInfo/version")
                     .and_then(Value::as_str)

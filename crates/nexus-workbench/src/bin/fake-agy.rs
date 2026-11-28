@@ -18,10 +18,14 @@ use serde_json::{Value, json};
 const ASK: &str = "agy-ask";
 
 fn main() {
+    let grok_dir = std::env::var("FAKE_GROK_DIR").ok();
+    let grok = grok_dir.is_some();
+    let ask_id = if grok { json!(0) } else { json!(ASK) };
     let cursor_dir = std::env::var("FAKE_CURSOR_DIR").ok();
     let cursor = cursor_dir.is_some();
     let folder = std::path::PathBuf::from(
-        cursor_dir
+        grok_dir
+            .or(cursor_dir)
             .or_else(|| std::env::var("FAKE_AGY_DIR").ok())
             .unwrap_or_else(|| ".".into()),
     );
@@ -34,6 +38,20 @@ fn main() {
         let _ = writeln!(file, "{line}");
     };
     let args: Vec<String> = std::env::args().skip(1).collect();
+    if grok {
+        assert!(std::env::var_os("XAI_API_KEY").is_none());
+        assert_eq!(std::env::var("GROK_DISABLE_API_KEY_AUTH").as_deref(), Ok("true"));
+        if args == ["inspect", "--json"] {
+            let config = folder.join("config.toml");
+            let layers: Vec<_> = config.is_file().then(|| json!({"path":config})).into_iter().collect();
+            println!(
+                "{}",
+                json!({"loginPolicy": {"apiKeyAuthDisabled": true}, "configSources": {"layers": layers}})
+            );
+            return;
+        }
+        assert_eq!(args, ["agent", "--no-leader", "stdio"]);
+    }
     append("args", &json!(args).to_string());
     // OpenCode's limit on the project's own config (`claude_trust.rs`): its value, or an empty line when unset.
     append(
@@ -49,6 +67,9 @@ fn main() {
     }
     if cursor {
         modes = vec!["agent", "plan", "ask"];
+    }
+    if grok {
+        modes = vec!["ask", "plan"];
     }
     let opens_in = modes[0];
     let mut out = std::io::stdout();
@@ -77,6 +98,18 @@ fn main() {
             }
         };
         match message.get("method").and_then(Value::as_str) {
+            Some("initialize") if grok => {
+                let mut methods = vec![json!({"id": "grok.com"})];
+                if std::env::var_os("FAKE_GROK_CACHED_LOGIN").is_some() {
+                    methods.insert(0, json!({"id":"cached_token"}));
+                }
+                if std::env::var_os("FAKE_GROK_KEY").is_some() {
+                    methods.push(json!({"id": "xai.api_key"}));
+                }
+                say(answer(
+                    json!({"protocolVersion": 1, "agentCapabilities": {"loadSession": true}, "authMethods": methods}),
+                ));
+            }
             Some("initialize") => say(answer(
                 json!({ "protocolVersion": 1, "agentInfo": { "name": "fake agy", "version": "0.0.0-fake" } }),
             )),
@@ -87,6 +120,12 @@ fn main() {
                 let session = params["sessionId"].as_str().unwrap_or("fake-agy-session");
                 if method == "session/load" {
                     append("loads", session);
+                }
+                if grok {
+                    say(answer(
+                        json!({"sessionId": session, "configOptions": [{"id":"model","type":"select","currentValue":"grok-build"}]}),
+                    ));
+                    continue;
                 }
                 let available: Vec<Value> = modes.iter().map(|mode| json!({ "id": mode, "name": mode })).collect();
                 let options: Vec<Value> = modes
@@ -104,7 +143,7 @@ fn main() {
             }
             Some("session/set_mode") => {
                 let mode = params["modeId"].as_str().unwrap_or_default();
-                if cursor && mode == "plan" && std::env::var_os("FAKE_CURSOR_REFUSE_PLAN").is_some() {
+                if (cursor || grok) && mode == "plan" && std::env::var_os("FAKE_CURSOR_REFUSE_PLAN").is_some() {
                     say(
                         json!({ "jsonrpc": "2.0", "id": id, "error": { "code": -32602, "message": "Plan refused by stand-in" } }),
                     );
@@ -118,7 +157,7 @@ fn main() {
             }
             Some("session/set_config_option") => say(answer(json!({}))),
             Some("session/prompt") => {
-                if cursor {
+                if cursor || grok {
                     append("prompts", &params["prompt"].to_string());
                 }
                 let text = params["prompt"]
@@ -129,11 +168,15 @@ fn main() {
                     .to_string();
                 if text.split_whitespace().any(|word| word == "run") {
                     let call = json!({ "toolCallId": "call-ls", "kind": "execute", "title": "ls", "status": "pending", "rawInput": { "command": "ls" } });
+                    let options = if grok {
+                        json!([{"optionId":"always-allow","kind":"allow_always"}, {"optionId":"allow-once","kind":"allow_once"},
+                            {"optionId":"reject-once","kind":"reject_once"}, {"optionId":"reject-always","kind":"reject_always"}])
+                    } else {
+                        json!([{"optionId":"allow","kind":"allow_once"}, {"optionId":"reject","kind":"reject_once"}])
+                    };
                     say(
-                        json!({ "jsonrpc": "2.0", "id": ASK, "method": "session/request_permission", "params": {
-                            "toolCall": call,
-                            "options": [{ "optionId": "allow", "kind": "allow_once" }, { "optionId": "reject", "kind": "reject_once" }],
-                        }}),
+                        json!({"jsonrpc":"2.0","id":ask_id,"method":"session/request_permission",
+                        "params":{"sessionId":params["sessionId"],"toolCall":call,"options":options}}),
                     );
                     waiting = Some((id, text));
                 } else {
@@ -145,7 +188,14 @@ fn main() {
             }
             Some("session/cancel") => {
                 if let Some((prompt, text)) = waiting.take() {
-                    say(end(&prompt, &text, "cancelled"));
+                    if grok {
+                        append("cancels", "session/cancel");
+                        say(
+                            json!({"jsonrpc":"2.0","id":prompt,"result":{"stopReason":"cancelled","_meta":{"cancellationCategory":"MidTurnAbort"}}}),
+                        );
+                    } else {
+                        say(end(&prompt, &text, "cancelled"));
+                    }
                 }
             }
             Some(_) if !id.is_null() => {
@@ -153,11 +203,22 @@ fn main() {
             }
             Some(_) => {}
             // The person's answer to the approval.
-            None if id == ASK => {
+            None if id == ask_id => {
                 let Some((prompt, text)) = waiting.take() else {
                     continue;
                 };
-                let allowed = message.pointer("/result/outcome/optionId") == Some(&json!("allow"));
+                let selected = message.pointer("/result/outcome/optionId").and_then(Value::as_str);
+                if grok {
+                    append("decisions", &message.to_string());
+                    if selected == Some("reject-once") {
+                        say(
+                            json!({"jsonrpc":"2.0","id":prompt,"result":{"stopReason":"cancelled","_meta":{"cancellationCategory":"PermissionRejected"}}}),
+                        );
+                        continue;
+                    }
+                    assert_eq!(selected, Some("allow-once"));
+                }
+                let allowed = matches!(selected, Some("allow" | "allow-once"));
                 let status = if allowed { "completed" } else { "failed" };
                 say(update(
                     json!({ "sessionUpdate": "tool_call_update", "toolCallId": "call-ls", "status": status, "rawOutput": "notes.txt" }),

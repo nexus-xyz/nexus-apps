@@ -43,6 +43,7 @@ pub(crate) fn anchor(agent: SessionAgent) -> &'static str {
         SessionAgent::Antigravity => "agent-antigravity",
         SessionAgent::Cursor => "agent-cursor",
         SessionAgent::Opencode => "agent-opencode",
+        SessionAgent::Grok => "agent-grok",
     }
 }
 

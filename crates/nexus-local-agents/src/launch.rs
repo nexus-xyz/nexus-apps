@@ -77,7 +77,7 @@ pub fn named_model(agent: Agent, args: &[String]) -> Option<String> {
         if arg == "--model" || (short && arg == "-m") {
             return args.get(i + 1).cloned();
         }
-        if short
+        if agent == Agent::Codex
             && (arg == "-c" || arg == "--config")
             && let Some(model) = args.get(i + 1).and_then(|next| config_model(next))
         {
@@ -117,7 +117,7 @@ pub fn replace_model(agent: Agent, args: &[String], model: &str) -> Vec<String> 
             }
             return out;
         }
-        if short
+        if agent == Agent::Codex
             && (arg == "-c" || arg == "--config")
             && out.get(i + 1).is_some_and(|next| {
                 next.strip_prefix("model")

@@ -29,6 +29,7 @@ pub mod antigravity_models;
 pub mod claude_models;
 pub mod codex_models;
 mod codex_rollouts;
+pub mod grok;
 pub mod launch;
 pub mod models;
 pub mod native_memory;

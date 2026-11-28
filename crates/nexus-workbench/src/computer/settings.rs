@@ -42,7 +42,7 @@ pub(crate) fn accepts(choices: &[AgentChoices], agent: SessionAgent, selection: 
 pub(super) fn phone_offers(agent: SessionAgent) -> bool {
     match agent {
         SessionAgent::Claude | SessionAgent::Codex | SessionAgent::Nexus => true,
-        SessionAgent::Antigravity => false,
+        SessionAgent::Antigravity | SessionAgent::Grok => false,
         #[cfg(feature = "cursor")]
         SessionAgent::Cursor => false,
         #[cfg(feature = "opencode")]

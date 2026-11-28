@@ -1,4 +1,4 @@
-//! Local clients have no Grok launcher.
+//! Grok uses the person's own login. Model selection for ACP stays in the session protocol.
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -43,9 +43,9 @@ impl LocalAgentT for Grok {
         None
     }
 
-    // The CLI also constructs a launch to probe capabilities. Only help is available until a launcher ships.
-    fn launch(&self, _options: LaunchOptions) -> (Vec<String>, HashMap<String, String>) {
-        (vec!["--help".into()], HashMap::new())
+    fn launch(&self, mut options: LaunchOptions) -> (Vec<String>, HashMap<String, String>) {
+        crate::grok::subscription_env(&mut options.env);
+        (options.args, options.env)
     }
 
     fn launch_with_credential(
@@ -57,10 +57,17 @@ impl LocalAgentT for Grok {
     }
 
     fn credential_env<'c>(&self, credential: &'c Credential) -> Result<CredentialEnv<'c>, ProviderError> {
-        Err(ProviderError::NotOffered {
-            agent: Agent::Grok,
-            kind: credential.kind(),
-        })
+        match credential {
+            Credential::AgentLogin { account_dir: None, .. } => Ok(CredentialEnv {
+                set: vec![("GROK_DISABLE_API_KEY_AUTH", "true".into())],
+                remove: Agent::Grok.entry().billing.plan_overrides.to_vec(),
+                args: Vec::new(),
+            }),
+            other => Err(ProviderError::NotOffered {
+                agent: Agent::Grok,
+                kind: other.kind(),
+            }),
+        }
     }
 
     fn shell_variable(&self, _name: &str, _value: &str) -> Option<[String; 2]> {
@@ -68,7 +75,7 @@ impl LocalAgentT for Grok {
     }
 
     fn takes_short_model_flags(&self) -> bool {
-        false
+        true
     }
 
     fn provider_model_id(&self, id: &str) -> String {
@@ -88,7 +95,7 @@ impl LocalAgentT for Grok {
     }
 
     fn takes_prompt_argument(&self) -> bool {
-        false
+        true
     }
 
     fn with_recording(&self, args: &[String], _prompt: &str, _sheet: &Path) -> Vec<String> {

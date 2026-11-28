@@ -629,3 +629,21 @@ fn opencode_uses_acp_and_preserves_the_configured_provider_environment() {
     );
     assert_eq!(launch, (args, env));
 }
+
+#[test]
+fn grok_plan_removes_billing_overrides_and_pins_api_key_auth_off() {
+    let (args, env) = least(
+        Agent::Grok,
+        Route::Subscription,
+        &[
+            ("XAI_API_KEY", "fake"),
+            ("GROK_HOME", "/person/grok"),
+            ("GROK_CODE_XAI_API_KEY", "test-only"),
+        ],
+    );
+    assert_eq!(args, Vec::<String>::new());
+    assert_eq!(
+        env,
+        vars(&[("GROK_DISABLE_API_KEY_AUTH", "true"), ("GROK_HOME", "/person/grok")])
+    );
+}

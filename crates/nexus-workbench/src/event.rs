@@ -19,11 +19,12 @@ pub enum SessionAgent {
     Cursor,
     #[cfg(feature = "opencode")]
     Opencode,
+    Grok,
 }
 
 impl SessionAgent {
     /// Every agent, in the order the app lists them.
-    pub const ALL: [SessionAgent; 4 + cfg!(feature = "cursor") as usize + cfg!(feature = "opencode") as usize] = [
+    pub const ALL: [SessionAgent; 5 + cfg!(feature = "cursor") as usize + cfg!(feature = "opencode") as usize] = [
         SessionAgent::Claude,
         SessionAgent::Codex,
         SessionAgent::Nexus,
@@ -32,6 +33,7 @@ impl SessionAgent {
         SessionAgent::Cursor,
         #[cfg(feature = "opencode")]
         SessionAgent::Opencode,
+        SessionAgent::Grok,
     ];
 
     pub fn as_str(self) -> &'static str {
@@ -44,6 +46,7 @@ impl SessionAgent {
             SessionAgent::Cursor => "cursor",
             #[cfg(feature = "opencode")]
             SessionAgent::Opencode => "opencode",
+            SessionAgent::Grok => "grok",
         }
     }
 
@@ -57,6 +60,7 @@ impl SessionAgent {
             "cursor" => Some(SessionAgent::Cursor),
             #[cfg(feature = "opencode")]
             "opencode" => Some(SessionAgent::Opencode),
+            "grok" => Some(SessionAgent::Grok),
             _ => None,
         }
     }
@@ -79,6 +83,7 @@ impl SessionAgent {
             SessionAgent::Cursor => SessionKind::Coding(nexus_agents::Agent::Cursor),
             #[cfg(feature = "opencode")]
             SessionAgent::Opencode => SessionKind::Coding(nexus_agents::Agent::Opencode),
+            SessionAgent::Grok => SessionKind::Coding(nexus_agents::Agent::Grok),
         }
     }
 
@@ -139,7 +144,7 @@ impl TryFrom<nexus_agents::Agent> for SessionAgent {
             nexus_agents::Agent::Cursor => Ok(SessionAgent::Cursor),
             #[cfg(feature = "opencode")]
             nexus_agents::Agent::Opencode => Ok(SessionAgent::Opencode),
-            nexus_agents::Agent::Grok => Err(agent),
+            nexus_agents::Agent::Grok => Ok(SessionAgent::Grok),
             #[cfg(not(feature = "cursor"))]
             nexus_agents::Agent::Cursor => Err(agent),
             #[cfg(not(feature = "opencode"))]
@@ -1201,6 +1206,7 @@ mod tests {
                 "cursor",
                 #[cfg(feature = "opencode")]
                 "opencode",
+                "grok",
             ]
         );
     }
@@ -1217,9 +1223,10 @@ mod tests {
             SessionAgent::Cursor => 4,
             #[cfg(feature = "opencode")]
             SessionAgent::Opencode => 4 + cfg!(feature = "cursor") as usize,
+            SessionAgent::Grok => 4 + cfg!(feature = "cursor") as usize + cfg!(feature = "opencode") as usize,
         }
     }
-    const PLACES: usize = 4 + cfg!(feature = "cursor") as usize + cfg!(feature = "opencode") as usize;
+    const PLACES: usize = 5 + cfg!(feature = "cursor") as usize + cfg!(feature = "opencode") as usize;
 
     /// `ALL` is written by hand: every variant is in it once, at its place.
     #[test]
@@ -1280,6 +1287,7 @@ mod tests {
             SessionAgent::Cursor => SessionKind::Coding(nexus_agents::Agent::Cursor),
             #[cfg(feature = "opencode")]
             SessionAgent::Opencode => SessionKind::Coding(nexus_agents::Agent::Opencode),
+            SessionAgent::Grok => SessionKind::Coding(nexus_agents::Agent::Grok),
         };
         for agent in SessionAgent::ALL {
             assert_eq!(agent.kind(), expected(agent), "{agent:?}");

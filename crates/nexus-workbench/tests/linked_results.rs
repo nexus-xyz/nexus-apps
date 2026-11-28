@@ -86,6 +86,7 @@ async fn happy_wait(name: &str, agent: SessionAgent) {
         SessionAgent::Claude => "Message 1 of this session.",
         SessionAgent::Codex => "Message 1 of this thread.",
         // Not among the agents this test runs.
+        SessionAgent::Grok => unreachable!("not among the agents this test runs"),
         #[cfg(feature = "cursor")]
         SessionAgent::Cursor => unreachable!("not among the agents this test runs"),
         #[cfg(feature = "opencode")]

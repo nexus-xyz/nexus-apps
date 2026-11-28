@@ -90,11 +90,13 @@ pub(crate) fn instructions() -> String {
 pub(crate) const ACP_PROFILE: Profile = Profile {
     name: Cow::Borrowed("Antigravity"),
     sign_in: Some(Cow::Borrowed(SIGN_IN)),
+    subscription_auth: None,
     sign_in_help: Cow::Borrowed("Run `agy` in a terminal and sign in with Google"),
     meta: || json!({ "antigravity": { "systemPrompt": { "append": instructions() } } }),
     modes: Some(ModeMapping {
         native: |mode| Some(mode_id(mode)),
         observed: |id| Some(mode_of(id)),
+        accepts_unreported_opening: false,
         confirm_opening: false,
         requested: |mode, auto| Some(acp_mode_id(mode, auto)),
     }),

@@ -19,6 +19,7 @@ pub(crate) mod antigravity;
 pub(crate) mod claude;
 pub(crate) mod codex;
 pub(crate) mod cursor;
+mod grok;
 pub(crate) mod nexus;
 mod opencode;
 
@@ -346,6 +347,7 @@ pub fn harness(agent: SessionAgent) -> &'static dyn Harness {
         SessionAgent::Cursor => &nexus_agents::Cursor,
         #[cfg(feature = "opencode")]
         SessionAgent::Opencode => &nexus_agents::Opencode,
+        SessionAgent::Grok => &nexus_agents::Grok,
         SessionAgent::Nexus => &Nexus,
     }
 }
@@ -424,6 +426,7 @@ mod tests {
             SessionAgent::Antigravity => ("Antigravity", "Antigravity", "gemini-3.8-flash", "gemini-3.8-flash"),
             #[cfg(feature = "cursor")]
             SessionAgent::Cursor => ("Cursor", "Cursor", "default", "default"),
+            SessionAgent::Grok => ("Grok", "Grok", "default", "default"),
             #[cfg(feature = "opencode")]
             SessionAgent::Opencode => ("OpenCode", "OpenCode", "fake/model", "fake/model"),
         };
@@ -450,7 +453,7 @@ mod tests {
                 SessionAgent::Claude => &[Low, Medium, High, Xhigh, Max],
                 SessionAgent::Codex => &[Low, Medium, High, Xhigh, Max, Ultra],
                 SessionAgent::Antigravity => &[Low, Medium, High],
-                SessionAgent::Nexus => &[],
+                SessionAgent::Nexus | SessionAgent::Grok => &[],
                 #[cfg(feature = "cursor")]
                 SessionAgent::Cursor => &[],
                 #[cfg(feature = "opencode")]
@@ -466,7 +469,7 @@ mod tests {
             let (limits, tier, fork) = match agent {
                 SessionAgent::Claude | SessionAgent::Codex => (true, true, true),
                 SessionAgent::Antigravity => (true, false, true),
-                SessionAgent::Nexus => (false, false, false),
+                SessionAgent::Nexus | SessionAgent::Grok => (false, false, false),
                 #[cfg(feature = "cursor")]
                 SessionAgent::Cursor => (false, false, false),
                 #[cfg(feature = "opencode")]

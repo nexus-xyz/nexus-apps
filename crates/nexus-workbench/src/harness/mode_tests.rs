@@ -140,6 +140,7 @@ fn every_agent_has_a_supported_default_mode() {
     for agent in SessionAgent::ALL {
         let harness = harness(agent);
         let expected: &[PermissionMode] = match agent {
+            SessionAgent::Grok => &[PermissionMode::Default, PermissionMode::Plan],
             #[cfg(feature = "cursor")]
             SessionAgent::Cursor => &[PermissionMode::AcceptEdits, PermissionMode::Plan],
             #[cfg(feature = "opencode")]

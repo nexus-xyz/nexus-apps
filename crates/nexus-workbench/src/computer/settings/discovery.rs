@@ -23,6 +23,7 @@ fn vendor(agent: SessionAgent) -> &'static str {
         SessionAgent::Codex => "openai",
         SessionAgent::Nexus => "nexus",
         SessionAgent::Antigravity => "google",
+        SessionAgent::Grok => "xai",
         #[cfg(feature = "cursor")]
         SessionAgent::Cursor => "cursor",
         #[cfg(feature = "opencode")]

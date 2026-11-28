@@ -512,6 +512,7 @@ fn outside_access_and_the_pull_request_watch_reach_the_services_sessions() {
 
     // Outside access: its tools list, show and message the service's session.
     let outside = crate::outside::GpuiOutside {
+        local_plans: nexus_workbench::provider::LocalProvidersOptIn::Disabled,
         api: runner.api.clone(),
         runtime: runtime(),
         org: Arc::new(|| "acme".into()),

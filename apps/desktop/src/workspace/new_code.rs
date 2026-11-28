@@ -3433,15 +3433,15 @@ fn mode_preference_agent(agent: SessionAgent) -> Option<SessionAgent> {
     EVERY_MODE.iter().any(|mode| !offered.contains(mode)).then_some(agent)
 }
 
-fn mode_for_agent(agent: SessionAgent, picked: Option<PermissionMode>) -> PermissionMode {
+pub(crate) fn mode_for_agent(agent: SessionAgent, picked: Option<PermissionMode>) -> PermissionMode {
     let behavior = nexus_workbench::harness::harness(agent);
     picked
         .filter(|mode| behavior.offered_modes().contains(mode))
         .unwrap_or_else(|| behavior.default_mode())
 }
 
-pub(super) fn local_plan_agent(agent: SessionAgent) -> bool {
-    matches!(agent, SessionAgent::Claude | SessionAgent::Codex)
+pub(crate) fn local_plan_agent(agent: SessionAgent) -> bool {
+    matches!(agent, SessionAgent::Claude | SessionAgent::Codex | SessionAgent::Grok)
 }
 
 pub(super) fn plan_only(agent: SessionAgent) -> bool {
@@ -3460,6 +3460,7 @@ pub(super) fn agent_maker(agent: SessionAgent) -> &'static str {
         SessionAgent::Claude => "anthropic",
         SessionAgent::Antigravity => "google",
         SessionAgent::Cursor => "cursor",
+        SessionAgent::Grok => "xai",
         SessionAgent::Opencode => "opencode",
         _ => "nexus",
     }
@@ -3796,6 +3797,23 @@ mod tests {
             }],
             ..CodeForm::default()
         }
+    }
+
+    #[test]
+    fn grok_can_start_on_its_own_local_plan() {
+        use super::*;
+        let mut form = CodeForm {
+            local_subscription: true,
+            ..CodeForm::default()
+        };
+        form.apply_defaults(ProjectDefaults {
+            agent: Some(SessionAgent::Grok),
+            ..Default::default()
+        });
+        assert_eq!(form.agent, SessionAgent::Grok);
+        assert!(!form.needs_local_provider());
+        assert_eq!(form.effective_via(), Via::Subscription);
+        assert_eq!(form.mode, PermissionMode::Default);
     }
 
     #[test]

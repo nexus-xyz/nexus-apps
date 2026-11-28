@@ -13,6 +13,7 @@ mod antigravity;
 mod claude;
 mod codex;
 mod cursor;
+mod grok;
 mod nexus;
 mod opencode;
 pub(crate) mod setup;
@@ -83,6 +84,7 @@ pub(crate) fn ui(agent: SessionAgent) -> &'static dyn AgentUi {
         SessionAgent::Nexus => &nexus::Nexus,
         SessionAgent::Antigravity => &antigravity::Antigravity,
         SessionAgent::Cursor => &cursor::Cursor,
+        SessionAgent::Grok => &grok::Grok,
         SessionAgent::Opencode => &opencode::Opencode,
     }
 }
@@ -126,7 +128,10 @@ mod tests {
     #[test]
     fn short_names_and_stop_hints() {
         let names: Vec<&str> = SessionAgent::ALL.map(|agent| ui(agent).short_name()).to_vec();
-        assert_eq!(names, ["Claude", "Codex", "Nexus", "Antigravity", "Cursor", "OpenCode"]);
+        assert_eq!(
+            names,
+            ["Claude", "Codex", "Nexus", "Antigravity", "Cursor", "OpenCode", "Grok"]
+        );
         for agent in SessionAgent::ALL {
             let title = ui(agent).interrupt_title();
             if agent == SessionAgent::Codex {

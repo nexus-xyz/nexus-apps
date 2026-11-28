@@ -2040,7 +2040,7 @@ fn nexus_agents_lists_antigravity_with_its_gateway_route_unavailable() {
         .iter()
         .filter_map(|entry| entry["agent"].as_str())
         .collect();
-    assert_eq!(ids, ["claude", "codex", "antigravity", "cursor"]);
+    assert_eq!(ids, ["claude", "codex", "antigravity", "cursor", "grok"]);
     let antigravity = &printed["agents"][2];
     assert_eq!(antigravity["routes"][0]["available"], false);
     assert!(antigravity["routes"][0].get("provider").is_none());
@@ -4421,4 +4421,108 @@ fn codex_model_auto_on_gateway_routes_through_agents_route() {
     assert!(res.asked("POST", "/v1/agents/check").is_none());
     let agent = res.agent.as_deref().expect("codex ran");
     assert!(agent.contains("--model gpt-6.1-sol"), "{agent}");
+}
+
+#[test]
+fn grok_checks_the_effective_config_before_launch_with_or_without_a_nexus_account() {
+    let home = Home::new();
+    let bin = home.path("grok");
+    let config = home.path("requirements.toml");
+    let script = r#"#!/bin/sh
+case "$1" in
+  --version) echo "grok 1.0.92";;
+  inspect) printf '{"loginPolicy":{"apiKeyAuthDisabled":%s},"configSources":{"layers":[{"path":"%s"}]}}' "$GROK_DISABLE_API_KEY_AUTH" "$TEST_CONFIG";;
+  *) printf '%s\n' "$*" "${XAI_API_KEY-unset}" "$GROK_DISABLE_API_KEY_AUTH" > "$AGENT_REPORT";;
+esac
+"#;
+    std::fs::write(&bin, script).expect("write fake Grok executable");
+    std::fs::set_permissions(&bin, std::fs::Permissions::from_mode(0o700)).expect("make fake Grok executable");
+    let env = [
+        ("NEXUS_GROK_BIN", bin.to_str().expect("UTF-8 test executable path")),
+        ("XAI_API_KEY", "test-secret"),
+        ("TEST_CONFIG", config.to_str().expect("UTF-8 test configuration path")),
+        ("NEXUS_BYO_PROVIDERS", "1"),
+    ];
+    let id = "7c1e2f4a-93b5-4d06-8a1f-2b3c4d5e6f70";
+    for signed_out in [true, false] {
+        let setup = Setup {
+            signed_out,
+            ..Setup::default()
+        };
+        for contents in [
+            "[model.other]\napi_key='test-secret'",
+            "[[version_overrides]]\n[version_overrides.model.other]\nenv_key='ANOTHER_KEY'",
+            "[model.other]\nbase_url='https://other.invalid'",
+            "[auth.oidc]\nissuer='fixture'\nclient_id='test'",
+            "[grok_com_config.oauth2]\nissuer='fixture'",
+            "[[experiments]]\nid='example'\n[experiments.arms.other.model.foo]\nauth_provider='corp'",
+            "invalid toml containing test-secret",
+        ] {
+            std::fs::write(&config, contents).expect("write test Grok configuration");
+            let run = run_in(&home, &["grok", "--subscription"], &env, setup.clone());
+            assert_ne!(run.code, 0);
+            assert!(run.opened().is_none());
+            assert!(!run.err.contains("test-secret"));
+        }
+        std::fs::write(&config, "[mcp_servers.example.env]\napi_key='fixture'\nmodel='helper'\nbase_url='local'\n[model.grok-build]\ncontext_window=12000").expect("write personal Grok test configuration");
+        for name in ["GROK_OIDC_ISSUER", "GROK_OIDC_CLIENT_ID", "GROK_AUTH_PATH"] {
+            let mut competing = env.to_vec();
+            competing.push((name, "test-secret"));
+            let refused = run_in(&home, &["grok", "--subscription"], &competing, setup.clone());
+            assert_ne!(refused.code, 0);
+            assert!(refused.err.contains(name) && !refused.err.contains("test-secret"));
+            assert!(refused.opened().is_none());
+        }
+        let prompt = run_in(
+            &home,
+            &[
+                "grok",
+                "--subscription",
+                "--",
+                "before",
+                "-p=--leader",
+                "after",
+                "--resume",
+            ],
+            &env,
+            setup.clone(),
+        );
+        assert_eq!(prompt.code, 0, "{}", prompt.err);
+        assert_eq!(
+            prompt.agent.as_deref(),
+            Some("--no-leader --permission-mode default --single --resume -- before --leader after\nunset\ntrue\n")
+        );
+        let run = run_in(
+            &home,
+            &["grok", "--subscription", "--", "--resume", id, "-m=grok-build"],
+            &env,
+            setup,
+        );
+        assert_eq!(run.code, 0, "{}", run.err);
+        assert_eq!(
+            run.agent.as_deref(),
+            Some(
+                format!("--no-leader --permission-mode default --resume {id} --model grok-build\nunset\ntrue\n")
+                    .as_str()
+            )
+        );
+        if signed_out {
+            assert!(run.opened().is_none());
+        } else {
+            let opened = run.opened().expect("Gateway recorded the signed-in session");
+            assert_eq!(
+                (&opened["agent"], &opened["via"]),
+                (&json!("grok"), &json!("subscription"))
+            );
+            assert_eq!(opened["model"], "grok-build");
+            assert_eq!(closed_with(&run)["agentSessionId"], id);
+            assert!(
+                run.seen
+                    .iter()
+                    .all(|request| !request.body.to_string().contains("test-secret"))
+            );
+        }
+    }
+    let denied = run_in(&home, &["grok", "--api"], &env, Setup::default());
+    assert!(denied.code != 0 && denied.opened().is_none());
 }

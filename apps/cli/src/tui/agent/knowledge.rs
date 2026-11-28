@@ -721,7 +721,7 @@ mod tests {
         );
         assert!(read("overview", &offline).1.contains(
             "| Claude Code, Codex, Antigravity, Cursor, OpenCode and Grok | Coding agents. For CLI sessions, use `nexus claude`, \
-             `nexus codex`, `nexus agy` and `nexus cursor-agent`. |"
+             `nexus codex`, `nexus agy`, `nexus cursor-agent` and `nexus grok`. |"
         ));
         assert!(
             read("skills", &offline)
@@ -926,7 +926,12 @@ mod tests {
                             .map(|variant| text_of(variant, "usage")),
                     )
                     .collect();
-                for flag in words.iter().filter(|word| word.starts_with("--")) {
+                // Words after the option terminator belong to the launched program.
+                for flag in words
+                    .iter()
+                    .take_while(|word| **word != "--")
+                    .filter(|word| word.starts_with("--"))
+                {
                     let flag = flag.trim_end_matches([',', '.', ')', ':', ';']);
                     let known = own.iter().any(|name| name == flag)
                         || global.contains(&flag)

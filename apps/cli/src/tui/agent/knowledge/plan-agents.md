@@ -34,6 +34,22 @@ nexus cursor-agent -p "hello"    # arguments go to cursor-agent unchanged
 - A run on the plan drops the variables that would sign it in another way or send its calls elsewhere, such as `CURSOR_API_KEY`.
 - It gets no page instructions, no skills and no screen recording from Nexus.
 
+## Grok
+
+Install the official Grok CLI and run `grok login` in your terminal.
+Start `nexus grok`, or select Grok on this computer in Nexus Desktop.
+Use `nexus sessions start "Review this project" --agent grok` for a Desktop session from the terminal.
+
+- Continue a CLI conversation with `nexus grok -- --resume <id>`.
+- In Desktop, answer tool requests in the session. Press Esc to cancel the current turn.
+- Grok checks your local sign-in when opening a conversation. Nexus does not read your Grok credentials.
+- Nexus disables API-key authentication and checks the effective Grok configuration before launch.
+- If a profile overrides model billing or identity, select a personal profile with `GROK_HOME`.
+  Run `grok login` in that profile first.
+
+Grok documents its [installation](https://docs.x.ai/build/overview),
+[credential precedence](https://docs.x.ai/build/enterprise) and [ACP interface](https://docs.x.ai/build/cli/headless-scripting).
+
 ## OpenCode
 
 On a cloud machine, OpenCode runs on Nexus credits (Team API).
@@ -41,9 +57,3 @@ Pick OpenCode, or an open-weight model, for a Cloud session in Nexus Desktop or 
 Nexus configures OpenCode's provider. You configure nothing.
 OpenCode never runs on a personal plan.
 On Linux, Nexus Desktop can also start OpenCode locally with the provider configured in OpenCode.
-
-## Grok
-
-Gateway records sessions on the person's Grok plan when the organization allows subscriptions.
-The person signs in with `grok login` on their computer.
-Nexus CLI and Desktop do not launch Grok yet.

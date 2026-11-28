@@ -76,6 +76,19 @@ impl Agent {
         of!(self, dyn AgentT).entry()
     }
 
+    /// The installer to show a person setting up this machine.
+    pub fn local_install_command(self) -> &'static str {
+        self.install_command_on(Platform::current())
+    }
+
+    fn install_command_on(self, platform: Option<Platform>) -> &'static str {
+        match (self, platform) {
+            // Grok 1.0.92, Getting Started, "Windows (PowerShell)": https://docs.x.ai/build/overview
+            (Self::Grok, Some(Platform::Windows)) => "irm https://x.ai/cli/install.ps1 | iex",
+            _ => self.entry().install.command,
+        }
+    }
+
     /// The agent named `id` (`claude`).
     pub fn parse(id: &str) -> Option<Agent> {
         Agent::ALL.into_iter().find(|agent| agent.as_str() == id)
@@ -143,6 +156,20 @@ mod tests {
     }
 
     #[test]
+    fn grok_installer_matches_the_local_shell() {
+        assert_eq!(
+            Agent::Grok.install_command_on(Some(Platform::Windows)),
+            "irm https://x.ai/cli/install.ps1 | iex"
+        );
+        for platform in [Platform::MacOs, Platform::Linux] {
+            assert_eq!(
+                Agent::Grok.install_command_on(Some(platform)),
+                "curl -fsSL https://x.ai/cli/install.sh | bash"
+            );
+        }
+    }
+
+    #[test]
     fn all_lists_every_variant() {
         let places: Vec<usize> = Agent::ALL.map(place).to_vec();
         assert_eq!(places, (0..Agent::ALL.len()).collect::<Vec<_>>());
@@ -178,7 +205,7 @@ mod tests {
         }
         assert_eq!(Agent::from_command("antigravity"), None);
         assert_eq!(Agent::ids("|"), "claude|codex|antigravity|cursor|opencode|grok");
-        assert_eq!(Agent::commands("|"), "claude|codex|agy|cursor-agent");
+        assert_eq!(Agent::commands("|"), "claude|codex|agy|cursor-agent|grok");
     }
 
     /// Each agent's entry states every field in its own file, at every level: no struct update (`..CLAUDE_CODE`), no

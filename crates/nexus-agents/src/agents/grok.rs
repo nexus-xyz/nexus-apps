@@ -1,4 +1,4 @@
-use crate::{AgentEntry, AgentT, Billing, Identity, Install, Profile, Session, SignIn};
+use crate::{AgentEntry, AgentT, Billing, Identity, Install, Platform, Profile, Session, SignIn};
 
 /// Grok's CLI (`grok`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -50,7 +50,7 @@ static GROK: AgentEntry = AgentEntry {
     },
     session: Session {
         permission_settings: None,
-        platforms: &[],
+        platforms: &[Platform::MacOs, Platform::Linux, Platform::Windows],
         cli_launcher: true,
         legacy_access: false,
         resume: "--resume {id}",

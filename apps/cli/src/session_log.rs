@@ -389,7 +389,10 @@ async fn run(start: Start, mut finished: watch::Receiver<Option<Arc<Finish>>>) -
                         let reader: Option<Box<dyn Reader>> = match agent {
                             SessionAgent::Claude => Some(Box::new(Claude::new(prices.clone()))),
                             SessionAgent::Codex => Some(Box::new(Codex::new(prices.clone(), start.model.as_deref()))),
-                            SessionAgent::Nexus | SessionAgent::Antigravity | SessionAgent::Cursor => None,
+                            SessionAgent::Nexus
+                            | SessionAgent::Antigravity
+                            | SessionAgent::Cursor
+                            | SessionAgent::Grok => None,
                             // nexus-workbench's `opencode` feature adds a variant. This crate leaves it off (turning it
                             // on changes `nexus help` and so commands.json), but a workspace that also builds the
                             // desktop app unifies it on (the open-source repo, whose CI tests the CLI with `-p`).

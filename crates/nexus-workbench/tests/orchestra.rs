@@ -977,7 +977,7 @@ async fn each_agent_is_started_with_the_server_and_its_token_only_in_its_environ
             SessionAgent::Cursor => unreachable!("not among the agents this test runs"),
             #[cfg(feature = "opencode")]
             SessionAgent::Opencode => unreachable!("not among the agents this test runs"),
-            SessionAgent::Antigravity => unreachable!("not among the agents this test runs"),
+            SessionAgent::Antigravity | SessionAgent::Grok => unreachable!("not among the agents this test runs"),
         }
         assert_eq!(
             allowed_tools(),
@@ -1094,7 +1094,7 @@ async fn end_to_end(name: &str, agent: SessionAgent) {
         SessionAgent::Cursor => unreachable!("not among the agents this test runs"),
         #[cfg(feature = "opencode")]
         SessionAgent::Opencode => unreachable!("not among the agents this test runs"),
-        SessionAgent::Antigravity => unreachable!("not among the agents this test runs"),
+        SessionAgent::Antigravity | SessionAgent::Grok => unreachable!("not among the agents this test runs"),
     };
     assert!(
         answer.contains(&format!("session=\"{child}\"")) && answer.contains(reply),

@@ -402,6 +402,7 @@ fn outside_access(
     changed: Arc<dyn Fn() + Send + Sync>,
 ) -> Arc<OutsideAccess> {
     let outside_host = Arc::new(crate::outside::GpuiOutside {
+        local_plans: host.local_providers_opt_in.clone(),
         api,
         runtime: runtime.clone(),
         org: {
@@ -2247,12 +2248,12 @@ async fn launch_local(
     check_owner: &(dyn Fn() -> Result<(), String> + Sync),
 ) -> Result<Launch, String> {
     let agent = request.agent;
-    let entry = agent.coding().expect("the local launch gate checked the agent").entry();
+    let coding = agent.coding().expect("the local launch gate checked the agent");
     let program = find(agent).ok_or_else(|| {
         format!(
             "{} is not installed on this computer. Install it with `{}`, then try again.",
             label(agent),
-            entry.install.command,
+            coding.local_install_command(),
         )
     })?;
     let env = agent_env();
@@ -2533,7 +2534,7 @@ impl Host for GpuiHost {
             let Some(program) = find(request.agent) else {
                 return Err(format!(
                     "{agent} is not installed on this computer. Install it with `{}`, then try again.",
-                    client_agent.entry().install.command
+                    client_agent.local_install_command()
                 ));
             };
             // An agent that takes its servers in its session gets them through the launcher, with no app tools.
