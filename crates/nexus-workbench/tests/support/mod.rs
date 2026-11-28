@@ -3,6 +3,7 @@
 
 #![allow(dead_code)]
 
+pub mod cross;
 pub mod watch;
 
 use std::collections::HashMap;

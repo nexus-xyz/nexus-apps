@@ -8,36 +8,11 @@ mod support;
 use std::path::Path;
 use std::time::Duration;
 
-use nexus_workbench::event::{PermissionMode, Project, SessionAgent, StoredEvent, ThreadSummary, WbEvent};
+use nexus_workbench::event::{PermissionMode, SessionAgent, StoredEvent, ThreadSummary, WbEvent};
 use nexus_workbench::project_defaults::ProjectDefaults;
-use nexus_workbench::{Config, Halt, HandOff, OrchCode, StartChild, ThreadPatch, Wait, WaitMode};
+use nexus_workbench::{Config, Halt, HandOff, OrchCode, ThreadPatch, Wait, WaitMode};
+use support::cross::*;
 use support::*;
-
-/// A second git repository, `elsewhere`, open in the workbench, not yet trusted.
-fn elsewhere(s: &Setup) -> Project {
-    let repo = s.root.join("elsewhere");
-    std::fs::create_dir_all(&repo).unwrap_or_else(|e| panic!("{e}"));
-    git(&repo, &["init", "--quiet", "--initial-branch", "main"]);
-    git(&repo, &["commit", "--quiet", "--allow-empty", "-m", "one"]);
-    s.workbench.add_project(&repo).unwrap_or_else(|e| panic!("{e}"))
-}
-
-/// [`elsewhere`], trusted.
-fn trusted(s: &Setup) -> Project {
-    let project = elsewhere(s);
-    s.workbench
-        .set_claude_trust(&project.id, true)
-        .unwrap_or_else(|e| panic!("{e}"));
-    project
-}
-
-/// A Claude child that runs `prompt` in `project`.
-fn into(project: &str, prompt: &str) -> StartChild {
-    StartChild {
-        project: Some(project.into()),
-        ..child(SessionAgent::Claude, prompt)
-    }
-}
 
 fn started(events: &[StoredEvent]) -> bool {
     events.iter().any(|e| matches!(e.event, WbEvent::TurnStart { .. }))
@@ -45,18 +20,6 @@ fn started(events: &[StoredEvent]) -> bool {
 
 fn halt(s: &Setup, id: &str) -> Option<Halt> {
     s.workbench.halt(id).unwrap_or_else(|e| panic!("{e}"))
-}
-
-async fn refused(s: &Setup, parent: &str, start: StartChild) -> (OrchCode, String) {
-    match s.workbench.start_child(parent, start).await {
-        Ok(summary) => panic!("started {}", summary.id),
-        Err(error) => (error.code, error.message),
-    }
-}
-
-async fn done(s: Setup) {
-    s.workbench.shutdown().await;
-    let _ = std::fs::remove_dir_all(&s.root);
 }
 
 /// The child runs in the other project: its project id, a worktree of that repository, that project's setup script,
@@ -190,6 +153,16 @@ async fn a_project_not_open_trusted_or_allowed_is_refused() {
     });
     let lead = root(&s, new_root(&s.project, "Plan the release")).await;
     let other = trusted(&s);
+    // Off, no other project is looked at: an unknown or archived one gets the same refusal, and none names a folder.
+    let _archived = s
+        .workbench
+        .update_project(&repo(&s, "shelved").id, None, Some(true))
+        .unwrap_or_else(|e| panic!("{e}"));
+    for asked in ["/nowhere/at/all", "shelved", "mytest"] {
+        let (code, message) = refused(&s, &lead.id, into(asked, "Build it")).await;
+        assert_eq!(code, OrchCode::CrossProjectOff, "{asked}: {message}");
+        assert!(!message.contains(&s.root.to_string_lossy().to_string()), "{message}");
+    }
     let (code, message) = refused(&s, &lead.id, into(&other.id, "Build it")).await;
     assert_eq!(code, OrchCode::CrossProjectOff, "{message}");
     assert_eq!(

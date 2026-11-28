@@ -1385,6 +1385,24 @@ async fn a_start_in_another_project_shows_its_folder_and_asks_by_the_leads_proje
         .expect("valid test fixture");
     let choice = pending_choice(&lead).await;
     assert_eq!(choice.workspace, other.path);
+    drop(stream);
+
+    // The other way round: the lead's project says New, the other project Ask. No card; the child starts there.
+    lead.s
+        .workbench
+        .set_session_start_preference(&lead.s.project, Preference::New)
+        .expect("valid test fixture");
+    lead.s
+        .workbench
+        .set_session_start_preference(&other.id, Preference::Ask)
+        .expect("valid test fixture");
+    let call = json!({"jsonrpc":"2.0","id":994,"method":"tools/call","params":{"name":"start_session","arguments":{
+        "agent":"claude","prompt":"Build the docs","key":"cross-new","project":other.id},
+        "_meta":{"progressToken":"choice-cross-new"}}});
+    let data = result_data(&post(&lead.at, &call).await);
+    assert_eq!(data["choice"], "new", "{data}");
+    let started = data["session_id"].as_str().unwrap_or_default();
+    assert_eq!(thread(&lead.s.workbench, started).project_id, other.id);
     done(lead).await;
 }
 
