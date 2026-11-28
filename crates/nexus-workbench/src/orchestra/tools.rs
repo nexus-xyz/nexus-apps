@@ -66,7 +66,7 @@ pub(crate) fn list() -> Vec<Value> {
                  unless they saved a preference. If the answer has choice here, continue the task in this session: no \
                  subsession exists. Otherwise the subsession works on its own. A {nesting} subsession can start \
                  subsessions of its own, up to the depth limit. Use wait_sessions to get its result when it finishes. \
-                 A subsession that could not start, such as one whose agent is not signed in, ends with a failed \
+                 When you replace a subsession with another session, archive the old one. A subsession that could not start, such as one whose agent is not signed in, ends with a failed \
                  result that says why. The subsession can't see this conversation: its prompt must say everything it \
                  needs. Ask it to end its last message with a line that starts with \"Tests:\" and says which tests \
                  it ran and how they went. {NOT_THE_PERSON}"
@@ -139,8 +139,10 @@ pub(crate) fn list() -> Vec<Value> {
         json!({
             "name": STOP,
             "title": "Stop a subsession",
-            "description": "Stops a subsession this session started, and every subsession below it. Its worktree \
-                            stays, and it can be messaged again later.",
+            "description": "Pauses a subsession this session started, and every subsession below it. Its worktree \
+                            stays, and you can message it again later. Stop only when the work may resume. When it \
+                            was replaced, cancelled by the person, or finished with its result read, archive it \
+                            instead.",
             "inputSchema": {
                 "type": "object",
                 "properties": {"session_id": session_id},
@@ -153,8 +155,10 @@ pub(crate) fn list() -> Vec<Value> {
             "name": HANDOFF,
             "title": "Hand off to a new session",
             "description": format!(
-                "Hands this session's work to a new {labels} session and archives this one. Use it when the person \
-                 asks you to hand off, or to continue in another agent. The new session takes this session's place: \
+                "Hands this session's work to a new {labels} session and archives this one. Use it only when the \
+                 person asks to replace or archive this session, or a saved memory says to always do so. Otherwise \
+                 start an independent session with `nexus sessions start`, and leave this session as it is. The new \
+                 session takes this session's place: \
                  its worktree with every uncommitted change, its parent, the sessions it started and its name. It \
                  starts with prompt as its first message and nothing else: it can't see this conversation, so the \
                  prompt must say the goal, what is done, what is left, the files that matter and how to check the \
@@ -178,8 +182,11 @@ pub(crate) fn list() -> Vec<Value> {
             "name": ARCHIVE,
             "title": "Archive a session",
             "description": "Archives a session this one started, which stops first, or this session itself when \
-                            session_id is left out. An archived session leaves the sidebar, and the person can \
-                            restore it. To pass your work on first, use handoff_session instead.",
+                            session_id is left out. Archive a subsession you replaced, one the person cancelled, or \
+                            one whose result you read and need nothing more from. Archive this session itself only \
+                            when the person asks, or a saved memory says to always do so. It leaves the sidebar, and the person can restore it. Its worktree \
+                            and branch stay on disk unless the person's worktree cleanup removes them: tell the \
+                            person they are there.",
             "inputSchema": {
                 "type": "object",
                 "properties": {"session_id": {"type": "string",
@@ -602,6 +609,58 @@ mod tests {
             start.contains("A Claude Code, Codex or Nexus subsession can start subsessions of its own"),
             "{start}"
         );
+    }
+
+    /// A stop is a pause; a replaced, cancelled or finished subsession is archived; this session is archived or handed
+    /// off only when the person asks, and otherwise an independent session starts with the CLI.
+    #[test]
+    fn the_tools_say_when_to_stop_archive_or_hand_off() {
+        let tools = list();
+        let description = |name: &str| {
+            tools
+                .iter()
+                .find(|tool| tool["name"] == name)
+                .and_then(|tool| tool["description"].as_str())
+                .unwrap_or_default()
+                .to_string()
+        };
+        for (name, phrases) in [
+            (
+                START,
+                &["When you replace a subsession with another session, archive the old one."][..],
+            ),
+            (
+                STOP,
+                &[
+                    "Pauses a subsession this session started",
+                    "Stop only when the work may resume.",
+                    "archive it instead.",
+                ][..],
+            ),
+            (
+                HANDOFF,
+                &[
+                    "Use it only when the person asks to replace or archive this session, or a saved memory says to \
+                     always do so.",
+                    "Otherwise start an independent session with `nexus sessions start`",
+                ][..],
+            ),
+            (
+                ARCHIVE,
+                &[
+                    "Archive a subsession you replaced, one the person cancelled, or one whose result you read",
+                    "Archive this session itself only when the person asks",
+                    "Its worktree and branch stay on disk unless the person's worktree cleanup removes them",
+                    "tell the person they are there.",
+                ][..],
+            ),
+        ] {
+            let text = description(name);
+            for phrase in phrases {
+                assert!(text.contains(phrase), "{name} lacks: {phrase}\n{text}");
+            }
+        }
+        assert!(!description(HANDOFF).contains("or to continue in another agent"));
     }
 
     #[test]

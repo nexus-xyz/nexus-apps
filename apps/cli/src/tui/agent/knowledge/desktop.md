@@ -66,6 +66,7 @@ Your prompt lists the available MCP servers.
 - Each uses a separate worktree. Use `wait_sessions` for results. If off, work here.
 - Disable cross-agent subsessions limits starts to the same agent. Off Gateway, each agent needs a sign-in.
 - Start sessions another way only if asked.
+- Before you start, stop, archive or hand off a session, read `desktop-sessions`.
 
 ## The nexus CLI inside a session
 
@@ -83,12 +84,7 @@ Your prompt lists the available MCP servers.
 
 ## From outside the app
 
-- To reach another session, run `nexus sessions list`, then `nexus sessions send <name> "<message>"`.
-  `nexus sessions` also starts, shows, names, waits for and stops them.
-  A session is its id (`t_…`), name (any case) or title. A name wins over a title,
-  which must be unique in the newest 200.
-  `nexus sessions name` or the app's `/name` sets a unique name for Claude Code's SendMessage.
-- It needs Outside access (macOS, Linux): Settings › MCP servers. Each client asks once.
+See `desktop-sessions` to use Code sessions from outside the app.
 
 ## Screen recordings
 

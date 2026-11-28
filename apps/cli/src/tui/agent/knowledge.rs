@@ -220,6 +220,11 @@ fn topics() -> Vec<Topic> {
         ),
         topic!(
             &places,
+            "desktop-sessions",
+            "Code sessions from a script or another agent: start, stop, archive and hand off"
+        ),
+        topic!(
+            &places,
             "api",
             "the Nexus API, for code that calls Nexus or models through it"
         ),
@@ -287,7 +292,8 @@ const ALIASES: &[(&str, &str)] = &[
     ("errand", "errands"),
     ("app", "desktop"),
     ("workbench", "desktop"),
-    ("sessions", "desktop"),
+    ("sessions", "desktop-sessions"),
+    ("handoff", "desktop-sessions"),
     ("browser", "desktop"),
     ("recordings", "desktop"),
     ("error", "errors"),
@@ -649,15 +655,48 @@ mod tests {
         assert_eq!(errors.contains("nexus triage"), cfg!(feature = "staff"), "{errors}");
     }
 
-    /// The Nexus agent, in a desktop session, is told how to reach another session by its name.
-    #[test]
-    fn the_desktop_topic_says_how_to_reach_another_session() {
-        let desktop = topics()
+    fn topic_text(name: &str) -> String {
+        topics()
             .into_iter()
-            .find(|topic| topic.name == "desktop")
-            .map_or_else(String::new, |topic| topic.text);
+            .find(|topic| topic.name == name)
+            .map_or_else(String::new, |topic| topic.text)
+    }
+
+    /// The Nexus agent, in a desktop session, is told how to reach another session by its name. The desktop topic
+    /// points to the topic that says it, and `sessions` leads there.
+    #[test]
+    fn the_desktop_sessions_topic_says_how_to_reach_another_session() {
+        let sessions = topic_text("desktop-sessions");
         for command in ["nexus sessions list", "nexus sessions send"] {
-            assert!(desktop.contains(command), "desktop.md lacks `{command}`");
+            assert!(sessions.contains(command), "desktop-sessions.md lacks `{command}`");
+        }
+        assert!(topic_text("desktop").contains("See `desktop-sessions` to use Code sessions from outside the app."));
+        assert_eq!(read("sessions", &offline).0, "desktop-sessions");
+    }
+
+    /// The person's words pick the tool, a stop is a pause, and the agent archives or hands off its own session only
+    /// when the person asks.
+    #[test]
+    fn the_desktop_sessions_topic_says_which_tool_and_when_to_archive() {
+        let sessions = topic_text("desktop-sessions");
+        for phrase in [
+            "| \"subsession\", \"spawn\", \"delegate\", or words that are unclear | Use `start_session`.",
+            "| \"new session\", \"separate session\", \"independent\" | Run `nexus sessions start`.",
+            "| \"hand off\", \"hand over\" | Run `nexus sessions start`, and leave this session as it is |",
+            "`nexus sessions start --project <folder or owner/repo>`",
+            "say which tool you chose and why",
+            "Use `handoff_session` only when the person asks to replace or archive this session.",
+            "`$NEXUS_SESSION_ID`",
+            "`nexus sessions wait <id>`",
+            "Stop is a pause. Stop a subsession only when its work may resume.",
+            "Archive a subsession you started when you replaced it, or the person cancelled it.",
+            "Archiving leaves the worktree and branch on disk.",
+            "Never archive your own session (`archive_session` with no `session_id`) unless the person says so.",
+            "A saved memory that says to always do so counts. Do not guess.",
+            "Save it with shared memory (`remember`)",
+            "If shared memory is unavailable, say so.",
+        ] {
+            assert!(sessions.contains(phrase), "desktop-sessions.md lacks: {phrase}");
         }
     }
 
