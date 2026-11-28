@@ -1,7 +1,7 @@
 # License policy for Nexus Desktop's own code
 
 This page says which license Nexus's own desktop code carries, and how a file shows it.
-It is for anyone who adds a crate or a file to the app, and for the legal review of the open-source export.
+It is for anyone who adds a crate or a file to the app, and for the legal review of the published source.
 Status: approved by legal.
 
 ## The license

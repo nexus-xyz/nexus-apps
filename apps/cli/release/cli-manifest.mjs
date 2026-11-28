@@ -26,8 +26,7 @@
  *     }
  *   }
  * Each `targets` entry is written on one line, so a shell script can read one with grep, as the desktop installer
- * reads its manifest. The Gateway reads `cli/<channel>/<its own version>/latest.json` (NEXUS_CLI_DOWNLOADS,
- * nexus-gateway's cli_assets.rs).
+ * reads its manifest. The Gateway reads `cli/<channel>/<its own version>/latest.json` (NEXUS_CLI_DOWNLOADS).
  */
 import { createHash } from "node:crypto";
 import { readdirSync, readFileSync, statSync } from "node:fs";
