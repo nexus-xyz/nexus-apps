@@ -67,6 +67,7 @@ pub(crate) mod commands_detach;
 mod composer;
 mod crash_prompt;
 mod crew_line;
+mod cross_project;
 mod diff_comments;
 mod drafts;
 pub(crate) mod files_detach;

@@ -254,7 +254,16 @@ impl Workspace {
                         .child(
                             div()
                                 .text_color(p.muted)
-                                .child(view_model::facts(node, status(node), now))
+                                .child(
+                                    [
+                                        Some(view_model::facts(node, status(node), now)),
+                                        self.crew_project_note(node),
+                                    ]
+                                    .into_iter()
+                                    .flatten()
+                                    .collect::<Vec<_>>()
+                                    .join(" · "),
+                                )
                                 .children(view_model::inferred(node).map(|note| div().text_color(p.faint).child(note))),
                         ),
                 ),

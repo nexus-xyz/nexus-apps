@@ -1,5 +1,6 @@
 //! The card a Code session's sidebar row shows once the pointer rests on it (Codex's thread hover card): the whole
-//! title, its age and state, where it works (project, server, branch), the agent and model, and its pull request.
+//! title, its age and state, its parent when that is in another project (`cross_project.rs`), where it works (project,
+//! server, branch), the agent and model, and its pull request.
 //! It opens beside the sidebar, level with the row, so the list under the pointer stays in sight.
 //!
 //! The first card waits out [`DELAY`], so passing over the list opens nothing. Once one shows, the next row's card
@@ -254,6 +255,7 @@ impl Workspace {
         let pull = crate::pr_watch::summary(&session.id)
             .and_then(|(watch, summary)| super::session_peek_pull::body(&watch, &summary, palette));
         let has_pull = pull.is_some();
+        let parent = self.cross_project_line(session);
         let content = v_flex()
             .w_full()
             .flex_none()
@@ -293,6 +295,7 @@ impl Workspace {
             .child(
                 v_flex()
                     .gap(px(6.))
+                    .when_some(parent, |lines, parent| lines.child(line(Lucide::Workflow, parent)))
                     .when_some(project, |lines, project| lines.child(line(Lucide::Folder, project)))
                     .when_some(machine, |lines, machine| lines.child(line(Lucide::Server, machine)))
                     .when_some(session.branch.clone(), |lines, branch| {
