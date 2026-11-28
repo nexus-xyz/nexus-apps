@@ -6,6 +6,7 @@ use crate::workspace::MenuTrigger;
 use crate::workspace::menu_item_hover;
 use crate::workspace::overlay::{Overlay, OverlaySlot};
 use gpui_kit::assets::IconName as Lucide;
+use gpui_kit::component::tooltip::Tooltip;
 use gpui_kit::component::{h_flex, v_flex};
 use gpui_kit::prelude::*;
 use gpui_kit::*;
@@ -361,8 +362,16 @@ impl Workspace {
                     let row = self.render_session_row(session, None, now, palette, window, cx);
                     self.drag_row(row, session, super::session_drag::Place::Archived, 0, None, palette, cx)
                 }));
+                rows.extend(
+                    self.archived_projects
+                        .iter()
+                        .map(|project| self.render_archived_project(project, palette, cx)),
+                );
             });
-            if matches!(&self.archived_chats, Some(Ok(chats)) if chats.is_empty()) && self.archived_code.is_empty() {
+            if matches!(&self.archived_chats, Some(Ok(chats)) if chats.is_empty())
+                && self.archived_code.is_empty()
+                && self.archived_projects.is_empty()
+            {
                 rows.push(note("Nothing archived", palette));
             }
         }
@@ -399,6 +408,44 @@ impl Workspace {
             cx,
         )
     }
+
+    /// An archived project's row in the "Archived" group: its folder and name, and Unarchive project, which brings it
+    /// and its sessions back to the list, as the Nexus app's menu does.
+    fn render_archived_project(
+        &self,
+        project: &code::ArchivedProject,
+        palette: Palette,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        let id = project.id.clone();
+        let unarchive = small_button(
+            SharedString::from(format!("archived-project-unarchive-{}", project.id)),
+            Lucide::ArchiveRestore,
+            palette,
+        )
+        .debug_selector(|| "archived-project-unarchive".into())
+        .tooltip(|window, cx| Tooltip::new("Unarchive project").build(window, cx))
+        .on_click(cx.listener(move |this, _, _, cx| {
+            cx.stop_propagation();
+            this.update_project(id.clone(), None, Some(false), cx);
+        }));
+        h_flex()
+            .id(SharedString::from(format!("archived-project-{}", project.id)))
+            .debug_selector(|| "archived-project".into())
+            .h(px(ROW))
+            .pl(px(32.))
+            .pr(px(4.))
+            .gap(px(8.))
+            .items_center()
+            .rounded(px(8.))
+            .text_size(px(ROW_TEXT))
+            .text_color(palette.muted)
+            .hover(|style| style.bg(palette.hover))
+            .child(glyph(Lucide::Folder, palette.icon).flex_none().size(px(14.)))
+            .child(div().flex_1().min_w(px(0.)).truncate().child(project.name.clone()))
+            .child(unarchive)
+            .into_any_element()
+    }
 }
 
 fn note(text: &str, palette: Palette) -> AnyElement {
@@ -415,3 +462,7 @@ fn note(text: &str, palette: Palette) -> AnyElement {
         .child(div().min_w(px(0.)).truncate().child(text.to_string()))
         .into_any_element()
 }
+
+#[cfg(test)]
+#[path = "archived_projects_tests.rs"]
+mod archived_projects_tests;

@@ -583,6 +583,8 @@ pub struct Workspace {
     archived_fold_motion: folder_motion::Transition,
     archived_chats: Option<Result<Vec<SessionSummary>, String>>,
     archived_code: Vec<crate::code::CodeSession>,
+    /// This computer's archived projects, each with Unarchive in the "Archived" group.
+    archived_projects: Vec<crate::code::ArchivedProject>,
     renaming: Option<session_menu::Renaming>,
     /// The open Fork page's points (`fork_points.rs`).
     fork_points: Option<fork_points::ForkPoints>,
@@ -1241,6 +1243,7 @@ impl Workspace {
             archived_fold_motion: folder_motion::Transition::settled(0.),
             archived_chats: None,
             archived_code: Vec::new(),
+            archived_projects: Vec::new(),
             renaming: None,
             fork_points: None,
             forking: None,
@@ -2574,11 +2577,14 @@ impl Workspace {
                 }
             }
             let local = local.or_else(|| reopened.as_ref().map(CodeStore::reader));
-            let (projects, archived) = match local {
-                Some(reader) => reader.overview(),
+            let (projects, archived, archived_projects) = match local {
+                Some(reader) => {
+                    let (projects, archived) = reader.overview();
+                    (projects, archived, reader.archived_projects())
+                }
                 None => match opening_error {
-                    Some(error) => (Err(error), Ok(Vec::new())),
-                    None => (Ok(Vec::new()), Ok(Vec::new())),
+                    Some(error) => (Err(error), Ok(Vec::new()), Ok(Vec::new())),
+                    None => (Ok(Vec::new()), Ok(Vec::new()), Ok(Vec::new())),
                 },
             };
             let (mut projects, local_error) =
@@ -2592,10 +2598,10 @@ impl Workspace {
                 archived.sort_by(|a, b| b.updated_at.cmp(&a.updated_at));
                 archived
             });
-            (projects, archived, local_error, reopened)
+            (projects, archived, archived_projects, local_error, reopened)
         });
         self.code_refresh = Some(cx.spawn(async move |this, cx| {
-            let (projects, archived, local_error, reopened) = read.await;
+            let (projects, archived, archived_projects, local_error, reopened) = read.await;
             let _ = this.update(cx, |this, cx| {
                 if this.code_scope != scope {
                     return;
@@ -2625,6 +2631,9 @@ impl Workspace {
                     .collect();
                 this.row_exits
                     .forget(|id| listed.contains(id), std::time::Instant::now(), cx.reduce_motion());
+                if let Ok(archived_projects) = archived_projects {
+                    this.archived_projects = archived_projects;
+                }
                 this.note_seen(cx);
                 this.note_inbox_completion_seen(cx);
                 if let View::Code(view) = &this.view
