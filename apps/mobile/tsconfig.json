@@ -1,0 +1,14 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "strict": true,
+    "paths": {
+      "@/*": ["./src/*"],
+      "@nexus/kit": ["../../packages/kit/src/index.ts"],
+      "@nexus/kit/*": ["../../packages/kit/src/*.ts"]
+    }
+  },
+  "include": ["**/*.ts", "**/*.tsx", ".expo/types/**/*.ts", "expo-env.d.ts"],
+  // The tests run in the repository's vitest (npm test at its root), which has their types.
+  "exclude": ["node_modules", "metro.config.js", "android", "ios", "**/*.test.ts"]
+}
