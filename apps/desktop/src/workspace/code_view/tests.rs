@@ -598,3 +598,30 @@ fn a_message_reads_as_read_once_the_agent_says_so_or_answers_after_it() {
     let blocks = vec![user(1), turn(TurnStatus::Completed)];
     assert_eq!(receipt_of(1, &Default::default(), &blocks), Receipt::Read(None));
 }
+
+#[test]
+fn an_answered_tool_request_reads_with_the_canons_words() {
+    let line = |tool, answer| answered_label(tool, answer, false);
+    assert_eq!(line("Bash", Some(Decision::Allow)), "Allowed once");
+    assert_eq!(line("Bash", Some(Decision::AllowSession)), "Allowed for this session");
+    assert_eq!(line("Bash", Some(Decision::Deny)), "Denied");
+    assert_eq!(line("Bash", Some(Decision::Expired)), "Not answered");
+    assert_eq!(line("Bash", None), "Waiting for you");
+    // Questions and plans keep their own words.
+    assert_eq!(line(QUESTION_TOOL, Some(Decision::Allow)), "Answered");
+    assert_eq!(line(PLAN_TOOL, Some(Decision::AllowSession)), "Approved");
+    assert_eq!(line(PLAN_TOOL, Some(Decision::Deny)), "Not approved");
+    assert_eq!(
+        answered_label(PLAN_TOOL, Some(Decision::Deny), true),
+        "Moved to a new session"
+    );
+}
+
+#[test]
+fn ask_the_agent_to_fix_it_sends_the_step_and_its_error() {
+    assert_eq!(
+        fix_request("Bash", "gh pr create --draft", "error: no upstream\n"),
+        "This step failed: Ran gh pr create --draft\n\n```\nerror: no upstream\n```\n\nFix it."
+    );
+    assert!(fix_request("Bash", "", "boom").starts_with("This step failed: Ran\n"));
+}

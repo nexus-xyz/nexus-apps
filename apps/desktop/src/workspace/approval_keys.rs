@@ -1,11 +1,12 @@
 //! The keys that answer a tool approval, as the Nexus app's `ApprovalPanel` (`composer.tsx`):
 //!
-//! - A new request focuses Allow once, so Enter (or Space) allows it once. If you typed in the composer in the last
+//! - A new request focuses Allow, so Enter (or Space) allows it once. If you typed in the composer in the last
 //!   1.5 seconds, the composer keeps focus, so its Enter does not approve a request.
-//! - Esc denies, with the reason typed, if any. A reason with text keeps its Esc: it clears the reason. A text field
-//!   outside the card keeps its Esc too, and the Always allow menu closes on its own Esc. Esc in the find field closes
-//!   find first (`code_find.rs`). While the card shows, Esc never stops the turn.
-//! - For 600 ms after the card appears, neither key answers it, so a key meant for the composer misses it.
+//! - Esc never answers a card (the canon, `canon_transcript.py`'s approval cards). A reason with text keeps its Esc: it
+//!   clears the reason; an empty one closes. A text field outside the card keeps its Esc too, and the Allow always menu
+//!   closes on its own Esc. Esc in the find field closes find first (`code_find.rs`). While the card shows, Esc never
+//!   stops the turn.
+//! - For 600 ms after the card appears, Enter does not answer it, so a key meant for the composer misses it.
 //!
 //! Enter in the reason denies; that is its own field's event (`code_dock.rs`), under the same 600 ms.
 
@@ -31,7 +32,7 @@ thread_local! {
 
 /// The card's keys: its focus targets, and when the request on it appeared.
 pub(super) struct ApprovalKeys {
-    /// Allow once: focused when a request appears, so Enter answers it.
+    /// Allow: focused when a request appears, so Enter answers it.
     pub(super) allow: FocusHandle,
     /// The card itself: focused instead when you were typing, so Enter answers nothing.
     pub(super) card: FocusHandle,
@@ -71,7 +72,7 @@ impl ApprovalKeys {
 /// Where the keys go when one is pressed.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum Focus {
-    /// Allow once.
+    /// Allow.
     Allow,
     /// The card, or nothing that takes keys (the window, the hidden composer).
     Card,
@@ -85,10 +86,11 @@ pub(super) enum Focus {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum KeyAnswer {
     Allow,
-    Deny,
     ClearReason,
+    /// An empty reason closes, and the keys go back to the card.
+    CloseReason,
     CloseMenu,
-    /// Taken, and nothing happens: Allow's Enter while the card arms.
+    /// Taken, and nothing happens: Allow's Enter while the card arms, and Esc on the card.
     Nothing,
 }
 
@@ -97,10 +99,12 @@ pub(super) fn answer_key(key: &str, focus: Focus, arming: bool, menu_open: bool)
     match key {
         // The Always allow menu closes on its own Esc; that Esc denies nothing.
         "escape" if menu_open => Some(KeyAnswer::CloseMenu),
-        // A reason with text in it clears, at any time.
+        // A reason with text in it clears, at any time; an empty one closes.
         "escape" if focus == (Focus::Reason { empty: false }) => Some(KeyAnswer::ClearReason),
-        "escape" if arming || focus == Focus::Field => None,
-        "escape" => Some(KeyAnswer::Deny),
+        "escape" if focus == (Focus::Reason { empty: true }) => Some(KeyAnswer::CloseReason),
+        "escape" if focus == Focus::Field => None,
+        // Esc never answers a card, and while it shows it stops nothing either.
+        "escape" => Some(KeyAnswer::Nothing),
         // A focused button's Enter or Space; right as the card appears, it was meant for the composer.
         "enter" | "space" if focus == Focus::Allow && !menu_open => {
             Some(if arming { KeyAnswer::Nothing } else { KeyAnswer::Allow })
@@ -141,7 +145,7 @@ impl Workspace {
         }
     }
 
-    /// Focus a new request's Allow once, unless the person was typing in the composer.
+    /// Focus a new request's Allow, unless the person was typing in the composer.
     pub(super) fn focus_approval(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let shown = self.tool_approval_shown();
         let View::Code(view) = &mut self.view else {
@@ -187,7 +191,7 @@ impl Workspace {
         })
     }
 
-    /// A plain key while a tool approval shows: Enter allows once, Esc denies. True when the card took the key.
+    /// A plain key while a tool approval shows: Enter allows once; Esc answers nothing. True when the card took the key.
     pub(super) fn approval_key(&mut self, key: &str, window: &mut Window, cx: &mut Context<Self>) -> bool {
         if !self.tool_approval_shown() {
             return false;
@@ -205,7 +209,7 @@ impl Workspace {
         };
         match answer {
             KeyAnswer::Allow => self.answer(Decision::Allow, None, None, None, cx),
-            KeyAnswer::Deny => self.deny_with_reason(window, cx),
+            KeyAnswer::CloseReason => self.close_deny_reason(window, cx),
             KeyAnswer::ClearReason => {
                 let reason = view.dock.reason.clone();
                 reason.update(cx, |state, cx| state.set_value("", window, cx));
@@ -228,7 +232,7 @@ mod tests {
     use std::time::{Duration, Instant};
 
     #[test]
-    fn enter_on_allow_once_allows_once_after_the_card_arms() {
+    fn enter_on_allow_allows_once_after_the_card_arms() {
         assert_eq!(answer_key("enter", Focus::Allow, false, false), Some(KeyAnswer::Allow));
         assert_eq!(answer_key("space", Focus::Allow, false, false), Some(KeyAnswer::Allow));
         // Right as the card appears, the key was meant for the composer: taken, and nothing happens.
@@ -236,7 +240,7 @@ mod tests {
     }
 
     #[test]
-    fn enter_anywhere_but_allow_once_is_not_the_cards() {
+    fn enter_anywhere_but_allow_is_not_the_cards() {
         assert_eq!(answer_key("enter", Focus::Card, false, false), None);
         assert_eq!(answer_key("enter", Focus::Field, false, false), None);
         // The reason's Enter is its field's own event.
@@ -244,14 +248,21 @@ mod tests {
     }
 
     #[test]
-    fn esc_denies_from_the_card_allow_once_or_an_empty_reason() {
-        for focus in [Focus::Card, Focus::Allow, Focus::Reason { empty: true }] {
-            assert_eq!(
-                answer_key("escape", focus, false, false),
-                Some(KeyAnswer::Deny),
-                "{focus:?}"
-            );
+    fn esc_never_answers_the_card() {
+        for arming in [false, true] {
+            for focus in [Focus::Card, Focus::Allow] {
+                assert_eq!(
+                    answer_key("escape", focus, arming, false),
+                    Some(KeyAnswer::Nothing),
+                    "{focus:?}"
+                );
+            }
         }
+        // An empty reason closes; nothing is denied.
+        assert_eq!(
+            answer_key("escape", Focus::Reason { empty: true }, false, false),
+            Some(KeyAnswer::CloseReason)
+        );
     }
 
     #[test]
@@ -262,9 +273,9 @@ mod tests {
     }
 
     #[test]
-    fn esc_in_a_field_outside_the_card_or_while_arming_denies_nothing() {
+    fn esc_in_a_field_outside_the_card_is_the_fields() {
         assert_eq!(answer_key("escape", Focus::Field, false, false), None);
-        assert_eq!(answer_key("escape", Focus::Card, true, false), None);
+        assert_eq!(answer_key("escape", Focus::Field, true, false), None);
     }
 
     #[test]

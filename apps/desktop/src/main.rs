@@ -13,6 +13,7 @@ mod artifact_refs;
 mod assets;
 mod attachments;
 mod backend;
+mod canon_preview;
 mod catalog;
 mod channel;
 mod chat_bar;

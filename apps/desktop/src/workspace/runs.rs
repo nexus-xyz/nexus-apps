@@ -387,10 +387,10 @@ impl Runs {
         }
     }
 
-    /// Approve the plan, then switch the session to Auto-accept edits, as on this computer.
-    pub fn implement_plan(&self, thread_id: String, request_id: String) {
+    /// Approve the plan, then switch the session to `mode`, as on this computer.
+    pub fn implement_plan(&self, thread_id: String, request_id: String, mode: PermissionMode, mode_name: &'static str) {
         let relay = match self {
-            Runs::Here(runner) => return runner.implement_plan(thread_id, request_id),
+            Runs::Here(runner) => return runner.implement_plan(thread_id, request_id, mode, mode_name),
             Runs::There(relay) => relay,
         };
         let (machines, machine, events) = (relay.machines.clone(), relay.machine.clone(), relay.events.clone());
@@ -405,7 +405,7 @@ impl Runs {
             let event = match approved {
                 Err(error) => CodeEvent::Failed(crate::machine_view::plain_error(&error)),
                 Ok(_) => {
-                    let mode = json!({ "threadId": thread_id, "permissionMode": PermissionMode::AcceptEdits.as_str() });
+                    let mode = json!({ "threadId": thread_id, "permissionMode": mode.as_str() });
                     match machines
                         .call(&machine, "wb_thread_update", mode)
                         .await
@@ -413,11 +413,7 @@ impl Runs {
                         .and_then(|a| a)
                     {
                         Ok(_) => CodeEvent::Changed,
-                        Err(_) => CodeEvent::Failed(
-                            "Plan approved, but the session could not switch to Accept edits. Pick it from the \
-                             mode menu."
-                                .into(),
-                        ),
+                        Err(_) => CodeEvent::Failed(crate::code_run::plan_mode_error(mode_name)),
                     }
                 }
             };

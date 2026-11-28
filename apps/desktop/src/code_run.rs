@@ -437,6 +437,11 @@ fn take_store(data: &Path) -> Result<Option<StoreOwner>, String> {
     }
 }
 
+/// What a plan's answer says when the plan was approved but its mode did not take.
+pub(crate) fn plan_mode_error(mode_name: &str) -> String {
+    format!("Plan approved, but the session could not switch to {mode_name}. Pick it from the mode menu.")
+}
+
 /// This build's hold on the Code sessions: the store's lock, the workbench and the commands over it.
 #[cfg(test)]
 type TerminalFixture =
@@ -1602,22 +1607,19 @@ impl CodeRunner {
         });
     }
 
-    /// Implement a plan (`plan-card.tsx`): approve it, then switch the session to Auto-accept edits, Claude Code's own
-    /// first answer to a plan. The plan stays approved when the switch fails; the error says so.
-    pub fn implement_plan(&self, thread_id: String, request_id: String) {
+    /// Implement a plan: approve it, then switch the session to `mode` (named `mode_name` in the error), as Claude Code's
+    /// own answers to a plan do. The plan stays approved when the switch fails; the error says so.
+    pub fn implement_plan(&self, thread_id: String, request_id: String, mode: PermissionMode, mode_name: &'static str) {
         self.run(move |api| async move {
             api.approve(thread_id.clone(), request_id, Decision::Allow, None, None, None)
                 .await?;
             api.thread_update(UpdateArgs {
                 thread_id,
-                permission_mode: Some(PermissionMode::AcceptEdits.as_str().to_string()),
+                permission_mode: Some(mode.as_str().to_string()),
                 ..UpdateArgs::default()
             })
             .await
-            .map_err(|_| {
-                "Plan approved, but the session could not switch to Accept edits. Pick it from the mode menu."
-                    .to_string()
-            })?;
+            .map_err(|_| plan_mode_error(mode_name))?;
             Ok(None)
         });
     }

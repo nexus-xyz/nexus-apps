@@ -4,10 +4,11 @@
 //! - A request for a secret (`request_secret`, `secret-request-card.tsx`), first: `secret_card.rs`.
 //! - A question from the agent (`AskUserQuestion`, `question.tsx`): its options, one or many, and an answer of your
 //!   own. Submit answer sends them; Skip tells the agent you skipped it.
-//! - A plan it wants to start on (`ExitPlanMode`, `plan-card.tsx`): the plan, Implement (approve it, then switch the
-//!   session to Auto-accept edits) or Keep planning, with what to change.
-//! - Any other request to use a tool (`composer.tsx`'s `ApprovalPanel`): Deny with an optional reason, Always allow
-//!   with the agent's rules in a menu, or Allow once.
+//! - A plan it wants to start on (`ExitPlanMode`): the plan and the canon's four answers (`PLAN_ANSWERS`): three yeses
+//!   that approve it and set the session's mode, and No, keep planning, with what to change. Implement in a new session
+//!   stays as a fifth, quieter answer.
+//! - Any other request to use a tool (`permission_queue.rs`): Allow, Allow for this session, Deny; the agent's rules
+//!   behind Allow always…, and a reason behind Deny with a reason….
 //! - Tool requests form an expandable queue above the composer. Each decision targets one request.
 //! - Otherwise the composer, with the messages queued behind the running turn above it (`queued-chips.tsx`), and the
 //!   session's model, effort and permission mode as chips in its toolbar (`effort-menu.tsx`).
@@ -40,6 +41,15 @@ pub(super) mod effort;
 pub(super) const QUESTION_TOOL: &str = "AskUserQuestion";
 /// The tool whose approval asks to leave plan mode with a plan.
 pub(super) const PLAN_TOOL: &str = "ExitPlanMode";
+/// The canon's answers to a plan (`canon_transcript.py`, Claude's plan approval), each with the mode it sets. The first
+/// is the primary one.
+pub(super) const PLAN_ANSWERS: [(&str, PermissionMode); 3] = [
+    ("Yes, and use auto mode", PermissionMode::Auto),
+    ("Yes, auto-accept edits", PermissionMode::AcceptEdits),
+    ("Yes, manually approve edits", PermissionMode::Default),
+];
+/// The plan's last answer: deny it, with what to change.
+pub(super) const KEEP_PLANNING: &str = "No, keep planning";
 /// How many questions one request carries at most (Claude Code's limit): one answer field each.
 const QUESTIONS: usize = 4;
 /// What a skipped question tells the agent (`question.tsx`).
@@ -105,7 +115,7 @@ pub(super) struct Dock {
     pub(super) tray_layout: crate::command_tray::Layout,
     /// The reason sent with Deny.
     pub(super) reason: Entity<InputState>,
-    /// What to change in a plan, sent with Keep planning.
+    /// What to change in a plan, sent with No, keep planning.
     change: Entity<InputState>,
     /// Each question's answer of your own, by the question's place.
     others: Vec<Entity<InputState>>,
@@ -724,7 +734,12 @@ impl Workspace {
                 return;
             }
             (Some(tool), Some(dock)) if tool == PLAN_TOOL => Some(dock.change.clone()),
-            (Some(_), Some(dock)) => Some(dock.reason.clone()),
+            // A tool request: its Allow, so Enter answers it; the reason is a second step (Deny with a reason…).
+            (Some(_), Some(dock)) => {
+                let allow = dock.keys.allow.clone();
+                window.focus(&allow, cx);
+                return;
+            }
             _ => None,
         };
         match field {
@@ -776,7 +791,7 @@ impl Workspace {
         self.answer(Decision::Deny, Some(message).filter(|m| !m.is_empty()), None, None, cx);
     }
 
-    /// Keep planning: deny the plan, with what to change, if anything was typed.
+    /// No, keep planning: deny the plan, with what to change, if anything was typed.
     fn keep_planning(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let Some(dock) = self.dock_mut() else {
             return;
@@ -787,15 +802,24 @@ impl Workspace {
         self.answer(Decision::Deny, Some(message).filter(|m| !m.is_empty()), None, None, cx);
     }
 
-    /// Implement the plan: approve it, then leave plan mode for Auto-accept edits.
-    fn implement_plan(&mut self, cx: &mut Context<Self>) {
+    /// One of the plan's yeses: approve it, then leave plan mode for `mode`.
+    fn implement_plan(&mut self, mode: PermissionMode, cx: &mut Context<Self>) {
+        let agent = self
+            .code_session()
+            .map(|session| session.agent)
+            .unwrap_or(SessionAgent::Claude);
         let Some((thread, request, ..)) = self.pending_request() else {
             return;
         };
         let Some(runs) = self.runs(&thread) else {
             return;
         };
-        runs.implement_plan(thread, request);
+        runs.implement_plan(
+            thread,
+            request,
+            mode,
+            super::code_title::code_meter::permissions(agent, mode),
+        );
         self.composer_note = None;
         cx.notify();
     }
@@ -1908,7 +1932,7 @@ impl Workspace {
             .into_any_element()
     }
 
-    /// The plan the agent wants to start on (`plan-card.tsx`'s `PlanPanel`): the plan, and Keep planning or Implement.
+    /// The plan the agent wants to start on (`plan-card.tsx`'s `PlanPanel`): the plan, and the canon's four answers.
     pub(super) fn render_plan(
         &self,
         view: &CodeView,
@@ -1958,50 +1982,88 @@ impl Workspace {
                 )
             })
             .child(self.render_card_problem(palette, cx))
-            // What to change gets its own line: three answers beside it left it too narrow to read.
+            // What to change gets its own line: the answers beside it left it too narrow to read.
             .child(h_flex().w_full().child(reason_field(&view.dock.change, palette)))
-            .child(
-                h_flex()
-                    .justify_end()
-                    .gap(px(8.))
-                    .child(
-                        answer_button("plan-keep", tr("Keep planning"), false, true, palette)
-                            .tooltip({
-                                let text =
-                                    tr("{name} stops and waits; what you typed goes with it").replace("{name}", &name);
-                                move |window, cx| {
-                                    gpui_kit::component::tooltip::Tooltip::new(text.clone()).build(window, cx)
-                                }
-                            })
-                            .on_click(cx.listener(|this, _, window, cx| this.keep_planning(window, cx))),
-                    )
-                    .child(
-                        answer_button(
-                            "plan-elsewhere",
-                            tr("Implement in a new session"),
-                            false,
-                            !plan.trim().is_empty(),
-                            palette,
+            .child({
+                let mut row = h_flex().flex_wrap().gap(px(8.));
+                if crate::canon_preview::transcript_actions() {
+                    row = row
+                        .children(PLAN_ANSWERS.into_iter().enumerate().map(|(ix, (label, mode))| {
+                            answer_button(("plan-yes", ix), label, ix == 0, true, palette)
+                                .on_click(cx.listener(move |this, _, _, cx| this.implement_plan(mode, cx)))
+                        }))
+                        .child(
+                            answer_button("plan-keep", KEEP_PLANNING, false, true, palette)
+                                .border_color(gpui_kit::transparent_black())
+                                .tooltip({
+                                    let text = tr("{name} stops and waits; what you typed goes with it")
+                                        .replace("{name}", &name);
+                                    move |window, cx| {
+                                        gpui_kit::component::tooltip::Tooltip::new(text.clone()).build(window, cx)
+                                    }
+                                })
+                                .on_click(cx.listener(|this, _, window, cx| this.keep_planning(window, cx))),
                         )
-                        .tooltip(|window, cx| {
-                            gpui_kit::component::tooltip::Tooltip::new(tr(
-                                "Start a new session on this plan, in auto-accept edits",
-                            ))
-                            .build(window, cx)
-                        })
-                        .on_click(cx.listener(|this, _, window, cx| this.implement_in_new_session(window, cx))),
-                    )
-                    .child(
-                        answer_button("plan-implement", tr("Implement"), true, true, palette)
+                        .child(
+                            text_button("plan-elsewhere", "Implement in a new session", false, palette)
+                                .ml_auto()
+                                .when(plan.trim().is_empty(), |button| button.opacity(0.4))
+                                .tooltip(|window, cx| {
+                                    gpui_kit::component::tooltip::Tooltip::new(
+                                        "Start a new session on this plan, in auto-accept edits",
+                                    )
+                                    .build(window, cx)
+                                })
+                                .when(!plan.trim().is_empty(), |button| {
+                                    button.on_click(
+                                        cx.listener(|this, _, window, cx| this.implement_in_new_session(window, cx)),
+                                    )
+                                }),
+                        );
+                } else {
+                    row = row
+                        .child(
+                            answer_button("plan-keep", tr("Keep planning"), false, true, palette)
+                                .tooltip({
+                                    let text = tr("{name} stops and waits; what you typed goes with it")
+                                        .replace("{name}", &name);
+                                    move |window, cx| {
+                                        gpui_kit::component::tooltip::Tooltip::new(text.clone()).build(window, cx)
+                                    }
+                                })
+                                .on_click(cx.listener(|this, _, window, cx| this.keep_planning(window, cx))),
+                        )
+                        .child(
+                            answer_button(
+                                "plan-elsewhere",
+                                tr("Implement in a new session"),
+                                false,
+                                !plan.trim().is_empty(),
+                                palette,
+                            )
                             .tooltip(|window, cx| {
                                 gpui_kit::component::tooltip::Tooltip::new(tr(
-                                    "Approve the plan and let it edit files (auto-accept edits)",
+                                    "Start a new session on this plan, in auto-accept edits",
                                 ))
                                 .build(window, cx)
                             })
-                            .on_click(cx.listener(|this, _, _, cx| this.implement_plan(cx))),
-                    ),
-            )
+                            .on_click(cx.listener(|this, _, window, cx| this.implement_in_new_session(window, cx))),
+                        )
+                        .child(
+                            answer_button("plan-implement", tr("Implement"), true, true, palette)
+                                .tooltip(|window, cx| {
+                                    gpui_kit::component::tooltip::Tooltip::new(tr(
+                                        "Approve the plan and let it edit files (auto-accept edits)",
+                                    ))
+                                    .build(window, cx)
+                                })
+                                .on_click(
+                                    cx.listener(|this, _, _, cx| this.implement_plan(PermissionMode::AcceptEdits, cx)),
+                                ),
+                        );
+                }
+                row
+            })
             .into_any_element()
     }
 
@@ -2043,7 +2105,7 @@ pub(super) fn card_head(icon: Lucide, title: String, palette: Palette) -> impl I
         .child(title)
 }
 
-/// The optional text sent with Deny or Keep planning (`.wb-reason`).
+/// The optional text sent with Deny or No, keep planning (`.wb-reason`).
 pub(super) fn reason_field(state: &Entity<InputState>, palette: Palette) -> impl IntoElement {
     div()
         .flex_1()

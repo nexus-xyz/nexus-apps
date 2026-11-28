@@ -1,7 +1,7 @@
 // Not `super::*`: GPUI's prelude has a `test` attribute of its own.
 use super::{
-    PermissionSuggestion, Value, describe_all, next_step, plan_body, plan_title, question_answers, question_receipt,
-    question_values, questions_of, receipt_rows,
+    KEEP_PLANNING, PLAN_ANSWERS, PermissionMode, PermissionSuggestion, Value, describe_all, next_step, plan_body,
+    plan_title, question_answers, question_receipt, question_values, questions_of, receipt_rows,
 };
 use serde_json::json;
 
@@ -165,4 +165,27 @@ fn suggestions_read_in_plain_words() {
     assert_eq!(views[0].scope, "For the rest of this session");
     assert_eq!(views[1].index, 3);
     assert_eq!(views[1].title, "Reading ~/src");
+}
+
+#[test]
+fn a_plan_offers_the_canons_four_answers_each_setting_its_mode() {
+    let labels: Vec<_> = PLAN_ANSWERS.iter().map(|(label, _)| *label).collect();
+    assert_eq!(
+        labels,
+        [
+            "Yes, and use auto mode",
+            "Yes, auto-accept edits",
+            "Yes, manually approve edits"
+        ]
+    );
+    let modes: Vec<_> = PLAN_ANSWERS.iter().map(|(_, mode)| *mode).collect();
+    assert_eq!(
+        modes,
+        [
+            PermissionMode::Auto,
+            PermissionMode::AcceptEdits,
+            PermissionMode::Default
+        ]
+    );
+    assert_eq!(KEEP_PLANNING, "No, keep planning");
 }

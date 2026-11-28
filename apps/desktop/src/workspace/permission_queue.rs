@@ -6,15 +6,15 @@ use gpui_kit::assets::IconName as Lucide;
 use gpui_kit::component::{h_flex, v_flex};
 use gpui_kit::prelude::*;
 use gpui_kit::*;
-use nexus_workbench::event::Decision;
+use nexus_workbench::event::{Decision, PermissionSuggestion};
 use serde_json::{Value, json};
 
-use super::code_dock::{Menu, PLAN_TOOL, QUESTION_TOOL, answer_button, describe_all, reason_field};
+use super::code_dock::{Menu, PLAN_TOOL, QUESTION_TOOL, answer_button, describe_all, reason_field, text_button};
 use super::code_view::CodeView;
 use super::message_text::MessageText;
 use super::{View, Workspace, glyph};
 use crate::code::Block;
-use crate::pages::ui::{permission_button, permission_footer};
+use crate::pages::ui::{ghost_button, permission_button, permission_footer};
 use crate::palette::Palette;
 
 #[derive(Default)]
@@ -29,7 +29,63 @@ pub(super) struct PermissionQueue {
     pub(super) reviewing: bool,
     compact: std::cell::Cell<bool>,
     pub(super) keep_focus: bool,
+    /// "Deny with a reason…" opened the reason field under the open request; TR-X2: the reason follows Deny.
+    pub(super) noting: bool,
     scroll: ScrollHandle,
+}
+
+/// The card's answers, with the canon's words (`canon_transcript.py`, `parts/approval-card.html`).
+pub(super) const ALLOW: &str = "Allow";
+pub(super) const ALLOW_SESSION: &str = "Allow for this session";
+pub(super) const DENY: &str = "Deny";
+/// The rules menu, behind its own quiet link: the canon's proposed "Allow always for a pattern" (TR-X1).
+pub(super) const ALLOW_ALWAYS: &str = "Allow always…";
+/// Opens the reason sent with Deny.
+pub(super) const DENY_WITH_REASON: &str = "Deny with a reason…";
+
+/// Where the session runs, for the card's location line.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(super) enum RunsOn {
+    Here,
+    Cloud,
+    /// A server reached over SSH, by its saved name.
+    Server(String),
+}
+
+/// The card's location line: "On this computer", "On a cloud machine", or the server's name.
+pub(super) fn place_line(place: &RunsOn) -> String {
+    match place {
+        RunsOn::Here => "On this computer".into(),
+        RunsOn::Cloud => "On a cloud machine".into(),
+        RunsOn::Server(name) => format!("On {name}"),
+    }
+}
+
+/// The card's title: "Claude Code wants to run a command".
+pub(super) fn ask_title(agent: &str, tool: &str) -> String {
+    format!("{agent} wants to {}", super::code_view::ask_verb(tool))
+}
+
+/// The rule "Allow for this session" keeps, as the phone's answer picks it (`session_sync/control/answer.rs`'s
+/// `session_rule`): Codex's and Nexus's `acceptForSession`, else a rule the agent already scoped to the session. A rule
+/// saved past the session never stands in for it, so with none the button does not show.
+pub(super) fn session_suggestion(suggestions: &[PermissionSuggestion]) -> Option<usize> {
+    let raw = |ix: usize| &suggestions[ix].raw;
+    (0..suggestions.len())
+        .find(|&ix| raw(ix).as_str() == Some("acceptForSession"))
+        .or_else(|| {
+            (0..suggestions.len()).find(|&ix| {
+                let raw = raw(ix);
+                let field = |key: &str| raw.get(key).and_then(Value::as_str);
+                field("destination") == Some("session")
+                    && field("behavior") != Some("deny")
+                    && match field("type") {
+                        Some("setMode") => field("mode") == Some("acceptEdits"),
+                        Some("addRules" | "addDirectories") => true,
+                        _ => false,
+                    }
+            })
+        })
 }
 
 pub(super) fn tool_request(block: &Block) -> Option<&str> {
@@ -70,6 +126,7 @@ impl PermissionQueue {
     }
 
     pub(super) fn follow(&mut self, blocks: &[Block]) {
+        let before = self.open.clone();
         let ids: HashSet<_> = blocks.iter().filter_map(tool_request).map(str::to_owned).collect();
         self.busy.retain(|id| ids.contains(id));
         self.settled.retain(|id| ids.contains(id));
@@ -100,6 +157,9 @@ impl PermissionQueue {
             self.open = pending.first().and_then(|block| tool_request(block)).map(str::to_owned);
         }
         self.initialized = !pending.is_empty();
+        if self.open != before {
+            self.noting = false;
+        }
         if !self.initialized {
             self.reviewing = false;
             self.keep_focus = false;
@@ -123,6 +183,7 @@ impl PermissionQueue {
         match result {
             Ok(()) => {
                 self.settled.insert(id);
+                self.noting = false;
             }
             Err(error) => {
                 self.errors.insert(id, error);
@@ -180,15 +241,34 @@ pub(super) fn needs_dot(palette: Palette) -> Div {
         .child(div().size(px(8.)).rounded_full().bg(palette.primary))
 }
 
-/// A request's row: its chevron, its tool's icon, what it runs in mono, and "Sending…" while it is answered.
+/// A request's row: its chevron, its tool's icon, what it runs in mono, and "Sending…" while it is answered. The open
+/// request's row is the card's title instead: the agent's mark and what it wants (`title`); its command shows below.
 pub(super) fn request_head(
     request_id: &str,
     tool: &str,
     summary: &str,
+    title: Option<(AnyElement, String)>,
     open: bool,
     busy: bool,
     palette: Palette,
 ) -> Stateful<Div> {
+    let (mark, label) = match title {
+        Some((mark, title)) => (
+            mark,
+            div().text_size(px(14.)).font_weight(FontWeight::MEDIUM).child(title),
+        ),
+        None => (
+            glyph(super::code_view::tool_icon(tool), palette.icon).into_any_element(),
+            div()
+                .font_family("Geist Mono")
+                .text_size(px(13.))
+                .child(if summary.is_empty() {
+                    tool.to_string()
+                } else {
+                    summary.to_string()
+                }),
+        ),
+    };
     h_flex()
         .id(SharedString::from(format!("permission-{request_id}")))
         .min_h(px(32.))
@@ -205,20 +285,8 @@ pub(super) fn request_head(
             },
             palette.faint,
         ))
-        .child(glyph(super::code_view::tool_icon(tool), palette.icon))
-        .child(
-            div()
-                .flex_1()
-                .min_w(px(0.))
-                .truncate()
-                .font_family("Geist Mono")
-                .text_size(px(13.))
-                .child(if summary.is_empty() {
-                    tool.to_string()
-                } else {
-                    summary.to_string()
-                }),
-        )
+        .child(mark)
+        .child(label.flex_1().min_w(px(0.)).truncate())
         .when(busy, |row| {
             row.child(div().text_size(px(12.)).text_color(palette.muted).child("Sending…"))
         })
@@ -251,31 +319,20 @@ pub(super) fn request_reason(request_id: &str, reason: String, palette: Palette)
         ))
 }
 
-/// "Exact request" and its copy button over the full payload, in mono.
+/// The exact command, or the full request, in mono, with its copy button at the right.
 pub(super) fn exact_request(request_id: &str, exact: String, palette: Palette) -> Div {
     let copy = exact.clone();
-    v_flex()
+    h_flex()
+        .items_start()
         .py(px(8.))
         .px(px(12.))
-        .gap(px(4.))
+        .gap(px(8.))
         .rounded(px(6.))
         .bg(palette.sidebar)
         .child(
-            h_flex()
-                .justify_between()
-                .text_size(px(12.))
-                .text_color(palette.muted)
-                .child("Exact request")
-                .child(
-                    div()
-                        .id(SharedString::from(format!("permission-copy-{request_id}")))
-                        .cursor_pointer()
-                        .child(glyph(Lucide::Copy, palette.icon))
-                        .on_click(move |_, _, cx| cx.write_to_clipboard(ClipboardItem::new_string(copy.clone()))),
-                ),
-        )
-        .child(
             div()
+                .flex_1()
+                .min_w(px(0.))
                 .text_size(px(13.))
                 .line_height(px(20.))
                 .font_family("Geist Mono")
@@ -283,6 +340,15 @@ pub(super) fn exact_request(request_id: &str, exact: String, palette: Palette) -
                     SharedString::from(format!("permission-exact-{request_id}")),
                     exact,
                 )),
+        )
+        .child(
+            div()
+                .id(SharedString::from(format!("permission-copy-{request_id}")))
+                .flex_none()
+                .pt(px(2.))
+                .cursor_pointer()
+                .child(glyph(Lucide::Copy, palette.icon))
+                .on_click(move |_, _, cx| cx.write_to_clipboard(ClipboardItem::new_string(copy.clone()))),
         )
 }
 
@@ -297,12 +363,12 @@ pub(super) fn request_error(request_id: &str, error: String, palette: Palette) -
         ))
 }
 
-/// The row that holds a request's decisions, wrapping when the pane is narrow.
+/// The row that holds a request's decisions, wrapping when the pane is narrow (the side chat's card).
 pub(super) fn request_actions() -> Div {
     h_flex().max_w(relative(1.)).flex_wrap().justify_end().gap(px(8.))
 }
 
-/// The open request's summary over the tray's footer and its decisions (`request_actions`).
+/// The open request's summary over the tray's footer and its decisions (`request_actions`), in the side chat.
 pub(super) fn request_footer(summary: String, actions: Div, palette: Palette) -> Div {
     v_flex()
         .debug_selector(|| "permission-actions".into())
@@ -318,7 +384,41 @@ pub(super) fn request_footer(summary: String, actions: Div, palette: Palette) ->
         .child(permission_footer("Allows this exact request once.", actions, palette))
 }
 
-/// A rule Remember… offers: what it allows, where, and its button.
+/// The card's decisions in the canon's order (Allow, Allow for this session, Deny), wrapping when the pane is narrow.
+fn card_actions() -> Div {
+    h_flex().max_w(relative(1.)).flex_wrap().gap(px(8.))
+}
+
+/// The tray's footer: the open request's location line, then its decisions (`card_actions`).
+fn card_footer(place: String, actions: Div, palette: Palette) -> Div {
+    v_flex()
+        .debug_selector(|| "permission-actions".into())
+        .flex_none()
+        .gap(px(8.))
+        .pt(px(12.))
+        .border_t_1()
+        .border_color(palette.border)
+        .child(
+            div()
+                .text_size(px(12.))
+                .text_color(palette.muted)
+                .truncate()
+                .child(place),
+        )
+        .child(actions)
+}
+
+/// Allow with its key: Enter on the focused button allows (`approval_keys.rs`).
+fn allow_button(id: SharedString, enabled: bool, palette: Palette) -> Stateful<Div> {
+    permission_button(id, ALLOW, true, enabled, palette).gap(px(6.)).child(
+        div()
+            .text_size(px(11.))
+            .text_color(palette.primary_foreground.opacity(0.7))
+            .child("↵"),
+    )
+}
+
+/// A rule Allow always… offers: what it allows, where, and its button.
 pub(super) fn remember_rule(
     title: String,
     scope: impl Into<SharedString>,
@@ -376,7 +476,7 @@ pub(super) fn needs_header(
         .children(review)
 }
 
-/// Deny and Allow once on a collapsed request's row, so it is answered without opening it. The row shows what it runs.
+/// Allow and Deny on a collapsed request's row, so it is answered without opening it. The row shows what it runs.
 fn quick_actions(request_id: &str, busy: bool, palette: Palette, cx: &mut Context<Workspace>) -> Div {
     let deny = request_id.to_string();
     let allow = request_id.to_string();
@@ -389,25 +489,8 @@ fn quick_actions(request_id: &str, busy: bool, palette: Palette, cx: &mut Contex
         .gap(px(6.))
         .child(
             permission_button(
-                SharedString::from(format!("permission-quick-deny-{request_id}")),
-                "Deny",
-                false,
-                !busy,
-                palette,
-            )
-            .h(px(26.))
-            .debug_selector(move || deny_selector)
-            .when(!busy, |button| {
-                button.on_click(cx.listener(move |this, _, _, cx| {
-                    cx.stop_propagation();
-                    this.answer_tool_request(deny.clone(), Decision::Deny, None, cx)
-                }))
-            }),
-        )
-        .child(
-            permission_button(
                 SharedString::from(format!("permission-quick-allow-{request_id}")),
-                "Allow once",
+                ALLOW,
                 true,
                 !busy,
                 palette,
@@ -418,6 +501,23 @@ fn quick_actions(request_id: &str, busy: bool, palette: Palette, cx: &mut Contex
                 button.on_click(cx.listener(move |this, _, _, cx| {
                     cx.stop_propagation();
                     this.answer_tool_request(allow.clone(), Decision::Allow, None, cx)
+                }))
+            }),
+        )
+        .child(
+            permission_button(
+                SharedString::from(format!("permission-quick-deny-{request_id}")),
+                DENY,
+                false,
+                !busy,
+                palette,
+            )
+            .h(px(26.))
+            .debug_selector(move || deny_selector)
+            .when(!busy, |button| {
+                button.on_click(cx.listener(move |this, _, _, cx| {
+                    cx.stop_propagation();
+                    this.answer_tool_request(deny.clone(), Decision::Deny, None, cx)
                 }))
             }),
         )
@@ -455,10 +555,46 @@ impl Workspace {
         view.dock.permissions.keep_focus = true;
         view.dock.keys.card.focus(window, cx);
         view.dock.permissions.open = (view.dock.permissions.open.as_ref() != Some(&id)).then_some(id);
+        view.dock.permissions.noting = false;
         view.dock.menu = None;
         view.dock.reason.update(cx, |state, cx| state.set_value("", window, cx));
         let pending = view.dock.permissions.current(&view.blocks);
         view.dock.follow(pending, cx);
+        cx.notify();
+    }
+
+    /// Where the open session runs, for the card's location line.
+    fn approval_place(&self, thread: &str) -> RunsOn {
+        let machines = crate::machines::get();
+        match machines.machine_of(thread) {
+            None => RunsOn::Here,
+            Some(machine) if machines.is_cloud(&machine) => RunsOn::Cloud,
+            Some(machine) => machines
+                .servers()
+                .into_iter()
+                .find(|server| server.id == machine)
+                .map_or(RunsOn::Here, |server| RunsOn::Server(server.name.clone())),
+        }
+    }
+
+    /// "Deny with a reason…": the reason field shows under the open request and takes the keys; Enter in it denies.
+    pub(super) fn open_deny_reason(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let View::Code(view) = &mut self.view else { return };
+        view.dock.permissions.noting = true;
+        view.dock.permissions.keep_focus = true;
+        view.dock.menu = None;
+        let reason = view.dock.reason.clone();
+        reason.update(cx, |state, cx| state.focus(window, cx));
+        cx.notify();
+    }
+
+    /// The reason field closes, empty, and the keys go back to the card.
+    pub(super) fn close_deny_reason(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let View::Code(view) = &mut self.view else { return };
+        view.dock.permissions.noting = false;
+        let (reason, card) = (view.dock.reason.clone(), view.dock.keys.card.clone());
+        reason.update(cx, |state, cx| state.set_value("", window, cx));
+        window.focus(&card, cx);
         cx.notify();
     }
 
@@ -531,6 +667,8 @@ impl Workspace {
         let compact = limit < crate::command_tray::REVIEW_MIN && !view.dock.permissions.reviewing;
         view.dock.permissions.compact.set(compact);
         let shown = !view.dock.permissions.collapsed && !compact;
+        let agent = self.code_session().map(|session| session.agent);
+        let agent_label = agent.map_or("The agent", super::code_title::code_meter::agent_name);
         let mut footer = None;
         let rows: Vec<_> = pending
             .into_iter()
@@ -550,20 +688,29 @@ impl Workspace {
                 let id = request_id.clone();
                 let open = view.dock.permissions.open.as_ref() == Some(request_id);
                 let busy = view.dock.permissions.busy.contains(request_id);
-                let header = request_head(request_id, tool, summary, open, busy, palette)
+                let title = open.then(|| {
+                    let mark = match agent {
+                        Some(agent) => super::model_menu::maker_mark(super::new_code::agent_maker(agent), 14., palette),
+                        None => glyph(super::code_view::tool_icon(tool), palette.icon).into_any_element(),
+                    };
+                    (mark, ask_title(agent_label, tool))
+                });
+                let header = request_head(request_id, tool, summary, title, open, busy, palette)
                     .on_click(cx.listener(move |this, _, window, cx| this.toggle_permission(id.clone(), window, cx)))
                     .when(!open, |head| head.child(quick_actions(request_id, busy, palette, cx)));
                 let cwd = directory(input)
                     .map(str::to_owned)
                     .unwrap_or_else(|| self.agents_folder_label());
-                let mut row = v_flex()
-                    .w_full()
-                    .gap(px(6.))
-                    .child(header)
-                    .child(request_folder(request_id, cwd, palette));
-                if open {
+                let mut row = v_flex().w_full().gap(px(6.)).child(header);
+                if !open {
+                    row = row.child(request_folder(request_id, cwd, palette));
+                } else {
                     let allow = request_id.clone();
+                    let session = request_id.clone();
                     let deny = request_id.clone();
+                    let rules = describe_all(suggestions);
+                    let for_session = session_suggestion(suggestions);
+                    let noting = view.dock.permissions.noting;
                     row = row
                         .children(
                             description
@@ -571,6 +718,7 @@ impl Workspace {
                                 .map(|reason| request_reason(request_id, reason.clone(), palette)),
                         )
                         .child(exact_request(request_id, payload(tool, input), palette))
+                        .child(request_folder(request_id, cwd, palette).pl(px(6.)).mt(px(0.)))
                         .children(
                             view.dock
                                 .permissions
@@ -578,19 +726,87 @@ impl Workspace {
                                 .get(request_id)
                                 .map(|error| request_error(request_id, error.clone(), palette)),
                         )
-                        .child(reason_field(&view.dock.reason, palette));
+                        .when(noting, |row| row.child(reason_field(&view.dock.reason, palette)))
+                        // The rules menu and the reason are second steps, on one quiet line under the request.
+                        .child(
+                            h_flex()
+                                .gap(px(4.))
+                                .when(!rules.is_empty(), |line| {
+                                    line.child(
+                                        text_button(
+                                            SharedString::from(format!("permission-always-{request_id}")),
+                                            ALLOW_ALWAYS,
+                                            false,
+                                            palette,
+                                        )
+                                        .when(!busy, |button| {
+                                            button.on_click(
+                                                cx.listener(|this, _, _, cx| this.toggle_dock_menu(Menu::Always, cx)),
+                                            )
+                                        }),
+                                    )
+                                })
+                                .when(!noting, |line| {
+                                    line.child(
+                                        text_button(
+                                            SharedString::from(format!("permission-reason-open-{request_id}")),
+                                            DENY_WITH_REASON,
+                                            false,
+                                            palette,
+                                        )
+                                        .when(!busy, |button| {
+                                            button.on_click(
+                                                cx.listener(|this, _, window, cx| this.open_deny_reason(window, cx)),
+                                            )
+                                        }),
+                                    )
+                                }),
+                        );
                     footer = Some(
-                        request_footer(
-                            summary.clone(),
-                            request_actions()
+                        card_footer(
+                            place_line(&self.approval_place(&view.id)),
+                            card_actions()
                                 .child(
-                                    permission_button(
-                                        SharedString::from(format!("permission-deny-{request_id}")),
-                                        "Deny",
-                                        false,
+                                    allow_button(
+                                        SharedString::from(format!("permission-allow-{request_id}")),
                                         !busy,
                                         palette,
                                     )
+                                    .track_focus(&view.dock.keys.allow)
+                                    .when(!busy, |button| {
+                                        button.on_click(cx.listener(move |this, _, _, cx| {
+                                            this.answer_tool_request(allow.clone(), Decision::Allow, None, cx)
+                                        }))
+                                    }),
+                                )
+                                .when_some(for_session, |actions, index| {
+                                    actions.child(
+                                        permission_button(
+                                            SharedString::from(format!("permission-session-{request_id}")),
+                                            ALLOW_SESSION,
+                                            false,
+                                            !busy,
+                                            palette,
+                                        )
+                                        .when(!busy, |button| {
+                                            button.on_click(cx.listener(move |this, _, _, cx| {
+                                                this.answer_tool_request(
+                                                    session.clone(),
+                                                    Decision::AllowSession,
+                                                    Some(index),
+                                                    cx,
+                                                )
+                                            }))
+                                        }),
+                                    )
+                                })
+                                .child(
+                                    ghost_button(
+                                        SharedString::from(format!("permission-deny-{request_id}")),
+                                        DENY,
+                                        palette,
+                                    )
+                                    .h(px(32.))
                                     .when(!busy, |button| {
                                         button.on_click(cx.listener(move |this, _, window, cx| {
                                             let message = if let View::Code(view) = &mut this.view {
@@ -611,44 +827,13 @@ impl Workspace {
                                             )
                                         }))
                                     }),
-                                )
-                                .when(!describe_all(suggestions).is_empty(), |actions| {
-                                    actions.child(
-                                        permission_button(
-                                            SharedString::from(format!("permission-always-{request_id}")),
-                                            "Remember…",
-                                            false,
-                                            !busy,
-                                            palette,
-                                        )
-                                        .when(!busy, |button| {
-                                            button.on_click(
-                                                cx.listener(|this, _, _, cx| this.toggle_dock_menu(Menu::Always, cx)),
-                                            )
-                                        }),
-                                    )
-                                })
-                                .child(
-                                    permission_button(
-                                        SharedString::from(format!("permission-allow-{request_id}")),
-                                        "Allow once",
-                                        true,
-                                        !busy,
-                                        palette,
-                                    )
-                                    .track_focus(&view.dock.keys.allow)
-                                    .when(!busy, |button| {
-                                        button.on_click(cx.listener(move |this, _, _, cx| {
-                                            this.answer_tool_request(allow.clone(), Decision::Allow, None, cx)
-                                        }))
-                                    }),
                                 ),
                             palette,
                         )
                         .into_any_element(),
                     );
                     if view.dock.menu == Some(Menu::Always) {
-                        for rule in describe_all(suggestions) {
+                        for rule in rules {
                             let id = request_id.clone();
                             let title = match rule.code {
                                 Some(code) => format!("{} {code}", rule.title),
@@ -806,6 +991,41 @@ mod tests {
         blocks.push(request("two", "echo two"));
         queue.follow(&blocks);
         assert_eq!(queue.open.as_deref(), Some("two"));
+    }
+
+    #[test]
+    fn the_card_says_who_asks_what_and_where() {
+        assert_eq!(ask_title("Claude Code", "Bash"), "Claude Code wants to run a command");
+        assert_eq!(ask_title("Codex", "Edit"), "Codex wants to edit a file");
+        assert_eq!(place_line(&RunsOn::Here), "On this computer");
+        assert_eq!(place_line(&RunsOn::Cloud), "On a cloud machine");
+        assert_eq!(place_line(&RunsOn::Server("build-box".into())), "On build-box");
+        assert_eq!(
+            (ALLOW, ALLOW_SESSION, DENY),
+            ("Allow", "Allow for this session", "Deny")
+        );
+    }
+
+    #[test]
+    fn allow_for_this_session_keeps_only_a_rule_scoped_to_the_session() {
+        let suggestion = |raw: Value| PermissionSuggestion {
+            kind: String::new(),
+            label: String::new(),
+            raw,
+        };
+        let project = suggestion(
+            json!({"type":"addRules","destination":"localSettings","behavior":"allow",
+            "rules":[{"toolName":"Bash","ruleContent":"npm test:*"}]}),
+        );
+        let edits = suggestion(json!({"type":"setMode","mode":"acceptEdits","destination":"session"}));
+        let deny = suggestion(json!({"type":"addRules","destination":"session","behavior":"deny"}));
+        // A rule saved past the session never stands in: no button.
+        assert_eq!(session_suggestion(&[project.clone()]), None);
+        assert_eq!(session_suggestion(&[project.clone(), deny.clone(), edits]), Some(2));
+        assert_eq!(
+            session_suggestion(&[deny, project, suggestion(json!("acceptForSession"))]),
+            Some(2)
+        );
     }
 
     #[test]

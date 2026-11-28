@@ -64,7 +64,7 @@ impl SideChat {
         let mut row = v_flex()
             .w_full()
             .gap(px(6.))
-            .child(queue::request_head(request_id, tool, summary, true, busy, p))
+            .child(queue::request_head(request_id, tool, summary, None, true, busy, p))
             .children(queue::directory(input).map(|cwd| queue::request_folder(request_id, cwd.to_string(), p)))
             .children(
                 description
