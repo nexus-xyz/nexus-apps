@@ -1291,7 +1291,8 @@ pub(crate) fn tightest(plan: &PlanUsage) -> Option<&Limit> {
 mod tests {
     use super::{
         ACTIVE_NOTE, Limit, PlanUsage, Progress, SessionAgent, duplicates, fold_key, folds, groups, limit_label,
-        login_command, plan_name, plan_payer, plans, resets_in, row_folds, starts_open, tightest, used_pct, window_label,
+        login_command, plan_name, plan_payer, plans, resets_in, row_folds, starts_open, tightest, used_pct,
+        window_label,
     };
 
     /// Each agent on its own plan names that plan: Antigravity's is Google AI, not Claude's.
