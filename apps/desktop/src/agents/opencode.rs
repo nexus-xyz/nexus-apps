@@ -15,10 +15,6 @@ impl AgentUi for Opencode {
         "Stop this turn (Esc). The sub-agents it started may stop too."
     }
 
-    fn fast_mode(&self) -> bool {
-        false
-    }
-
     /// OpenCode's provider owns billing and sign-in.
     fn reads_plan(&self) -> bool {
         false

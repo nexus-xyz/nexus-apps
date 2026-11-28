@@ -1057,7 +1057,7 @@ impl Workspace {
     }
 
     /// Turn the open session's fast mode on or off (`wb_thread_update`). A running agent takes it at its next model call.
-    fn set_session_fast(&mut self, on: bool, cx: &mut Context<Self>) {
+    pub(super) fn set_session_fast(&mut self, on: bool, cx: &mut Context<Self>) {
         if let Some(id) = self.code_session().map(|session| session.id.clone())
             && let Some(runs) = self.runs(&id)
         {
@@ -1073,28 +1073,21 @@ impl Workspace {
         cx.notify();
     }
 
-    /// Whether the session's model has fast mode: the model picked, else the one the agent reported running, else the one
-    /// Default runs. Only Claude Code has it (`AgentUi::fast_mode`).
+    /// Whether the session's model has fast mode (`effort::has_fast`): the model picked, else the one the agent reported
+    /// running, else the one Default runs.
     pub(super) fn session_has_fast(&self, session: &CodeSession) -> bool {
-        if !crate::agents::ui(session.agent).fast_mode() {
-            return false;
-        }
-        let model = session
-            .picker_values()
-            .model
-            .or_else(|| {
-                session
-                    .connection
-                    .as_ref()
-                    .and_then(|connection| connection.model.clone())
-            })
-            .or_else(|| {
-                self.agent_catalog(session.agent)
-                    .iter()
-                    .find(|model| crate::code::is_default_entry(model))
-                    .and_then(|model| model.resolved_id.clone())
-            });
-        model.is_some_and(|model| nexus_workbench::claude::supports_fast(&model))
+        let model = session.picker_values().model.or_else(|| {
+            session
+                .connection
+                .as_ref()
+                .and_then(|connection| connection.model.clone())
+        });
+        effort::has_fast(
+            session.agent,
+            session.via,
+            &self.agent_catalog(session.agent),
+            model.as_deref(),
+        )
     }
 
     /// Start rewriting queued message `seq` in place.
@@ -1629,7 +1622,7 @@ impl Workspace {
                     menu_row(
                         "code-speed-fast",
                         "Fast".into(),
-                        Some(fast_hint(on.then_some(off).flatten()).into()),
+                        Some(fast_hint(session.agent, on.then_some(off).flatten()).into()),
                         on,
                         palette,
                     )
@@ -2517,9 +2510,10 @@ pub(crate) fn menu_label(label: &'static str, palette: Palette) -> impl IntoElem
 
 /// A menu row: its words, a hint under them, and a check when it is the current one.
 /// The Fast row's hint: what it costs, or, when Claude Code reports fast mode is not serving, why (its
-/// `fast_mode_disabled_reason`, `claude::fast_off`).
-fn fast_hint(off: Option<&str>) -> String {
+/// `fast_mode_disabled_reason`, `claude::fast_off`). Codex runs it only on its plan (`driver::fast_allowed`).
+pub(super) fn fast_hint(agent: SessionAgent, off: Option<&str>) -> String {
     match off {
+        None if agent == SessionAgent::Codex => "Faster output; uses more of your ChatGPT plan".into(),
         None => "Faster output at twice the price".into(),
         // Claude Code reports these until the next model call takes the change.
         Some("sdk_opt_in_required" | "pending") => nexus_workbench::picker_values::APPLIES_LATER.into(),
@@ -2828,18 +2822,21 @@ mod receipt_layout_tests {
                 name: "Default".into(),
                 efforts: Vec::new(),
                 resolved_id: Some("claude-opus-5-5".into()),
+                fast: false,
             },
             nexus_workbench::agent_models::Model {
                 id: "opus".into(),
                 name: "Opus 5.5".into(),
                 efforts: Vec::new(),
                 resolved_id: Some("claude-opus-5-5".into()),
+                fast: false,
             },
             nexus_workbench::agent_models::Model {
                 id: "gpt-6.1-sol".into(),
                 name: "GPT-6.1 Sol".into(),
                 efforts: Vec::new(),
                 resolved_id: None,
+                fast: false,
             },
         ];
         assert_eq!(super::session_model_label(&catalog, "claude-opus-5-5"), "Opus 5.5");

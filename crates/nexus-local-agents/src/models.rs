@@ -10,6 +10,10 @@ pub struct Model {
     pub efforts: Vec<Effort>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub resolved_id: Option<String>,
+    /// The agent reports a fast speed for it: Codex's `priority` service tier. Claude Code reports none; nexus-workbench's
+    /// `claude::supports_fast` lists its fast models.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub fast: bool,
 }
 
 /// The agent's reasoning effort. None on a session is the model's own default.

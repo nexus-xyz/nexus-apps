@@ -11,6 +11,7 @@ Chats restore saved images and files. **Retry attachments** retries missing ones
 - A project is a local or server folder, or a cloned repository. Add a project lists folders as the person types.
 - Sessions run one agent at a time. GPUI uses main worktrees unless defaults override them.
 - GPUI's model picker switches Claude Code and Codex, with a context and payer confirmation.
+- Its Speed control turns on fast mode: Claude Code on its fast models, Codex only on a ChatGPT plan.
 - Worktree moves include uncommitted changes.
 - Permission modes set approvals. Your modes follow `agent`.
 - Settings › App can archive sessions whose PR merged.

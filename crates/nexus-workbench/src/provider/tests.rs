@@ -181,6 +181,7 @@ fn model(id: &str, resolved: Option<&str>, name: &str) -> Model {
         name: name.into(),
         efforts: Vec::new(),
         resolved_id: resolved.map(String::from),
+        fast: false,
     }
 }
 

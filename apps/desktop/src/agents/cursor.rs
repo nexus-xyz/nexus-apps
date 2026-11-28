@@ -15,10 +15,6 @@ impl AgentUi for Cursor {
         "Stop this turn (Esc). The sub-agents it started may stop too."
     }
 
-    fn fast_mode(&self) -> bool {
-        false
-    }
-
     /// Nexus does not read Cursor's plan.
     fn reads_plan(&self) -> bool {
         false

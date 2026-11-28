@@ -1027,6 +1027,7 @@ pub(crate) mod tests {
             name: "Opus 5.5".into(),
             efforts: Vec::new(),
             resolved_id: Some("claude-opus-5-5".into()),
+            fast: false,
         }
     }
 
@@ -1181,6 +1182,7 @@ pub(crate) mod tests {
             name: name.into(),
             efforts: Vec::new(),
             resolved_id: resolved.map(String::from),
+            fast: false,
         };
         let limit = |label: &str, used: f64, resets_at: Option<i64>| crate::plans::Limit {
             models: Vec::new(),

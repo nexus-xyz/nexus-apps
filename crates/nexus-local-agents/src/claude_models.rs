@@ -105,6 +105,7 @@ fn parse(message: &Value) -> Option<Vec<Model>> {
                 .and_then(Value::as_str)
                 .filter(|id| !id.is_empty())
                 .map(String::from),
+            fast: false,
         });
     }
     Some(models)

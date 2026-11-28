@@ -34,8 +34,6 @@ pub(crate) trait AgentUi: Sync {
     fn short_name(&self) -> &'static str;
     /// The Stop button's tooltip while a turn runs (`interrupt.ts`'s `interruptTitle`).
     fn interrupt_title(&self) -> &'static str;
-    /// Whether its models may run in fast mode.
-    fn fast_mode(&self) -> bool;
     /// Whether Settings › Subscriptions reads its plan: it has a section there.
     fn reads_plan(&self) -> bool;
     /// What to pick in its sign-in so the login bills the plan.
@@ -134,7 +132,6 @@ mod tests {
             } else {
                 assert_eq!(title, "Stop this turn (Esc). The sub-agents it started may stop too.");
             }
-            assert_eq!(ui(agent).fast_mode(), agent == SessionAgent::Claude, "{agent:?}");
         }
     }
 }

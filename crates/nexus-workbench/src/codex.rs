@@ -21,6 +21,7 @@
 
 use std::collections::{HashMap, HashSet, VecDeque};
 
+use nexus_local_agents::codex_models::FAST_TIER;
 use serde_json::{Value, json};
 
 use crate::driver::{Background, Out, Protocol, Say, Start, cap};
@@ -104,6 +105,8 @@ struct Changes {
     mode: Option<PermissionMode>,
     model: Option<String>,
     effort: Option<Effort>,
+    /// Fast mode on or off: `serviceTier`, which the thread keeps for the turns after.
+    fast: Option<bool>,
 }
 
 /// One run of `codex app-server`, for one session.
@@ -228,7 +231,11 @@ impl Driver {
                 .unwrap_or_else(|| nexus_agents::Codex.instructions().text()),
             mode: start.mode,
             reviewing: start.mode == PermissionMode::Auto,
-            changes: Changes::default(),
+            // A session saved in fast mode asks for it on its first turn; one that is not keeps Codex's own default.
+            changes: Changes {
+                fast: start.fast.then_some(true),
+                ..Changes::default()
+            },
             queue: VecDeque::new(),
             turn: Turn::Idle,
             steers: Vec::new(),
@@ -534,6 +541,10 @@ impl Driver {
         };
         let mut params = json!({"threadId": thread, "input": input});
         let changes = std::mem::take(&mut self.changes);
+        if let Some(on) = changes.fast {
+            // "default" is Codex's standard speed; a missing tier would keep the thread's.
+            params["serviceTier"] = json!(if on { FAST_TIER } else { "default" });
+        }
         let mode_changed = changes.mode.is_some();
         if let Some(mode) = changes.mode {
             params["approvalPolicy"] = json!(policy(mode).0);
@@ -1498,8 +1509,10 @@ impl Protocol for Driver {
                 self.changes.effort = effort;
                 ack(request)
             }
-            // Later: Codex's service tier is not supported yet; only "off" reaches here.
-            Say::Fast { request, .. } => ack(request),
+            Say::Fast { request, on } => {
+                self.changes.fast = Some(on);
+                ack(request)
+            }
             Say::Allow {
                 request_id,
                 answers,
@@ -1900,6 +1913,58 @@ mod tests {
             assert_eq!(requests[0]["method"], "turn/start");
             assert_eq!(requests[0]["params"]["effort"], effort.as_str());
         }
+    }
+
+    /// Fast mode is Codex's `priority` service tier, sent once with the next turn; off is "default", and a turn with no
+    /// change sends none, so the thread keeps its tier.
+    #[test]
+    fn fast_mode_is_the_next_turns_service_tier() {
+        // One message as a turn of its own, and that turn's `serviceTier`.
+        let turn = |c: &mut Driver, text: &str| {
+            let start = written(&c.say(user(text))).remove(0);
+            assert_eq!(start["method"], "turn/start");
+            c.turn = Turn::Idle;
+            start["params"].get("serviceTier").cloned()
+        };
+        let mut c = codex(false);
+        c.open();
+        lines(&mut c, &[json!({"id":2,"result":{"thread":{"id":"thr_1"}}})]);
+        assert_eq!(
+            turn(&mut c, "one"),
+            None,
+            "Codex's own default until the person picks a speed"
+        );
+        c.say(Say::Fast {
+            request: "on".into(),
+            on: true,
+        });
+        assert_eq!(turn(&mut c, "two"), Some(json!("priority")));
+        assert_eq!(turn(&mut c, "three"), None, "the thread keeps it");
+        c.say(Say::Fast {
+            request: "off".into(),
+            on: false,
+        });
+        assert_eq!(turn(&mut c, "four"), Some(json!("default")));
+
+        // A session saved in fast mode asks for it on its first turn.
+        let mut fast = Driver::new(&Start {
+            mode: PermissionMode::Default,
+            model: None,
+            effort: None,
+            fast: true,
+            native_id: "thr_old",
+            resume: false,
+            fork: false,
+            cwd: "/r",
+            rewind: None,
+            rewind_required: false,
+            instructions: None,
+            prompt: None,
+            name: None,
+        });
+        fast.open();
+        lines(&mut fast, &[json!({"id":2,"result":{"thread":{"id":"thr_1"}}})]);
+        assert_eq!(turn(&mut fast, "one"), Some(json!("priority")));
     }
 
     #[test]

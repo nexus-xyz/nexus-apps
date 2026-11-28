@@ -15,10 +15,6 @@ impl AgentUi for Nexus {
         "Stop this turn (Esc). The sub-agents it started may stop too."
     }
 
-    fn fast_mode(&self) -> bool {
-        false
-    }
-
     fn reads_plan(&self) -> bool {
         false
     }

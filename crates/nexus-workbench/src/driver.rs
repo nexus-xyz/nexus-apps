@@ -8,7 +8,7 @@ use std::path::{Path, PathBuf};
 use serde_json::{Map, Value};
 
 use crate::event::{
-    AgentCapabilities, Effort, Image, PLAN_TOOL, PermissionMode, QUESTION_TOOL, SessionAgent, Usage, WbEvent,
+    AgentCapabilities, Effort, Image, PLAN_TOOL, PermissionMode, QUESTION_TOOL, SessionAgent, Usage, Via, WbEvent,
 };
 use crate::harness::{RunFacts, harness};
 
@@ -176,7 +176,8 @@ pub enum Say {
         request: String,
         effort: Option<Effort>,
     },
-    /// Claude Code's fast mode on or off ([`crate::claude::set_fast`]). Only a Claude Code session is sent one.
+    /// Fast mode on or off: Claude Code's ([`crate::claude::set_fast`]) or Codex's service tier. Only a session
+    /// [`fast_allowed`] is sent one.
     Fast {
         request: String,
         on: bool,
@@ -335,7 +336,7 @@ pub struct Start<'a> {
     pub mode: PermissionMode,
     pub model: Option<&'a str>,
     pub effort: Option<Effort>,
-    /// Claude Code's fast mode ([`crate::event::ThreadSummary::fast`]).
+    /// Fast mode ([`crate::event::ThreadSummary::fast`]).
     pub fast: bool,
     /// The agent's own id for the conversation.
     pub native_id: &'a str,
@@ -399,6 +400,16 @@ pub(crate) fn check_mode(agent: SessionAgent, mode: PermissionMode) -> Result<()
 /// The agent as people name it.
 pub fn label(agent: SessionAgent) -> &'static str {
     harness(agent).label()
+}
+
+/// Whether a session of `agent` paid `via` may run in fast mode: Claude Code always; Codex only on the person's plan,
+/// because Gateway has no price for its `priority` service tier yet.
+pub fn fast_allowed(agent: SessionAgent, via: Via) -> bool {
+    match agent {
+        SessionAgent::Claude => true,
+        SessionAgent::Codex => via == Via::Subscription,
+        _ => false,
+    }
 }
 
 /// Whether the workbench answers an ask about `tool` without the person. It answers only Nexus's own agent's

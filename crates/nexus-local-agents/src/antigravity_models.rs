@@ -71,6 +71,7 @@ fn fold(listed: &[(String, String)], gemini_only: bool) -> Vec<Model> {
                     name: plain_name(label),
                     efforts: vec![effort],
                     resolved_id: None,
+                    fast: false,
                 }),
             },
             None => models.push(Model {
@@ -78,6 +79,7 @@ fn fold(listed: &[(String, String)], gemini_only: bool) -> Vec<Model> {
                 name: plain_name(label),
                 efforts: Vec::new(),
                 resolved_id: None,
+                fast: false,
             }),
         }
     }
@@ -97,6 +99,7 @@ fn fold(listed: &[(String, String)], gemini_only: bool) -> Vec<Model> {
             name: "Default".into(),
             efforts: first.efforts.clone(),
             resolved_id: Some(first.id.clone()),
+            fast: false,
         };
         models.insert(0, default);
     }
