@@ -28,6 +28,7 @@ use serde_json::{Map, Value};
 use super::code_view::CodeView;
 use super::queue_drag::{QueuedDrag, grip};
 use super::{View, Workspace, glyph, transcript};
+use super::{queue_drag, queued_row};
 use crate::code::{Block, CodeSession, Todo, TodoStatus};
 use crate::i18n::tr;
 use crate::motion;
@@ -1253,14 +1254,21 @@ impl Workspace {
             .into();
         let sent_rows = sent.iter().map(|message| {
             let tip = next_step.clone();
-            on_queue_row(
-                ("on-queue-sent", message.seq as u64),
-                &message.chip_text(),
-                None,
-                palette,
-            )
-            .tooltip(move |window, cx| gpui_kit::component::tooltip::Tooltip::new(tip.clone()).build(window, cx))
-            .into_any_element()
+            let (seq, text) = (message.seq as u64, message.chip_text());
+            let open = self.queue_hover.is("code-sent", seq);
+            v_flex()
+                .id(("on-queue-sent-wrap", seq))
+                .w_full()
+                .on_hover(
+                    cx.listener(move |this, hovered: &bool, _, cx| this.queue_hovered("code-sent", seq, *hovered, cx)),
+                )
+                .child(
+                    on_queue_row(("on-queue-sent", seq), &text, None, palette).tooltip(move |window, cx| {
+                        gpui_kit::component::tooltip::Tooltip::new(tip.clone()).build(window, cx)
+                    }),
+                )
+                .child(queued_row::body(("on-queue-sent-open", seq), open, &text, 0., palette))
+                .into_any_element()
         });
         let thread = view.id.clone();
         let queued_rows = queued.iter().enumerate().map(|(ix, &(seq, text))| {
@@ -1323,18 +1331,9 @@ impl Workspace {
                     gpui_kit::component::tooltip::Tooltip::new(tr("Drag to reorder")).build(window, cx)
                 })
             });
-            let target = palette.hover;
-            on_queue_row(("queued", ix), text, drag, palette)
+            let indent = if drag.is_some() { 28. } else { 0. };
+            let row = on_queue_row(("queued", ix), text, drag, palette)
                 .when(acting, |row| row.opacity(0.5))
-                // The row a drop would land on lights up; the dragged row itself does not.
-                .drag_over::<QueuedDrag>(move |style, drag, _, _| {
-                    if drag.seq() == seq {
-                        style
-                    } else {
-                        style.rounded(px(8.)).bg(target)
-                    }
-                })
-                .on_drop(cx.listener(move |this, drag: &QueuedDrag, _, cx| this.drop_queued(drag, seq, cx)))
                 .child(
                     icon_button(("queued-steer", ix), Lucide::ArrowUp, palette)
                         .tooltip(move |window, cx| {
@@ -1372,8 +1371,27 @@ impl Workspace {
                             this.focus_composer(window, cx);
                             cx.notify();
                         })),
-                )
-                .into_any_element()
+                );
+            // Under the pointer the row opens to its whole message, as a stacked reply does (`queued_row.rs`).
+            let open = self.queue_hover.is("code", seq as u64);
+            let wrap =
+                v_flex()
+                    .id(("queued-wrap", seq as u64))
+                    .w_full()
+                    .rounded(px(8.))
+                    .on_hover(cx.listener(move |this, hovered: &bool, _, cx| {
+                        this.queue_hovered("code", seq as u64, *hovered, cx)
+                    }))
+                    .on_drop(cx.listener(move |this, drag: &QueuedDrag, _, cx| this.drop_queued(drag, seq, cx)))
+                    .child(row)
+                    .child(queued_row::body(
+                        ("queued-open", seq as u64),
+                        open,
+                        text,
+                        indent,
+                        palette,
+                    ));
+            queue_drag::drop_target(wrap, seq, palette).into_any_element()
         });
         // A hairline under the rows parts them from the text. A long queue scrolls (about five rows show), as chat's.
         Some(
@@ -1406,10 +1424,24 @@ impl Workspace {
         }
         let rows = texts.iter().enumerate().map(|(ix, (id, text))| {
             let id = *id;
-            queued_chip(("waiting", id as usize), ix, text, palette).child(
-                icon_button(("waiting-take-back", id as usize), Lucide::X, palette)
-                    .on_click(cx.listener(move |this, _, window, cx| this.take_back_waiting(id, window, cx))),
-            )
+            let open = self.queue_hover.is("waiting", id);
+            queued_row::frame(("waiting-frame", id as usize), palette.raised, palette)
+                .on_hover(
+                    cx.listener(move |this, hovered: &bool, _, cx| this.queue_hovered("waiting", id, *hovered, cx)),
+                )
+                .child(
+                    queued_row::in_frame(queued_chip(("waiting", id as usize), ix, text, palette)).child(
+                        icon_button(("waiting-take-back", id as usize), Lucide::X, palette)
+                            .on_click(cx.listener(move |this, _, window, cx| this.take_back_waiting(id, window, cx))),
+                    ),
+                )
+                .child(queued_row::body(
+                    ("waiting-open", id as usize),
+                    open,
+                    text,
+                    queued_row::chip_indent(false),
+                    palette,
+                ))
         });
         Some(
             v_flex()
@@ -2289,6 +2321,17 @@ pub(super) fn queued_header(count: usize, when: &'static str, palette: Palette) 
 
 /// A queued message's chip: its place in the queue and its first words. Its actions follow.
 pub(super) fn queued_chip(id: impl Into<ElementId>, ix: usize, text: &str, palette: Palette) -> Stateful<Div> {
+    queued_chip_led(id, ix, text, None, palette)
+}
+
+/// A queued chip with `lead` before its number: the side chat's reorder grip (`queue_drag::grip`).
+pub(super) fn queued_chip_led(
+    id: impl Into<ElementId>,
+    ix: usize,
+    text: &str,
+    lead: Option<AnyElement>,
+    palette: Palette,
+) -> Stateful<Div> {
     let line = text.split_whitespace().collect::<Vec<_>>().join(" ");
     let line = if line.is_empty() { tr("Image").to_string() } else { line };
     h_flex()
@@ -2302,6 +2345,7 @@ pub(super) fn queued_chip(id: impl Into<ElementId>, ix: usize, text: &str, palet
         .border_color(palette.border)
         .bg(palette.raised)
         .text_size(px(13.))
+        .children(lead)
         .child(
             div()
                 .flex_none()

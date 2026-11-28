@@ -1,6 +1,7 @@
-//! Reordering a Code session's queue by drag and drop. Each "On queue" row has a grip; drag it onto another queued
-//! row and the message moves there. The session engine owns the order (`Workbench::queue_move`): the dock redraws when
-//! its `QueueMove` event comes back, so every window and a remote host's clients see the same order.
+//! Reordering a queue by drag and drop. Each queued row of two or more has a grip; drag it onto another queued row
+//! and the message moves there. A Code session's and a side chat's engine owns the order (`Workbench::queue_move`):
+//! the queue redraws when its `QueueMove` event comes back, so every window and a remote host's clients see the same
+//! order. A Gateway chat's queue is the app's own (`chat_queue.rs`, `Queue::move_before`).
 
 use gpui_kit::assets::IconName as Lucide;
 use gpui_kit::component::h_flex;
@@ -31,6 +32,11 @@ impl QueuedDrag {
 
     pub(super) fn seq(&self) -> i64 {
         self.seq
+    }
+
+    /// The session or side chat whose queue it belongs to: a drop on another's row moves nothing.
+    pub(super) fn thread(&self) -> &str {
+        &self.thread
     }
 }
 
@@ -81,6 +87,16 @@ pub(super) fn grip(id: impl Into<ElementId>, drag: QueuedDrag, palette: Palette)
         .hover(|style| style.bg(palette.hover))
         .child(glyph(Lucide::GripVertical, palette.faint))
         .on_drag(drag, |drag, _, _, cx| cx.new(|_| drag.clone()))
+}
+
+/// The row a drop would land on lights up; the dragged row itself does not.
+pub(super) fn drop_target(row: Stateful<Div>, seq: i64, palette: Palette) -> Stateful<Div> {
+    let target = palette.hover;
+    row.drag_over::<QueuedDrag>(
+        move |style, drag, _, _| {
+            if drag.seq() == seq { style } else { style.bg(target) }
+        },
+    )
 }
 
 impl Workspace {

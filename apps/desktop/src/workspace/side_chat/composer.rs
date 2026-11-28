@@ -3,6 +3,7 @@
 use super::*;
 use crate::palette::Palette;
 use crate::workspace::code_dock::{self, MODES, menu_box, menu_label, menu_row};
+use crate::workspace::queued_row;
 use gpui_kit::assets::IconName as Lucide;
 use gpui_kit::component::input::Textarea;
 use gpui_kit::component::{h_flex, v_flex};
@@ -392,7 +393,9 @@ impl SideChat {
                     .into_any_element();
             }
             let edit = text.to_string();
-            code_dock::queued_chip(("side-queued", ix), ix, text, p)
+            let indent = queued_row::chip_indent(false);
+            let open = self.history.queued.is("side", seq as u64);
+            let head = queued_row::in_frame(code_dock::queued_chip(("side-queued", ix), ix, text, p))
                 .when(self.sending, |chip| chip.opacity(0.5))
                 .child(
                     code_dock::text_button(SharedString::from(format!("side-steer-{seq}")), "Send now", false, p)
@@ -431,7 +434,22 @@ impl SideChat {
                             this.input.focus_handle(cx).focus(window, cx);
                         }),
                     ),
-                )
+                );
+            // Under the pointer the chip opens to its whole message, as a stacked reply does (`queued_row.rs`).
+            queued_row::frame(("side-queued-frame", seq as u64), p.raised, p)
+                .on_hover(cx.listener(move |this, hovered: &bool, _, cx| {
+                    if this.history.queued.set("side", seq as u64, *hovered) {
+                        cx.notify();
+                    }
+                }))
+                .child(head)
+                .child(queued_row::body(
+                    ("side-queued-open", seq as u64),
+                    open,
+                    text,
+                    indent,
+                    p,
+                ))
                 .into_any_element()
         });
         Some(

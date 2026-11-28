@@ -20,6 +20,8 @@ pub(super) struct History {
     /// The turn (its end's seq) and the message under the pointer: their actions show.
     pub(super) hovered_turn: Option<i64>,
     pub(super) hovered_message: Option<i64>,
+    /// The queued row under the pointer, which opens to its whole message (`queued_row.rs`).
+    pub(super) queued: crate::workspace::queued_row::Hovered,
     /// What Copy last copied: a message's seq, or a turn's as `-seq - 1`.
     pub(super) copied: Option<i64>,
 }

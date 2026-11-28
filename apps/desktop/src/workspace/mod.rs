@@ -174,6 +174,7 @@ mod local_mode;
 mod onboarding;
 mod queue_drag;
 mod queue_hold;
+mod queued_row;
 const REQUIRES_SIGN_IN: &str = "Requires sign-in";
 mod revoked_notice;
 mod session_drag;
@@ -671,6 +672,8 @@ pub struct Workspace {
     diff_comments: HashMap<String, Vec<nexus_workbench::diff_comment::DiffComment>>,
     /// Passages of answers and their replies waiting over a Code session's composer (`stacked_replies.rs`).
     replies: stacked_replies::Replies,
+    /// The queued row under the pointer, which opens to its whole message (`queued_row.rs`).
+    queue_hover: queued_row::Hovered,
     attaching: usize,
     /// A sent message's files while they go up in pieces (`uploads.rs`).
     uploading: Option<uploads::Uploading>,
@@ -1297,6 +1300,7 @@ impl Workspace {
             draft_text: SharedString::default(),
             diff_comments: HashMap::new(),
             replies: stacked_replies::Replies::new(window, cx),
+            queue_hover: Default::default(),
             attaching: 0,
             uploading: None,
             file_drag: false,

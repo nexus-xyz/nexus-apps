@@ -18,6 +18,8 @@ use gpui_kit::*;
 use nexus_workbench::chat_queue::{self, Item, Outcome, Queues};
 
 use super::code_dock::{icon_button, text_button};
+use super::queue_drag::{self, QueuedDrag};
+use super::queued_row;
 use super::{View, Workspace, glyph};
 use crate::attachments::Draft;
 use crate::palette::Palette;
@@ -279,6 +281,30 @@ impl Workspace {
         }
     }
 
+    /// `drag` was dropped on queued chip `target` of the chat on screen: it moves there.
+    fn drop_queued_chat(&mut self, drag: &QueuedDrag, target: u64, cx: &mut Context<Self>) {
+        if !self.navigation_allowed() || drag.thread() != self.queue_key() {
+            return;
+        }
+        self.refresh_gateway_queues(cx);
+        let key = self.queue_key();
+        let order: Vec<i64> = self
+            .chat_queue
+            .queues
+            .get(&key)
+            .map(|queue| queue.items().iter().map(|item| item.seq as i64).collect())
+            .unwrap_or_default();
+        let Some(before) = queue_drag::drop_before(&order, drag.seq(), target as i64) else {
+            return;
+        };
+        let (seq, before) = (drag.seq() as u64, before.map(|before| before as u64));
+        self.chat_queue
+            .queues
+            .update(&key, |queue| queue.move_before(seq, before));
+        self.commit_gateway_queues(cx);
+        cx.notify();
+    }
+
     pub(super) fn gateway_rewrite_text(&self, cx: &App) -> String {
         self.chat_queue.edit.read(cx).value().to_string()
     }
@@ -375,17 +401,24 @@ impl Workspace {
                     .into_any_element();
             }
             let edit = item.text.clone();
-            h_flex()
+            // A queue of two or more reorders: drag a chip's grip onto another chip (`queue_drag.rs`).
+            let grip = (count > 1).then(|| {
+                let line = chat_queue::chip_text(&item.text, attachments);
+                let drag = QueuedDrag::new(self.queue_key(), seq as i64, line.into(), palette);
+                queue_drag::grip(("chat-queued-grip", ix), drag, palette).tooltip(|window, cx| {
+                    gpui_kit::component::tooltip::Tooltip::new("Drag to reorder").build(window, cx)
+                })
+            });
+            let indent = queued_row::chip_indent(grip.is_some());
+            let open = self.queue_hover.is("chat", seq);
+            let head = h_flex()
                 .id(("chat-queued", ix))
                 .w_full()
                 .h(px(32.))
                 .px(px(10.))
+                .when(grip.is_some(), |head| head.pl(px(4.)))
                 .gap(px(8.))
-                .rounded(px(10.))
-                .border_1()
-                .border_color(palette.border)
-                .bg(palette.background)
-                .text_size(px(13.))
+                .children(grip)
                 .child(
                     div()
                         .flex_none()
@@ -442,8 +475,20 @@ impl Workspace {
                             this.focus_composer(window, cx);
                             cx.notify();
                         })),
-                )
-                .into_any_element()
+                );
+            // Under the pointer the chip opens to its whole message, as a stacked reply does (`queued_row.rs`).
+            let frame = queued_row::frame(("chat-queued-frame", seq), palette.background, palette)
+                .on_hover(cx.listener(move |this, hovered: &bool, _, cx| this.queue_hovered("chat", seq, *hovered, cx)))
+                .on_drop(cx.listener(move |this, drag: &QueuedDrag, _, cx| this.drop_queued_chat(drag, seq, cx)))
+                .child(head)
+                .child(queued_row::body(
+                    ("chat-queued-open", seq),
+                    open,
+                    &item.text,
+                    indent,
+                    palette,
+                ));
+            queue_drag::drop_target(frame, seq as i64, palette).into_any_element()
         });
         let head = h_flex()
             .gap(px(6.))

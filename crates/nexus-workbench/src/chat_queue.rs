@@ -96,6 +96,23 @@ impl<P> Queue<P> {
         self.editing = seq.filter(|seq| self.items.iter().any(|item| item.seq == *seq));
     }
 
+    /// Moves item `seq` to just before item `before`, or last when `before` is `None` (drag to reorder). Nothing
+    /// moves when either is gone.
+    pub fn move_before(&mut self, seq: u64, before: Option<u64>) {
+        let has = |seq: u64| self.items.iter().any(|item| item.seq == seq);
+        if before == Some(seq) || !has(seq) || before.is_some_and(|before| !has(before)) {
+            return;
+        }
+        let Some(from) = self.items.iter().position(|item| item.seq == seq) else {
+            return;
+        };
+        let item = self.items.remove(from);
+        match before.and_then(|before| self.items.iter().position(|item| item.seq == before)) {
+            Some(to) => self.items.insert(to, item),
+            None => self.items.push(item),
+        }
+    }
+
     /// Moves an item to the front (Send now).
     pub fn promote(&mut self, seq: u64) {
         if let Some(at) = self.items.iter().position(|item| item.seq == seq) {
@@ -314,6 +331,24 @@ mod tests {
         assert_eq!(queue.editing(), None, "the item left with its rewrite");
         queue.set_editing(Some(99));
         assert_eq!(queue.editing(), None, "no rewrite of an item that is not there");
+    }
+
+    #[test]
+    fn moves_an_item_before_another_or_last() {
+        let mut queue = queued(&["one", "two", "three"]);
+        let seqs: Vec<u64> = queue.items().iter().map(|item| item.seq).collect();
+        queue.move_before(seqs[2], Some(seqs[0]));
+        assert_eq!(texts(&queue), ["three", "one", "two"]);
+        queue.move_before(seqs[2], None);
+        assert_eq!(texts(&queue), ["one", "two", "three"]);
+        queue.move_before(seqs[0], Some(99));
+        queue.move_before(99, None);
+        queue.move_before(seqs[1], Some(seqs[1]));
+        assert_eq!(
+            texts(&queue),
+            ["one", "two", "three"],
+            "a gone item or itself moves nothing"
+        );
     }
 
     #[test]
