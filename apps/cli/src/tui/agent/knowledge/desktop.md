@@ -65,6 +65,7 @@ Your prompt lists the available MCP servers.
 - Settings > Code > Subsessions sets limits and the default. Saved project choices win.
 - Each uses a separate worktree. Use `wait_sessions` for results. If off, work here.
 - Disable cross-agent subsessions limits starts to the same agent. Off Gateway, each agent needs a sign-in.
+- Enable cross-project subsessions, on by default, lets one run in another open, trusted project.
 - Start sessions another way only if asked.
 - Before you start, stop, archive or hand off a session, read `desktop-sessions`.
 

@@ -151,7 +151,7 @@ pub fn definitions(scope: Scope) -> Vec<Value> {
             "inputSchema": {
                 "type": "object",
                 "properties": {
-                    "project": {"type": "string", "description": "Only this project: its id, folder or GitHub owner/repo."},
+                    "project": {"type": "string", "description": "Only this project: its id, folder, GitHub owner/repo or name."},
                     "archived": {"type": "boolean", "description": "Include archived sessions. Default false."},
                     "limit": {"type": "integer", "minimum": 1, "maximum": 200, "default": 50}
                 },
@@ -187,7 +187,7 @@ pub fn definitions(scope: Scope) -> Vec<Value> {
                 "inputSchema": {
                     "type": "object",
                     "properties": {
-                        "project": {"type": "string", "description": "The project: its id, a folder in it, or GitHub owner/repo."},
+                        "project": {"type": "string", "description": "The project: its id, a folder in it, GitHub owner/repo or its name."},
                         "prompt": {"type": "string", "description": "The first message, 1 to 32000 characters."},
                         // The start parses any session agent (`SessionAgent::parse`), so the schema lists them all.
                         "agent": {"type": "string", "enum": nexus_workbench::event::SessionAgent::ALL.map(nexus_workbench::event::SessionAgent::as_str)},
@@ -343,67 +343,8 @@ pub fn turns(events: &[StoredEvent], count: usize) -> Vec<Value> {
         .collect()
 }
 
-/// `owner/repo` from a GitHub remote URL (`git@github.com:o/r.git`, `https://github.com/o/r`), lowercased.
-fn github_repo(remote: &str) -> Option<String> {
-    let rest = remote
-        .strip_prefix("git@github.com:")
-        .or_else(|| remote.split_once("github.com/").map(|(_, rest)| rest))?;
-    let rest = rest.trim_end_matches('/').trim_end_matches(".git");
-    let mut parts = rest.split('/');
-    let (owner, repo) = (parts.next()?, parts.next()?);
-    (parts.next().is_none() && !owner.is_empty() && !repo.is_empty()).then(|| format!("{owner}/{repo}").to_lowercase())
-}
-
-/// `project`, unless the person archived it. The app hides an archived project's sessions, so a turn started there
-/// from outside would run out of sight.
-pub fn in_sight(project: &Project) -> Result<&Project, String> {
-    if project.archived {
-        return Err(format!(
-            "The project {} is archived in Nexus, so its sessions are hidden there. Unarchive it in the app first.",
-            project.name
-        ));
-    }
-    Ok(project)
-}
-
-/// The project `query` names: its id, an absolute path inside it (the deepest project wins), or GitHub `owner/repo`.
-pub fn find_project<'a>(projects: &'a [Project], query: &str) -> Result<&'a Project, String> {
-    let query = query.trim();
-    if let Some(project) = projects.iter().find(|project| project.id == query) {
-        return Ok(project);
-    }
-    let path = std::path::Path::new(query);
-    if path.is_absolute() {
-        return projects
-            .iter()
-            .filter(|project| path.starts_with(&project.path))
-            .max_by_key(|project| project.path.len())
-            .ok_or_else(|| format!("No project in Nexus holds {query}. Add its folder in the app first."));
-    }
-    let wanted = query.to_lowercase();
-    let matches: Vec<&Project> = projects
-        .iter()
-        .filter(|project| {
-            project
-                .remotes
-                .iter()
-                .any(|remote| github_repo(remote).as_deref() == Some(&wanted))
-        })
-        .collect();
-    match matches.as_slice() {
-        [one] => Ok(one),
-        [] => Err(format!(
-            "No project in Nexus is the repository {query}. Add or clone it in the app first."
-        )),
-        many => Err(format!(
-            "More than one project is {query}: {}. Name one by its folder.",
-            many.iter()
-                .map(|project| project.path.as_str())
-                .collect::<Vec<_>>()
-                .join(", ")
-        )),
-    }
-}
+/// The project a start or a list names: the workbench's lookup, shared with `start_session`'s `project`.
+pub use nexus_workbench::project_lookup::{find_project, in_sight};
 
 /// A permission mode asked for in a start, read by name. None when it was not given.
 pub fn asked_mode(value: &Value) -> Result<Option<PermissionMode>, String> {
@@ -483,40 +424,19 @@ mod tests {
         assert!(acts(START) && acts(SEND) && acts(STOP) && acts(NAME));
     }
 
+    /// The outside start finds a project by the workbench's lookup: its name too, and an archived one is refused.
     #[test]
-    fn an_archived_project_is_out_of_sight() {
-        let mut archived = project("p1", "/home/a/nexus", &[]);
-        assert_eq!(in_sight(&archived).map(|p| &p.id), Ok(&"p1".to_string()));
-        archived.archived = true;
-        let refusal = in_sight(&archived).expect_err("an archived project is refused");
+    fn a_start_finds_its_project_by_the_workbench_lookup() {
+        let mut projects = [project("p1", "/home/a/nexus", &["git@github.com:acme/nexus.git"])];
+        assert_eq!(find_project(&projects, "P1").map(|p| &p.id), Ok(&"p1".to_string()));
+        projects[0].archived = true;
+        let refusal = find_project(&projects, "acme/nexus")
+            .and_then(in_sight)
+            .expect_err("archived");
         assert!(
             refusal.contains("p1 is archived") && refusal.contains("Unarchive"),
             "{refusal}"
         );
-    }
-
-    #[test]
-    fn a_project_is_found_by_id_folder_or_repository() {
-        let projects = [
-            project("p1", "/home/a/nexus", &["git@github.com:acme/nexus.git"]),
-            project("p2", "/home/a/nexus/eng/sub", &["https://github.com/acme/sub"]),
-            project("p3", "/home/a/other", &[]),
-        ];
-        assert_eq!(find_project(&projects, "p3").map(|p| &p.id), Ok(&"p3".to_string()));
-        assert_eq!(
-            find_project(&projects, "/home/a/nexus/src").map(|p| &p.id),
-            Ok(&"p1".to_string())
-        );
-        assert_eq!(
-            find_project(&projects, "/home/a/nexus/eng/sub/x").map(|p| &p.id),
-            Ok(&"p2".to_string())
-        );
-        assert_eq!(
-            find_project(&projects, "Acme/nexus").map(|p| &p.id),
-            Ok(&"p1".to_string())
-        );
-        assert!(find_project(&projects, "/home/a/nexusish").is_err());
-        assert!(find_project(&projects, "acme/missing").is_err());
     }
 
     #[test]

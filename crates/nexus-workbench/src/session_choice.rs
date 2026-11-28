@@ -359,7 +359,8 @@ impl Workbench {
         // A later decrease still clamps it again in start_child.
         child.permission_mode = Some(preview.summary.permission_mode);
         child.model = preview.summary.model.clone();
-        let preference = self.session_start_preference(&project.id)?;
+        // The choice is about the parent's work: its project's preference, also for a child in another project.
+        let preference = self.session_start_preference(&record.summary.project_id)?;
         let choice = if preference == Preference::Ask {
             let id = uuid::Uuid::new_v4().to_string();
             let (answer, mut received) = watch::channel(None);
@@ -369,7 +370,7 @@ impl Workbench {
                     parent: parent.into(),
                     scope: record.scope.clone(),
                     identity: identity.clone(),
-                    project: project.id,
+                    project: record.summary.project_id.clone(),
                     grant: grant.into(),
                     choice: StartChoice {
                         id: id.clone(),

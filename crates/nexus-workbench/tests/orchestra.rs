@@ -647,6 +647,36 @@ async fn app_tool_instructions_and_claude_allowlist_match_discovery() {
     let _ = std::fs::remove_dir_all(s.root);
 }
 
+/// A subsession in another project gets the subsession tools as any child does, while depth allows.
+#[tokio::test]
+async fn a_cross_project_subsession_gets_the_subsession_tools() {
+    let s = setup_with("tool-cross-project", Limits::default(), true, |config| Config {
+        terminal: true,
+        ..config
+    });
+    record_launches(&s);
+    let repo = s.root.join("elsewhere");
+    std::fs::create_dir_all(&repo).expect("a folder");
+    git(&repo, &["init", "--quiet", "--initial-branch", "main"]);
+    git(&repo, &["commit", "--quiet", "--allow-empty", "-m", "one"]);
+    let other = s.workbench.add_project(&repo).expect("a project");
+    s.workbench.set_claude_trust(&other.id, true).expect("trusted");
+
+    let lead = root(&s, new_root(&s.project, "Plan the release")).await;
+    assert_app_tools(&s, "the lead", true).await;
+    std::fs::remove_file(record(&s)).expect("clear the lead's launch record");
+    let start = nexus_workbench::StartChild {
+        title: Some("Child".into()),
+        project: Some(other.id.clone()),
+        ..child(SessionAgent::Claude, "Check the release")
+    };
+    let c = s.workbench.start_child(&lead.id, start).await.expect("started");
+    assert_app_tools(&s, "in another project", true).await;
+    assert!(thread(&s.workbench, &c.id).cross_project);
+    s.workbench.shutdown().await;
+    let _ = std::fs::remove_dir_all(s.root);
+}
+
 async fn assert_app_tools(s: &Setup, case: &str, crew: bool) {
     let launch = launched(s, |l| endpoint(l).is_some()).await;
     let at = endpoint(&launch).expect("nexus_app MCP server");
@@ -1322,6 +1352,57 @@ async fn a_start_loads_the_price_catalog_before_it_admits_the_child() {
     ask(&lead);
     let _stream = open_start(&lead, "priced").await;
     assert_eq!(pending_choice(&lead).await.title, "Sample child");
+    done(lead).await;
+}
+
+/// A start in another project shows that project's folder on the card. The lead's project's preference decides
+/// whether to ask: the choice is about the lead's work, so the other project's saved preference is not read.
+#[tokio::test]
+async fn a_start_in_another_project_shows_its_folder_and_asks_by_the_leads_project() {
+    use nexus_workbench::session_choice::Preference;
+    let lead = lead("choice-cross-project").await;
+    let repo = lead.s.root.join("elsewhere");
+    std::fs::create_dir_all(&repo).expect("a folder");
+    git(&repo, &["init", "--quiet", "--initial-branch", "main"]);
+    git(&repo, &["commit", "--quiet", "--allow-empty", "-m", "one"]);
+    let other = lead.s.workbench.add_project(&repo).expect("a project");
+    lead.s.workbench.set_claude_trust(&other.id, true).expect("trusted");
+    lead.s
+        .workbench
+        .set_session_start_preference(&other.id, Preference::New)
+        .expect("valid test fixture");
+    ask(&lead);
+    let call = json!({"jsonrpc":"2.0","id":993,"method":"tools/call","params":{"name":"start_session","arguments":{
+        "agent":"claude","title":"Sample child","prompt":"Build the changelog","key":"cross","project":other.id},
+        "_meta":{"progressToken":"choice-cross"}}});
+    let body = call.to_string();
+    let mut stream = TcpStream::connect(("127.0.0.1", lead.at.port))
+        .await
+        .expect("valid test fixture");
+    stream
+        .write_all(&raw("POST", &lead.at.path, &good_head(&lead.at, body.len()), &body))
+        .await
+        .expect("valid test fixture");
+    let choice = pending_choice(&lead).await;
+    assert_eq!(choice.workspace, other.path);
+    drop(stream);
+
+    // The other way round: the lead's project says New, the other project Ask. No card; the child starts there.
+    lead.s
+        .workbench
+        .set_session_start_preference(&lead.s.project, Preference::New)
+        .expect("valid test fixture");
+    lead.s
+        .workbench
+        .set_session_start_preference(&other.id, Preference::Ask)
+        .expect("valid test fixture");
+    let call = json!({"jsonrpc":"2.0","id":994,"method":"tools/call","params":{"name":"start_session","arguments":{
+        "agent":"claude","prompt":"Build the docs","key":"cross-new","project":other.id},
+        "_meta":{"progressToken":"choice-cross-new"}}});
+    let data = result_data(&post(&lead.at, &call).await);
+    assert_eq!(data["choice"], "new", "{data}");
+    let started = data["session_id"].as_str().unwrap_or_default();
+    assert_eq!(thread(&lead.s.workbench, started).project_id, other.id);
     done(lead).await;
 }
 

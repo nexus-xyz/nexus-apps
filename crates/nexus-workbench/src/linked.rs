@@ -5,6 +5,7 @@
 //! spend cap ([`spend`]). The tests in tests/linked.rs,
 //! tests/linked_results.rs and tests/linked_halts.rs cover each scenario.
 
+pub mod cross_project;
 pub mod halts;
 pub mod handoff;
 pub mod messages;
@@ -109,6 +110,9 @@ pub struct Subsessions {
     /// "Disable cross-agent subsessions": a subsession runs only its parent's agent, on every route
     /// ([`Config::cross_agent_off`](crate::Config::cross_agent_off)). Off by default.
     pub cross_agent_off: bool,
+    /// "Enable cross-project subsessions": `start_session` may start a subsession in another project open here
+    /// ([`Config::cross_project_on`](crate::Config::cross_project_on), [`cross_project`]). On by default.
+    pub cross_project_on: bool,
 }
 
 impl Default for Subsessions {
@@ -118,6 +122,7 @@ impl Default for Subsessions {
             first_start: crate::session_choice::Preference::Ask,
             limits: Limits::default(),
             cross_agent_off: false,
+            cross_project_on: true,
         }
     }
 }
@@ -144,6 +149,14 @@ pub enum OrchCode {
     UnpricedModel,
     /// The person turned on "Disable cross-agent subsessions": a subsession runs only its parent's agent.
     AgentNotAllowed,
+    /// The project a start names is not open in Nexus, or is archived.
+    ProjectNotOpen,
+    /// The project a start names is not trusted in Nexus.
+    ProjectUntrusted,
+    /// The person turned off "Enable cross-project subsessions".
+    CrossProjectOff,
+    /// A subsession in another project than its parent's tried to hand off.
+    CrossProject,
     /// This app or host makes no worktrees.
     WorktreesUnavailable,
     BadInput,
@@ -199,6 +212,9 @@ pub struct StartChild {
     /// Never above the parent's; None: the parent's.
     pub permission_mode: Option<PermissionMode>,
     pub key: Option<String>,
+    /// Another project open here, as [`crate::project_lookup::find_project`] reads it; None: the parent's
+    /// ([`cross_project`]).
+    pub project: Option<String>,
 }
 
 /// The session a new one is linked to: its parent, who started it (`agent` or `crew`), and its group: the crew's
@@ -323,6 +339,7 @@ impl Workbench {
         {
             let mut config = self.inner.config.lock().unwrap_or_else(|p| p.into_inner());
             config.cross_agent_off = subsessions.cross_agent_off;
+            config.cross_project_on = subsessions.cross_project_on;
             config.subsessions = subsessions.on;
             config.subsessions_first_start = subsessions.first_start;
         }
@@ -408,13 +425,19 @@ impl Workbench {
     /// A start that fails before the agent runs ends with a failed turn, so a wait on the child ends.
     ///
     /// Refused, in this order: a parent not in this workbench's organization (`org_mismatch`), with orchestration off
-    /// (`off`), or in Plan only (`plan_mode`); a bad prompt, title or key (`bad_input`); past the depth (`depth_limit`),
-    /// the parent's active children or every active linked session (`children_limit`), the parent's worktrees
-    /// (`worktrees_limit`); a paused tree (`paused`) or past the tree's starts (`starts_limit`); another agent than the
-    /// parent's with cross-agent subsessions off (`agent_not_allowed`); a mode the agent does not offer (`bad_input`);
-    /// no list prices at all (`unpriced_model`); no worktrees here (`worktrees_unavailable`). A halt on the parent or on
-    /// any session above it is refused too (`halted`), after its organization, and checked again just before the row is
-    /// saved.
+    /// (`off`), or in Plan only (`plan_mode`); a bad prompt, title or key (`bad_input`); past the depth (`depth_limit`), the parent's active children or every
+    /// active linked session (`children_limit`), the parent's worktrees (`worktrees_limit`); a paused tree (`paused`)
+    /// or past the tree's starts (`starts_limit`); another agent than the parent's with cross-agent subsessions off
+    /// (`agent_not_allowed`); a `project` other than the parent's own with cross-project subsessions off
+    /// (`cross_project_off`), one that is not open or is archived (`project_not_open`) or one not trusted
+    /// (`project_untrusted`), at every hop, and the same three for a child in its parent's own project when that is
+    /// not the root's; a mode the agent does not offer (`bad_input`); no list prices at all (`unpriced_model`); no worktrees here
+    /// (`worktrees_unavailable`). A halt on the parent or on any session above it is refused too (`halted`), after its
+    /// organization, and checked again just before the row is saved.
+    ///
+    /// A child in another project ([`cross_project`]) runs in its worktree, with its setup script, and in a mode no
+    /// higher than that project's default mode. It may start subsessions of its own, up to the depth limit, which
+    /// counts from the tree's root across projects.
     ///
     /// The child has the parent's organization and route (the person's own sign-in for an agent Gateway has no route
     /// for, [`child_via`]), the parent's account when it runs the same agent (else that agent's own login), and the
@@ -634,8 +657,15 @@ impl Workbench {
                 cross_agent_refusal(p.agent, "starts only {agent} subsessions"),
             );
         }
-        let mode = child.permission_mode.unwrap_or(parent_mode).lower(parent_mode);
-        if let Some(refusal) = mode_refusal(child.agent, mode, parent_mode) {
+        // The tree's root is the chain's last session (the parent itself for a root).
+        let root_project = chain
+            .last()
+            .map_or(p.project_id.as_str(), |root| root.summary.project_id.as_str());
+        let place = self.child_project(p, child.project.as_deref(), root_project)?;
+        // Another project's default mode is a ceiling too: the agent picked the project, not the person.
+        let ceiling = place.mode.map_or(parent_mode, |mode| parent_mode.lower(mode));
+        let mode = child.permission_mode.unwrap_or(ceiling).lower(ceiling);
+        if let Some(refusal) = mode_refusal(child.agent, mode, ceiling) {
             return refuse(OrchCode::BadInput, refusal);
         }
         let model = child
@@ -663,10 +693,7 @@ impl Workbench {
                 "Linked sessions need worktrees, and they aren't available here.",
             );
         }
-        let project = self
-            .store()
-            .project(&p.project_id)?
-            .ok_or_else(|| "This session's project is no longer open.".to_string())?;
+        let project = place.project;
 
         // Read again: the parent's row was read before this lock, and a halt may have landed since.
         if let Some(refusal) = self.start_refusal(&p.id)? {
@@ -677,7 +704,7 @@ impl Workbench {
             summary: ThreadSummary {
                 name: None,
                 id: id.unwrap_or_else(|| format!("t_{}", short_id())),
-                project_id: p.project_id.clone(),
+                project_id: project.id.clone(),
                 title: title.map_or_else(|| title_of(prompt), |t| t.to_string()),
                 agent: child.agent,
                 model,
@@ -709,6 +736,7 @@ impl Workbench {
                 spawned_by: Some(link.spawned_by),
                 group_id: link.group_id,
                 depth,
+                cross_project: place.cross,
                 // Depth gates the tools at each launch (`arm`, `Limits::depth`), so a change to the limits reaches
                 // this child too.
                 orchestration: true,
@@ -746,7 +774,8 @@ impl Workbench {
     }
 
     /// The child's worktree, its setup script, then its first prompt from `from` (None: the person's). Any failure before its agent
-    /// runs ends it with a failed turn. `native_id` tells this child from a session saved under its id after it was
+    /// runs ends it with a failed turn: a project removed or a child archived before its worktree too
+    /// ([`Workbench::start_gone`]). `native_id` tells this child from a session saved under its id after it was
     /// deleted (a keyed retry's), which this setup never touches. A child stopped, halted or deleted meanwhile keeps its
     /// worktree and sends nothing; one whose tree paused meanwhile ends as stopped.
     async fn set_up_child(
@@ -760,6 +789,9 @@ impl Workbench {
     ) {
         let made = async {
             let _update_activity = UpdateActivity::begin(self)?;
+            if let Some(reason) = self.start_gone(&id, &project)? {
+                return Err(reason);
+            }
             let worktree = self
                 .make_worktree(&project, &id, &prompt, NewWorktree::default())
                 .await?;
@@ -769,7 +801,10 @@ impl Workbench {
                 ours = record.native_id == native_id;
                 if ours {
                     record.summary.worktree = Some(worktree.clone());
-                    ended = record.summary.status != ThreadStatus::Starting || record.halt.is_some();
+                    // Archived meanwhile: its project was removed, say.
+                    ended = record.summary.status != ThreadStatus::Starting
+                        || record.halt.is_some()
+                        || record.summary.archived;
                 }
             });
             let summary = match saved {
@@ -1276,6 +1311,10 @@ mod tests {
             (OrchCode::Paused, "paused"),
             (OrchCode::OrgMismatch, "org_mismatch"),
             (OrchCode::AgentNotAllowed, "agent_not_allowed"),
+            (OrchCode::ProjectNotOpen, "project_not_open"),
+            (OrchCode::ProjectUntrusted, "project_untrusted"),
+            (OrchCode::CrossProjectOff, "cross_project_off"),
+            (OrchCode::CrossProject, "cross_project"),
             (OrchCode::WorktreesUnavailable, "worktrees_unavailable"),
             (OrchCode::BadInput, "bad_input"),
             (OrchCode::NotYourSession, "not_your_session"),

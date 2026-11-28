@@ -65,7 +65,9 @@ pub(crate) fn list() -> Vec<Value> {
                  branch from the default branch. It may run any of these agents: {labels}. {route} Nexus first asks \
                  the person where to run it, unless they saved a preference. If the answer has choice here, continue \
                  the task in this session: no subsession exists. Otherwise the subsession works on its own. A \
-                 {nesting} subsession can start subsessions of its own, up to the depth limit. Use wait_sessions to \
+                 {nesting} subsession can start subsessions of its own, up to the depth limit. With project, it runs \
+                 in another project open in Nexus and trusted there. A subsession in another project can't hand off. \
+                 Use wait_sessions to \
                  get its result when it finishes. When you replace a subsession with another session, archive the \
                  old one. A subsession that could not start, such as one whose agent is not signed in, ends with a \
                  failed result that says why. The subsession can't see this conversation: its prompt must say \
@@ -83,7 +85,8 @@ pub(crate) fn list() -> Vec<Value> {
                     "effort": {"type": "string", "enum": ["low", "medium", "high", "xhigh", "max"], "description": "Never above this session's."},
                     "permission_mode": {"type": "string", "enum": ["plan", "default", "acceptEdits", "auto", "bypassPermissions"],
                         "description": "Never above this session's; default: this session's. An agent that does not offer the mode is refused, with the modes it offers. Antigravity's Auto runs agy's own auto when the account offers it; otherwise it runs as Auto-accept edits, with commands run unasked inside the sandbox."},
-                    "key": {"type": "string", "description": "1 to 64 characters. A retry with the same key returns the same subsession instead of a second one."}
+                    "key": {"type": "string", "description": "1 to 64 characters. A retry with the same key returns the same subsession instead of a second one."},
+                    "project": {"type": "string", "description": "The project to run in: its folder, GitHub owner/repo, id or name. It must be open in Nexus and trusted. Default: this session's project. A subsession in another project can't hand off."}
                 },
                 "required": ["agent", "prompt"],
                 "additionalProperties": false
@@ -166,7 +169,7 @@ pub(crate) fn list() -> Vec<Value> {
                  and its name. It starts with prompt as its first message and nothing else: it can't see this \
                  conversation, so the prompt must say the goal, what is done, what is left, the files that matter \
                  and how to check the work. Call it last, then end your turn: the new session starts once this turn \
-                 ends."
+                 ends. It is not available in a subsession that runs in another project than its parent's."
             ),
             "inputSchema": {
                 "type": "object",
@@ -436,6 +439,7 @@ fn start_args(args: &Map<String, Value>) -> Result<StartChild, OrchError> {
             "default, acceptEdits, auto, plan and bypassPermissions",
         )?,
         key: optional(args, "key")?,
+        project: optional(args, "project")?.filter(|project| !project.trim().is_empty()),
     })
 }
 
@@ -704,6 +708,53 @@ mod tests {
                 .unwrap_or_else(|| panic!("took {bad}"));
             assert_eq!(error.code, OrchCode::BadInput);
         }
+    }
+
+    /// `project` names another project to run in; absent or blank, the session's own. The schema says what it takes
+    /// and the limits, and `handoff_session` says a subsession in another project can't use it.
+    #[test]
+    fn start_session_takes_another_project() {
+        let read = |value: Value| start_args(&args(value)).unwrap_or_else(|e| panic!("{e}")).project;
+        assert_eq!(read(json!({"agent": "claude", "prompt": "x"})), None);
+        assert_eq!(read(json!({"agent": "claude", "prompt": "x", "project": "  "})), None);
+        assert_eq!(
+            read(json!({"agent": "claude", "prompt": "x", "project": "acme/site"})),
+            Some("acme/site".into())
+        );
+        let error = start_args(&args(json!({"agent": "claude", "prompt": "x", "project": 7})))
+            .err()
+            .unwrap_or_else(|| panic!("took a number"));
+        assert_eq!(error.code, OrchCode::BadInput);
+
+        let tools = list();
+        let start = tools.iter().find(|tool| tool["name"] == START).expect("start_session");
+        assert_eq!(
+            start["inputSchema"]["properties"]["project"],
+            json!({"type": "string", "description": "The project to run in: its folder, GitHub owner/repo, id or \
+                name. It must be open in Nexus and trusted. Default: this session's project. A subsession in another \
+                project can't hand off."})
+        );
+        assert_eq!(start["inputSchema"]["required"], json!(["agent", "prompt"]));
+        let description = start["description"].as_str().unwrap_or_default();
+        assert!(
+            description.contains(
+                "With project, it runs in another project open in Nexus and trusted there. A subsession in another \
+                 project can't hand off."
+            ),
+            "{description}"
+        );
+        assert!(!description.contains("can't start subsessions"), "{description}");
+        let handoff = tools
+            .iter()
+            .find(|tool| tool["name"] == HANDOFF)
+            .expect("handoff_session");
+        assert!(
+            handoff["description"]
+                .as_str()
+                .unwrap_or_default()
+                .ends_with("It is not available in a subsession that runs in another project than its parent's."),
+            "{handoff}"
+        );
     }
 
     #[test]

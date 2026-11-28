@@ -499,6 +499,11 @@ pub struct ThreadSummary {
     /// 0 for a session the person started, its parent's depth + 1 for a linked one.
     #[serde(default, skip_serializing_if = "is_zero")]
     pub depth: u32,
+    /// A subsession in another project than its parent's (`start_session` with `project`). It can't hand off. Set
+    /// when it is made, like its project, and cleared when a deleted parent frees it. A session that is not one writes
+    /// the same bytes as before.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub cross_project: bool,
     /// Its agent may start, message, wait for and stop linked sessions of its own.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub orchestration: bool,

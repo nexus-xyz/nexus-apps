@@ -163,6 +163,10 @@ pub struct Settings {
     /// and written only when on.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub disable_cross_agent_subsessions: bool,
+    /// "Enable cross-project subsessions": a subsession may run in another project open on this computer. Default true
+    /// ([`Settings::cross_project_subsessions_on`]); written only once the person changed it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cross_project_subsessions: Option<bool>,
     /// The Gateways signed in to before, other than the current one (`gateway_url`, whose organization and kind are
     /// `org` and `kind`). Settings lists them to switch back without signing in again.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -671,6 +675,16 @@ impl Settings {
         self.subsessions.unwrap_or(true)
     }
 
+    /// Cross-project subsessions: on unless the person turned them off.
+    pub fn cross_project_subsessions_on(&self) -> bool {
+        self.cross_project_subsessions.unwrap_or(true)
+    }
+
+    /// The person's choice for "Enable cross-project subsessions", as the Subsessions page saves it.
+    pub fn set_cross_project_subsessions(&mut self, on: bool) {
+        self.cross_project_subsessions = Some(on);
+    }
+
     /// The switch and the limits, as the engine applies them (`Workbench::set_subsessions`).
     pub fn subsessions(&self) -> Subsessions {
         Subsessions {
@@ -678,6 +692,7 @@ impl Settings {
             first_start: self.subsessions_first_start.unwrap_or_default(),
             limits: self.linked_limits(),
             cross_agent_off: self.disable_cross_agent_subsessions,
+            cross_project_on: self.cross_project_subsessions_on(),
         }
     }
 }
@@ -735,12 +750,15 @@ pub fn load(path: &Path) -> Settings {
     settings
 }
 
+/// Saves `settings` to `path`, only its owner may read it (0600). The new text replaces the file in one rename, so a
+/// reader that takes no lock (the app's own loads, the cloud sign-ins, the CLI) never reads it empty or half written,
+/// and a crash mid-write leaves the old file.
 pub fn save(path: &Path, settings: &Settings) -> std::io::Result<()> {
     if let Some(dir) = path.parent() {
         nexus_client::config::create_private_dir(dir)?;
     }
     let text = serde_json::to_string_pretty(settings).unwrap_or_default();
-    nexus_client::config::write_private(path, format!("{text}\n").as_bytes())
+    crate::atomic_file::write_atomic_private(path, format!("{text}\n").as_bytes())
 }
 
 /// This computer's policy: the OS's managed preferences merged with the managed JSON file (`NEXUS_MANAGED_CONFIG`,
@@ -1074,6 +1092,82 @@ mod tests {
         );
     }
 
+    /// A reader that takes no lock, running beside many saves, never reads the file empty or half written: each read is
+    /// a whole saved file. The file stays readable by its owner only.
+    #[test]
+    fn a_save_replaces_the_file_whole_and_keeps_it_private() {
+        let dir = std::env::temp_dir().join(format!("nexus-settings-atomic-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let file = dir.join(FILE);
+        let saved = |n: usize| Settings {
+            org: Some(format!("org-{n}")),
+            mcp_servers: (0..50)
+                .map(|i| McpServer {
+                    name: format!("server-{i}"),
+                    enabled: true,
+                    command: Some("x".repeat(200)),
+                    args: Vec::new(),
+                    url: None,
+                    secrets: Vec::new(),
+                    tool_timeout_sec: None,
+                })
+                .collect(),
+            ..Settings::default()
+        };
+        save(&file, &saved(0)).expect("saved");
+        let done = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let reader = {
+            let (file, done) = (file.clone(), done.clone());
+            std::thread::spawn(move || {
+                let mut reads = 0;
+                while !done.load(std::sync::atomic::Ordering::SeqCst) {
+                    let text = std::fs::read_to_string(&file).expect("the file is always there");
+                    let read: Settings = serde_json::from_str(&text).unwrap_or_else(|e| panic!("a partial read: {e}"));
+                    assert!(read.org.is_some() && read.mcp_servers.len() == 50, "a whole file");
+                    reads += 1;
+                }
+                reads
+            })
+        };
+        for n in 1..200 {
+            save(&file, &saved(n)).expect("saved");
+        }
+        done.store(true, std::sync::atomic::Ordering::SeqCst);
+        assert!(reader.join().expect("the reader") > 0);
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let mode = std::fs::metadata(&file).expect("the file").permissions().mode() & 0o777;
+            assert_eq!(mode, 0o600);
+        }
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// Cross-project subsessions are on in a file written before the switch, reach the engine, and round-trip. Only a
+    /// choice the person made is written.
+    #[test]
+    fn cross_project_subsessions_are_on_unless_turned_off() {
+        let older: Settings = serde_json::from_str(r#"{"subsessions":true}"#).expect("a file without the switch reads");
+        assert!(older.cross_project_subsessions_on() && older.subsessions().cross_project_on);
+        assert_eq!(
+            serde_json::to_value(&older).expect("the settings serialize"),
+            serde_json::json!({ "subsessions": true }),
+            "nothing is written for the switch never touched"
+        );
+        for on in [false, true] {
+            let set = Settings {
+                cross_project_subsessions: Some(on),
+                ..Settings::default()
+            };
+            let saved = serde_json::to_value(&set).expect("the settings serialize");
+            assert_eq!(saved, serde_json::json!({ "crossProjectSubsessions": on }));
+            let again: Settings = serde_json::from_value(saved).expect("the setting reads");
+            assert_eq!(again, set, "it round-trips");
+            assert_eq!(again.subsessions().cross_project_on, on);
+            assert!(again.subsessions().on, "the switch does not turn subsessions off");
+        }
+    }
+
     /// Subsessions are on in a file written before the switch, and only a choice the person made is written.
     #[test]
     fn subsessions_are_on_unless_turned_off() {
@@ -1087,6 +1181,7 @@ mod tests {
                 first_start: Preference::Ask,
                 limits: older.linked_limits(),
                 cross_agent_off: false,
+                cross_project_on: true,
             }
         );
         assert_eq!(

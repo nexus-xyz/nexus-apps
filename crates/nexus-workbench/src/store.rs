@@ -137,7 +137,8 @@ create table if not exists threads (
   fast integer not null default 0,
   acted_at integer,
   provider text,
-  handoff_from text
+  handoff_from text,
+  cross_project integer not null default 0
 );
 create index if not exists threads_scope on threads (scope, updated_at);
 create index if not exists threads_project on threads (project_id);
@@ -711,7 +712,7 @@ impl Store {
         // orchestration off and no halt; pinned: not pinned; source_thread_id: not a fork; limit_stop: no limit stop;
         // snoozed_until, settled_at, settled_by, keep_listed: in the active list, settled by no merge, not opted out;
         // a project's pinned and archived: neither; side_chat: not a side chat; pull_requests: none opened in the
-        // project's folder; fast: standard speed; handoff_from: no handoff).
+        // project's folder; fast: standard speed; handoff_from: no handoff; cross_project: in its parent's project).
         for (table, column, declaration) in [
             ("threads", "effort", "text"),
             ("threads", "worktree", "text"),
@@ -741,6 +742,7 @@ impl Store {
             ("threads", "fast", "integer not null default 0"),
             ("threads", "handoff_from", "text"),
             ("threads", "acted_at", "integer"),
+            ("threads", "cross_project", "integer not null default 0"),
             ("projects", "orchestration", "integer not null default 0"),
             ("projects", "pinned", "integer not null default 0"),
             ("projects", "archived", "integer not null default 0"),
@@ -1137,10 +1139,11 @@ impl Store {
                    native_id, native_started, nexus_sessions, context_tokens, context_window, created_at, updated_at,
                    archived, effort, worktree, account, fork_from, seed, automatic_title, parent_thread_id, spawned_by,
                    group_id, depth, delivered_seq, orchestration, halt, listed_at, pinned, source_thread_id, limit_stop,
-                   snoozed_until, settled_at, settled_by, keep_listed, side_chat, name, pull_requests, fast, acted_at, provider, handoff_from)
+                   snoozed_until, settled_at, settled_by, keep_listed, side_chat, name, pull_requests, fast, acted_at, provider, handoff_from,
+                   cross_project)
                  values (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21,
                    ?22, ?23, ?24, ?25, ?26, ?27, ?28, ?29, ?30, ?31, ?32, ?33, ?34, ?35, ?36, ?37, ?38, ?39, ?40, ?41,
-                   ?42, ?43, ?44, ?45, ?46)",
+                   ?42, ?43, ?44, ?45, ?46, ?47)",
                 params![
                     s.id,
                     s.project_id,
@@ -1189,6 +1192,7 @@ impl Store {
                     s.acted_at.unwrap_or(s.created_at),
                     s.provider.as_ref().map(nexus_providers::InstanceId::as_str),
                     handoff_json(s),
+                    s.cross_project,
                 ],
             )
             .map_err(name_clash)?;
@@ -1360,7 +1364,8 @@ impl Store {
         cost_usd, native_id, native_started, nexus_sessions, context_tokens, context_window, created_at, updated_at,
         archived, effort, worktree, account, fork_from, seed, automatic_title, parent_thread_id, spawned_by, group_id,
         depth, delivered_seq, orchestration, halt, listed_at, pinned, source_thread_id, limit_stop, snoozed_until,
-        settled_at, settled_by, keep_listed, side_chat, name, pull_requests, fast, acted_at, provider, handoff_from";
+        settled_at, settled_by, keep_listed, side_chat, name, pull_requests, fast, acted_at, provider, handoff_from,
+        cross_project";
 
     fn read_thread(row: &rusqlite::Row) -> rusqlite::Result<ThreadRecord> {
         let sessions: String = row.get(12)?;
@@ -1411,6 +1416,7 @@ impl Store {
                     .and_then(|json| serde_json::from_str(&json).ok()),
                 group_id: row.get(26)?,
                 depth: row.get(27)?,
+                cross_project: row.get(46)?,
                 orchestration: row.get(29)?,
                 waits_on: vec![],
                 pending_results: 0,
@@ -1567,14 +1573,16 @@ impl Store {
         Ok(())
     }
 
-    /// Delete promotes every descendant to a root, with its halt cleared and its worktree kept.
+    /// Delete promotes every descendant to a root, with its halt cleared and its worktree kept. A root is no
+    /// cross-project subsession: it is the person's own session in its project.
     pub fn free_children(&self, parent_id: &str) -> Result<()> {
         self.db
             .execute(
                 "with recursive crew(id) as (select id from threads where parent_thread_id = ?1
              union select t.id from threads t join crew c on t.parent_thread_id = c.id)
              update threads set parent_thread_id = null, depth = 0, halt = null,
-             spawned_by = null, group_id = null, delivered_seq = 0 where id in (select id from crew)",
+             spawned_by = null, group_id = null, delivered_seq = 0, cross_project = 0
+             where id in (select id from crew)",
                 [parent_id],
             )
             .map_err(sql)?;
@@ -1944,7 +1952,7 @@ mod tests {
         let db = Connection::open_in_memory().unwrap_or_else(|e| panic!("{e}"));
         let old_schema = SCHEMA
             .replace(
-                "  archived integer not null default 0,\n  effort text,\n  worktree text,\n  account text,\n  fork_from text,\n  seed text,\n  automatic_title integer not null default 0,\n  parent_thread_id text,\n  spawned_by text,\n  group_id text,\n  depth integer not null default 0,\n  delivered_seq integer not null default 0,\n  orchestration integer not null default 0,\n  halt text,\n  listed_at integer,\n  pinned integer not null default 0,\n  source_thread_id text,\n  limit_stop text,\n  snoozed_until integer,\n  settled_at integer,\n  settled_by integer,\n  keep_listed integer not null default 0,\n  side_chat integer not null default 0,\n  name text,\n  pull_requests text,\n  fast integer not null default 0,\n  acted_at integer,\n  provider text,\n  handoff_from text\n",
+                "  archived integer not null default 0,\n  effort text,\n  worktree text,\n  account text,\n  fork_from text,\n  seed text,\n  automatic_title integer not null default 0,\n  parent_thread_id text,\n  spawned_by text,\n  group_id text,\n  depth integer not null default 0,\n  delivered_seq integer not null default 0,\n  orchestration integer not null default 0,\n  halt text,\n  listed_at integer,\n  pinned integer not null default 0,\n  source_thread_id text,\n  limit_stop text,\n  snoozed_until integer,\n  settled_at integer,\n  settled_by integer,\n  keep_listed integer not null default 0,\n  side_chat integer not null default 0,\n  name text,\n  pull_requests text,\n  fast integer not null default 0,\n  acted_at integer,\n  provider text,\n  handoff_from text,\n  cross_project integer not null default 0\n",
                 "  archived integer not null default 0\n",
             )
             .replace(
@@ -1961,7 +1969,8 @@ mod tests {
                 && !old_schema.contains("fast")
                 && !old_schema.contains("acted_at")
                 && !old_schema.contains("provider")
-                && !old_schema.contains("handoff_from"),
+                && !old_schema.contains("handoff_from")
+                && !old_schema.contains("cross_project"),
             "the test strips the newer columns"
         );
         db.execute_batch(&old_schema).unwrap_or_else(|e| panic!("{e}"));
@@ -1994,6 +2003,8 @@ mod tests {
         // Nor is it a fork that can send back.
         assert_eq!(old.summary.source_thread_id, None);
         assert_eq!(old.summary.handoff_from, None);
+        // Nor does it run in another project than a parent's.
+        assert!(!old.summary.cross_project);
         assert!(!old.summary.side_chat);
         assert_eq!((old.summary.depth, old.summary.orchestration), (0, false));
         assert_eq!((old.delivered_seq, old.halt.clone()), (0, None));
@@ -2121,6 +2132,7 @@ mod tests {
                 spawned_by: None,
                 group_id: None,
                 depth: 0,
+                cross_project: false,
                 orchestration: false,
                 waits_on: vec![],
                 pending_results: 0,

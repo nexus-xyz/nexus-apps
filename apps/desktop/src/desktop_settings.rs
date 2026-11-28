@@ -59,7 +59,15 @@ pub fn update<T>(change: impl FnOnce(&mut Settings) -> Result<T, String>) -> Res
     update_at(&file, writable(), change)
 }
 
-/// [`update`] on the file at `file`, by an owner (`owns`) or not.
+/// One read-change-write of the settings at a time in this process: the Settings pages, the pull request watch and
+/// the cloud sign-ins each change the file from their own thread.
+static WRITES: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+/// [`update`] on the file at `file`, by an owner (`owns`) or not. The read, the change and the write run as one under
+/// [`WRITES`]: without it, two changes at once each read the file before the other wrote, and the later write drops
+/// the earlier change. Only the store's owner writes ([`writable`]), so that lock covers this app's writers. The
+/// advisory lock on `<file>.lock` ([`hold`]) only guards against a second writer that does not check ownership, such
+/// as an older build of this app.
 fn update_at<T>(
     file: &Path,
     owns: bool,
@@ -68,10 +76,39 @@ fn update_at<T>(
     if !owns {
         return Err(READ_ONLY.into());
     }
+    let _one = WRITES.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+    let _held = hold(file);
     let mut settings = settings::load(file);
     let answer = change(&mut settings)?;
     settings::save(file, &settings).map_err(|error| format!("Could not save the settings: {error}"))?;
     Ok((settings, answer))
+}
+
+/// How long a write waits for another process's hold on `<file>.lock` before it saves anyway.
+const HOLD_WAIT: std::time::Duration = std::time::Duration::from_millis(500);
+
+/// The advisory lock on `<file>.lock`, held until dropped. None when it can't be taken within [`HOLD_WAIT`] (another
+/// process holds it, or there is no folder yet): the change is saved anyway, as before the lock existed, rather than
+/// lost or left waiting.
+fn hold(file: &Path) -> Option<std::fs::File> {
+    let mut name = file.as_os_str().to_owned();
+    name.push(".lock");
+    let lock = std::fs::OpenOptions::new()
+        .create(true)
+        .truncate(false)
+        .write(true)
+        .open(PathBuf::from(name))
+        .ok()?;
+    let until = std::time::Instant::now() + HOLD_WAIT;
+    loop {
+        match lock.try_lock() {
+            Ok(()) => return Some(lock),
+            Err(std::fs::TryLockError::WouldBlock) if std::time::Instant::now() < until => {
+                std::thread::sleep(std::time::Duration::from_millis(10));
+            }
+            Err(_) => return None,
+        }
+    }
 }
 
 /// Settings' Gateway switch, on the settings (the Nexus app's `point_at`): make `to` the Gateway, keeping `from`'s
@@ -120,6 +157,64 @@ impl Drop for TempFile {
 mod tests {
     use super::*;
     use nexus_desktop_core::settings::{McpServer, WorktreeRoot};
+
+    /// The Subsessions page's cross-project switch, saved as the page saves it, reads back from the file and reaches
+    /// the engine's settings.
+    #[test]
+    fn the_cross_project_switch_is_saved_to_the_file() {
+        let file = TempFile::new("cross-project-switch");
+        for on in [false, true] {
+            let (saved, ()) = file
+                .update(|settings| {
+                    settings.set_cross_project_subsessions(on);
+                    Ok(())
+                })
+                .expect("saved");
+            assert_eq!(saved.cross_project_subsessions, Some(on));
+            let read = settings::load(file.path());
+            assert_eq!(read.cross_project_subsessions, Some(on), "the file keeps it");
+            assert_eq!(read.subsessions().cross_project_on, on);
+        }
+    }
+
+    /// Changes made at once from several threads all reach the file: one read-change-write never drops another's
+    /// change, so a write of the pull request watch can't drop the cross-project switch saved beside it.
+    #[test]
+    fn changes_at_once_from_several_threads_all_reach_the_file() {
+        let file = TempFile::new("at-once");
+        let path = file.path().to_path_buf();
+        let writers: Vec<_> = (0..16)
+            .map(|n| {
+                let path = path.clone();
+                std::thread::spawn(move || {
+                    update_at(&path, true, |settings| {
+                        if n == 0 {
+                            settings.set_cross_project_subsessions(false);
+                        }
+                        settings.mcp_servers.push(McpServer {
+                            name: format!("server-{n}"),
+                            enabled: true,
+                            command: Some("x".into()),
+                            args: Vec::new(),
+                            url: None,
+                            secrets: Vec::new(),
+                            tool_timeout_sec: None,
+                        });
+                        // Widen the window between the read and the write, as a slow disk would.
+                        std::thread::sleep(std::time::Duration::from_millis(2));
+                        Ok(())
+                    })
+                    .expect("saved");
+                })
+            })
+            .collect();
+        for writer in writers {
+            writer.join().expect("a writer");
+        }
+        let read = settings::load(&path);
+        assert_eq!(read.mcp_servers.len(), 16, "every change is kept");
+        assert_eq!(read.cross_project_subsessions, Some(false));
+    }
 
     #[test]
     fn load_edit_save_load_keeps_every_field() {

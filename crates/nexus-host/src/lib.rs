@@ -181,6 +181,7 @@ pub async fn serve_as(
         subsessions: settings.on,
         subsessions_first_start: settings.first_start,
         cross_agent_off: settings.cross_agent_off,
+        cross_project_on: settings.cross_project_on,
         // As the desktop app scopes its sessions: the Gateway and the organization (the one launches are checked against).
         scope: host.scope(),
         worktrees: Some(

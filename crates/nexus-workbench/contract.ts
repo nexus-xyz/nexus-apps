@@ -671,6 +671,8 @@ export interface ThreadSummary {
   groupId?: string | null;
   /** 0 (absent) for a session the person started; its parent's depth + 1 for a linked one. */
   depth?: number;
+  /** A subsession in another project than its parent's (`start_session` with `project`). It may start subsessions of its own; it can't hand off. Absent: not one. */
+  crossProject?: boolean;
   /** Its agent may start, message, wait for and stop linked sessions. Absent: off. */
   orchestration?: boolean;
   /** The linked sessions its agent's open wait covers. Absent: none, or an older core. Never stored. */

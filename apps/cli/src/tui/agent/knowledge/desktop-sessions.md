@@ -20,15 +20,21 @@ Ask whether the person wants a result back through you, or owns the new session;
 | --- | --- |
 | Work you coordinate or need a result from, in any wording, even "new session" | Use `start_session`. It starts a linked subsession, and its result comes back to you |
 | The person says it is independent or theirs, or hands it over | Run `nexus sessions start`. Do nothing more unless the person asks |
-| Another project | Run `nexus sessions start` with `--project`. For its result, ask for a report to `$NEXUS_SESSION_ID`, or wait |
+| Coordinated work in another open, trusted project | Use `start_session` with `project`. Its result comes back to you |
+| Independent work in another project, as the person says | Run `nexus sessions start` with `--project`. Do nothing more unless the person asks |
 
 - Independent means the person says so: "independent", "I own it", "I'll take it from here", "don't wait for it", "no need to report back".
   "Hand off" and "hand over" count too.
 - When the words are unclear, use `start_session`, and say which tool you chose and why.
-- `start_session` can't reach another project yet. Use `nexus sessions start` there, even for work you coordinate.
+- `start_session` with `project` takes the project's folder, GitHub owner/repo, id or name.
+  The project must be open and trusted in Nexus, and cross-project subsessions on in Settings.
+  A subsession in another project can start subsessions of its own, up to the depth limit, but can't hand off.
+- If `start_session` answers `project_not_open`, `project_untrusted` or `cross_project_off`, tell the person why.
+  Say what they can do: open or unarchive the project, trust it, or turn the setting on.
+  Then wait. Do not start the work another way.
 - Start an independent session with `nexus sessions start "<prompt>" --project <owner/repo or the project's folder>`.
   From a worktree, always pass --project: a bare `nexus sessions start` finds no project there.
-  `--project` takes a project's id, a folder inside it, or its GitHub owner/repo. It does not take the project's name.
+  `--project` takes a project's id, a folder inside it, its GitHub owner/repo or its name.
 - To hand work over without replacing this session, first commit your work on its branch.
   Then name the branch in the new session's prompt. It does not get your worktree or uncommitted changes.
 - Use `handoff_session` only when the person asks to replace or archive this session.
