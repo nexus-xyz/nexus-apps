@@ -48,7 +48,8 @@ Work from top to bottom. After step 1, the compiler names most of the places tha
 3. Where a value comes from the vendor's documentation, link that page in a comment.
 4. Add the module to `src/agents.rs`, and the name to the `agents!` list in `src/lib.rs`.
 5. Update the tests in `src/lib.rs` that pin the catalog's order, ids and agent files.
-6. Set `Session::cli_launcher` for published Rust CLI launchers. Keep `Session::legacy_access` false for new agents.
+6. Set `Session::cli_launcher` to register the executable for Gateway setup.
+   The Rust CLI publishes it when `session.platforms` names a supported platform. Keep `Session::legacy_access` false for new agents.
 
 Set `session.platforms` to an empty list when the agent cannot start locally.
 The Desktop picker, local launchers and self-hosted servers use this list.

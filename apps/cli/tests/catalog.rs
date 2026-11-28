@@ -79,7 +79,7 @@ fn help_separates_session_agents_from_launchers() {
     let commands: Vec<&str> = agents.iter().map(|agent| agent.command()).collect();
     let launchers: Vec<&str> = agents
         .iter()
-        .filter(|agent| agent.entry().session.cli_launcher)
+        .filter(|agent| agent.entry().session.has_cli_launcher())
         .map(|agent| agent.command())
         .collect();
     for listed in [format!("<{}>", launchers.join("|")), format!("({})", ids.join(" or "))] {

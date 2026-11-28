@@ -11,7 +11,7 @@ use std::pin::Pin;
 use serde_json::Value;
 
 use crate::driver::{Protocol, Start};
-use crate::event::{AgentCapabilities, Effort, PermissionMode, SessionAgent, SessionKind, Via};
+use crate::event::{AgentCapabilities, Effort, PermissionMode, SessionAgent, Via};
 use crate::mcp_servers::{McpServer, Values};
 use crate::plans::PlanUsage;
 
@@ -336,12 +336,17 @@ pub(crate) fn effort_under(effort: Option<Effort>, ceiling: Option<Effort>) -> O
     }
 }
 
-/// The agent's [`Harness`], by its kind: a coding agent's through `nexus_agents::of!`, and Nexus's own. A new kind does
-/// not build here until it names its harness.
+/// Each session agent supported by this build has its own harness.
 pub fn harness(agent: SessionAgent) -> &'static dyn Harness {
-    match agent.kind() {
-        SessionKind::Coding(coding) => nexus_agents::of!(coding, dyn Harness),
-        SessionKind::Nexus => &Nexus,
+    match agent {
+        SessionAgent::Claude => &nexus_agents::Claude,
+        SessionAgent::Codex => &nexus_agents::Codex,
+        SessionAgent::Antigravity => &nexus_agents::Antigravity,
+        #[cfg(feature = "cursor")]
+        SessionAgent::Cursor => &nexus_agents::Cursor,
+        #[cfg(feature = "opencode")]
+        SessionAgent::Opencode => &nexus_agents::Opencode,
+        SessionAgent::Nexus => &Nexus,
     }
 }
 

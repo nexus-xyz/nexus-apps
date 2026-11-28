@@ -41,3 +41,9 @@ Pick OpenCode, or an open-weight model, for a Cloud session in Nexus Desktop or 
 Nexus configures OpenCode's provider. You configure nothing.
 OpenCode never runs on a personal plan.
 On Linux, Nexus Desktop can also start OpenCode locally with the provider configured in OpenCode.
+
+## Grok
+
+Gateway records sessions on the person's Grok plan when the organization allows subscriptions.
+The person signs in with `grok login` on their computer.
+Nexus CLI and Desktop do not launch Grok yet.

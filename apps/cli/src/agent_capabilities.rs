@@ -135,7 +135,7 @@ mod tests {
         json!({
             "access": access,
             "executable": entry.identity.executable,
-            "cliLauncher": entry.session.cli_launcher,
+            "cliLauncher": entry.session.has_cli_launcher(),
             "configuredProvider": entry.billing.configured_provider,
             "logout": entry.sign_in.logout,
             "resume": resume,

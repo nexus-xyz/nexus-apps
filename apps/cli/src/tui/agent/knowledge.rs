@@ -261,6 +261,7 @@ const ALIASES: &[(&str, &str)] = &[
     ("cursor", "plan-agents"),
     ("cursor-agent", "plan-agents"),
     ("opencode", "plan-agents"),
+    ("grok", "plan-agents"),
     ("agents", "coding-agents"),
     ("mcp", "coding-agents"),
     ("memory", "shared-memory"),
@@ -689,7 +690,7 @@ mod tests {
             for word in [agent.as_str(), agent.command()] {
                 let (shown, text) = read(word, &offline);
                 assert_eq!(shown, topic, "{word}");
-                if agent.entry().session.cli_launcher {
+                if agent.entry().session.has_cli_launcher() {
                     assert!(text.contains(&format!("`nexus {}", agent.command())), "{word}");
                 } else {
                     assert!(text.contains(agent.entry().identity.name), "{word}");
@@ -699,7 +700,7 @@ mod tests {
         let index = index();
         for line in [
             "- coding-agents: Claude Code and Codex through Nexus: their two routes, a run, `nexus agents` and `nexus mcp`",
-            "- plan-agents: Antigravity, Cursor and OpenCode without Gateway",
+            "- plan-agents: Antigravity, Cursor, OpenCode and Grok without Gateway",
         ] {
             assert!(index.contains(line), "{index}");
         }
@@ -711,7 +712,7 @@ mod tests {
         assert!(
             read("plan-agents", &offline)
                 .1
-                .starts_with("# Antigravity, Cursor and OpenCode without Gateway\n")
+                .starts_with("# Antigravity, Cursor, OpenCode and Grok without Gateway\n")
         );
         assert!(
             read("models", &offline)
@@ -719,7 +720,7 @@ mod tests {
                 .contains("for each coding agent (`claude`, `codex`).")
         );
         assert!(read("overview", &offline).1.contains(
-            "| Claude Code, Codex, Antigravity, Cursor and OpenCode | Coding agents. For CLI sessions, use `nexus claude`, \
+            "| Claude Code, Codex, Antigravity, Cursor, OpenCode and Grok | Coding agents. For CLI sessions, use `nexus claude`, \
              `nexus codex`, `nexus agy` and `nexus cursor-agent`. |"
         ));
         assert!(

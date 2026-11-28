@@ -53,7 +53,7 @@ const NO_BASELINE: &str = "the conversation's rows before the run are not known"
 pub fn counts_from_conversation(agent: Agent) -> bool {
     match agent {
         Agent::Antigravity => true,
-        Agent::Claude | Agent::Codex | Agent::Cursor | Agent::Opencode => false,
+        Agent::Claude | Agent::Codex | Agent::Cursor | Agent::Opencode | Agent::Grok => false,
     }
 }
 

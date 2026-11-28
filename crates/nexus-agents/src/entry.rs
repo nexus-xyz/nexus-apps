@@ -106,7 +106,7 @@ pub struct Profile {
 pub struct Session {
     /// The settings label if the agent owns its tool permissions.
     pub permission_settings: Option<&'static str>,
-    /// Whether Nexus publishes a local CLI launcher for this catalog entry.
+    /// Whether Gateway offers this agent's subscription setup to clients that name its executable.
     pub cli_launcher: bool,
     /// Whether clients without launcher negotiation can render this agent on their access page.
     pub legacy_access: bool,
@@ -119,6 +119,11 @@ pub struct Session {
 }
 
 impl Session {
+    /// Whether the CLI publishes the launcher. Gateway can register setup before clients support a platform.
+    pub fn has_cli_launcher(&self) -> bool {
+        self.cli_launcher && !self.platforms.is_empty()
+    }
+
     pub fn supports_platform(&self, platform: Option<Platform>) -> bool {
         platform.is_some_and(|platform| self.platforms.contains(&platform))
     }
@@ -191,7 +196,7 @@ impl AgentEntry {
             return self.plan_only_reason();
         }
         let reason = format!("{} runs only on your {} plan", self.identity.name, self.identity.plan);
-        if self.session.cli_launcher {
+        if self.session.has_cli_launcher() {
             format!("{reason}: run `nexus {} --subscription`", self.identity.executable)
         } else {
             reason

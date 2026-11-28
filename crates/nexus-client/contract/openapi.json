@@ -1675,7 +1675,7 @@
           "Nexus Gateway › Agents"
         ],
         "operationId": "agentPolicy",
-        "summary": "Deprecated: an alias of `GET /v1/policies/agents/{agent}`. Allowed and default models for each coding agent (`provider/model` ids), as the model policy resolves them. An agent without a Gateway route (`antigravity`, `cursor`) allows none, and its `defaultModel` is empty.",
+        "summary": "Deprecated: an alias of `GET /v1/policies/agents/{agent}`. Allowed and default models for each coding agent (`provider/model` ids), as the model policy resolves them. An agent without a Gateway route (such as `antigravity`, `cursor` or `grok`) allows none, and its `defaultModel` is empty.",
         "responses": {
           "200": {
             "description": "OK",
@@ -1842,7 +1842,7 @@
             }
           },
           "400": {
-            "description": "`agent` is not `claude`, `codex`, `antigravity` or `cursor`, or `allowedModels` (a non-empty list) or `defaultModel` is missing (`invalid_request`); `agent` runs only on the person's own plan (`route_unsupported`); or the rule it makes is not valid (`invalid_policy`).",
+            "description": "`agent` is not a catalog agent id, or `allowedModels` (a non-empty list) or `defaultModel` is missing (`invalid_request`); `agent` runs only on the person's own plan (`route_unsupported`); or the rule it makes is not valid (`invalid_policy`).",
             "content": {
               "application/json": {
                 "schema": {
@@ -1904,7 +1904,7 @@
           "Nexus Gateway › Agents"
         ],
         "operationId": "checkAgent",
-        "summary": "May the agent launch on this model (no model: what `nexus/default` resolves to)? The model policy's decision, the same the gateway makes on every call. An agent without a Gateway route (`antigravity`, `cursor`) is a 400 `route_unsupported`.",
+        "summary": "May the agent launch on this model (no model: what `nexus/default` resolves to)? The model policy's decision, the same the gateway makes on every call. An agent without a Gateway route (such as `antigravity`, `cursor` or `grok`) is a 400 `route_unsupported`.",
         "requestBody": {
           "required": true,
           "content": {
@@ -2292,7 +2292,7 @@
             }
           },
           "400": {
-            "description": "The body is not valid: `agent` not claude, codex, antigravity or cursor, `via` not nexus, subscription or ori, `model`, `person` or `cwd` not a string, `team` not a slug, or a bad `Idempotency-Key`; or `via` nexus or ori for an agent that runs only on the person's own plan (`route_unsupported`).",
+            "description": "The body is not valid: unknown `agent`, `via` not nexus, subscription or ori, `model`, `person` or `cwd` not a string, `team` not a slug, or a bad `Idempotency-Key`; or `via` nexus or ori for an agent that runs only on the person's own plan (`route_unsupported`).",
             "content": {
               "application/json": {
                 "schema": {
@@ -2300,7 +2300,7 @@
                 },
                 "example": {
                   "error": {
-                    "message": "agent must be one of: claude, codex, antigravity, cursor",
+                    "message": "agent must be one of: claude, codex, antigravity, cursor, opencode, grok",
                     "type": "invalid_request_error",
                     "code": "invalid_request"
                   }
@@ -2733,7 +2733,7 @@
           "Nexus Gateway › Agents"
         ],
         "operationId": "reportAgentSessionUsage",
-        "summary": "Usage from a subscription session as an OpenTelemetry logs export (OTLP/HTTP JSON). Cursor sessions return 409 `usage_unsupported`. A record whose event.name (else its body) is api_request or claude_code.api_request counts as one model call. A request_id seen among the session's last 512 does not count again. Codex's codex.sse_event for response.completed counts too, once per conversation.id and event.timestamp. Other records are dropped unread. A body without resourceLogs is a 400.",
+        "summary": "Usage from a subscription session as an OpenTelemetry logs export (OTLP/HTTP JSON). Grok and Cursor sessions return 409 `usage_unsupported`. A record whose event.name (else its body) is api_request or claude_code.api_request counts as one model call. A request_id seen among the session's last 512 does not count again. Codex's codex.sse_event for response.completed counts too, once per conversation.id and event.timestamp. Other records are dropped unread. A body without resourceLogs is a 400.",
         "parameters": [
           {
             "name": "id",
@@ -2814,7 +2814,12 @@
           "Nexus Gateway › Agents"
         ],
         "operationId": "getAgentAccess",
-        "summary": "Routes for coding agents with a released Nexus launcher: for each agent, the route it takes when you name none (`from`: your preference, the default, or the organization when it turned subscriptions off), each route with who pays (the organization's own key, Nexus, or your plan), whether it can run, and the commands that install and sign in the agent.",
+        "summary": "Routes for the coding agents this client supports: for each agent, the route it takes when you name none (`from`: your preference, the default, or the organization when it turned subscriptions off), each route with who pays (the organization's own key, Nexus, or your plan), whether it can run, and the commands that install and sign in the agent.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/AgentLaunchers"
+          }
+        ],
         "responses": {
           "200": {
             "description": "OK",
@@ -2849,6 +2854,9 @@
         "operationId": "setAgentAccess",
         "summary": "Choose the route each of your coding agents takes when you name none (`nexus agents use`), in every client: `gateway` or `subscription`; null forgets it (the default: subscription, or gateway when the organization turned subscription mode off). Yours in every organization, not audited (each session records its route). 403 `subscriptions_disabled` for a subscription the organization turned off; 400 `route_unsupported` for the gateway route of an agent that runs only on the person's own plan; 400 for a key-only organization key (a route belongs to a person).",
         "parameters": [
+          {
+            "$ref": "#/components/parameters/AgentLaunchers"
+          },
           {
             "$ref": "#/components/parameters/IdempotencyKey"
           }
@@ -2912,6 +2920,17 @@
                       "null"
                     ],
                     "description": "OpenCode uses its configured provider. Gateway refuses `gateway` with `route_unsupported`.",
+                    "enum": [
+                      "subscription",
+                      null
+                    ]
+                  },
+                  "grok": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "description": "Grok runs only on the person's Grok plan. Gateway refuses `gateway` with `route_unsupported`.",
                     "enum": [
                       "subscription",
                       null
@@ -18116,7 +18135,7 @@
             }
           },
           "400": {
-            "description": "The path names no coding agent: `agent` must be `claude`, `codex`, `antigravity` or `cursor` (`invalid_request`); or it names one without a Gateway route, which has no model policy (`route_unsupported`).",
+            "description": "The path names no coding agent: `agent` must be a catalog agent id (`invalid_request`); or it names one without a Gateway route, which has no model policy (`route_unsupported`).",
             "content": {
               "application/json": {
                 "schema": {
@@ -18124,7 +18143,7 @@
                 },
                 "example": {
                   "error": {
-                    "message": "agent must be one of: claude, codex, antigravity, cursor",
+                    "message": "agent must be one of: claude, codex, antigravity, cursor, opencode, grok",
                     "type": "invalid_request_error",
                     "code": "invalid_request"
                   }
@@ -18450,7 +18469,7 @@
             }
           },
           "400": {
-            "description": "A field has the wrong type or value: `agent` is not `claude`, `codex`, `antigravity` or `cursor`, `surface` is not one of its values, or `as`, `team` or `model` is not a string (`invalid_request`); or `agent` has no Gateway route (`route_unsupported`).",
+            "description": "A field has the wrong type or value: `agent` is not a catalog agent id, `surface` is not one of its values, or `as`, `team` or `model` is not a string (`invalid_request`); or `agent` has no Gateway route (`route_unsupported`).",
             "content": {
               "application/json": {
                 "schema": {
@@ -43461,7 +43480,8 @@
           "codex",
           "antigravity",
           "cursor",
-          "opencode"
+          "opencode",
+          "grok"
         ]
       },
       "AgentPolicy": {
@@ -43527,6 +43547,20 @@
                 }
               },
               "opencode": {
+                "type": "object",
+                "properties": {
+                  "allowedModels": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "defaultModel": {
+                    "type": "string"
+                  }
+                }
+              },
+              "grok": {
                 "type": "object",
                 "properties": {
                   "allowedModels": {
@@ -65138,6 +65172,15 @@
       }
     },
     "parameters": {
+      "AgentLaunchers": {
+        "name": "x-nexus-agent-launchers",
+        "in": "header",
+        "required": false,
+        "description": "Comma-separated executable names this client supports (for example, `claude,codex,agy,cursor-agent,grok`). The response lists matching setup entries. Without the header it lists Claude Code, Codex and Antigravity.",
+        "schema": {
+          "type": "string"
+        }
+      },
       "IdempotencyKey": {
         "name": "Idempotency-Key",
         "in": "header",
@@ -65294,7 +65337,7 @@
         "name": "agent",
         "in": "query",
         "required": false,
-        "description": "`claude`, `codex`, `antigravity` or `cursor`",
+        "description": "A coding agent id from the catalog.",
         "schema": {
           "$ref": "#/components/schemas/AgentId"
         }

@@ -817,7 +817,7 @@ pub fn detect_all(env: &dyn Fn(&str) -> Option<String>) -> Vec<LocalAgent> {
     let mut dirs = search_path(env);
     let launchers: Vec<Agent> = Agent::ALL
         .into_iter()
-        .filter(|agent| agent.entry().session.cli_launcher)
+        .filter(|agent| agent.entry().session.has_cli_launcher())
         .collect();
     let mut agents: Vec<LocalAgent> = launchers.iter().map(|&agent| detect_in(agent, &dirs, env)).collect();
     if agents.iter().any(|agent| !agent.installed)

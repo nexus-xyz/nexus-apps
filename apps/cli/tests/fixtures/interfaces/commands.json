@@ -3284,7 +3284,7 @@
         {
           "name": "--agent",
           "value": "<A>",
-          "description": "With --csv or --jsonl: one agent's sessions (claude or codex or antigravity or cursor or opencode)"
+          "description": "With --csv or --jsonl: one agent's sessions (claude or codex or antigravity or cursor or opencode or grok)"
         },
         {
           "name": "--via",
