@@ -25,6 +25,7 @@ import tomllib
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
+REPO_ROOT = ROOT.parent.parent
 CARGO_ABOUT = "0.9.3"
 CARGO_CYCLONEDX = "0.5.9"
 RULE = "=" * 80
@@ -60,16 +61,16 @@ def require(tool, version):
 
 
 def cef_version():
-    """CEF's version: the build metadata of the `cef` crate in Cargo.lock (`156.3.0+156.0.15` is CEF 156.0.15)."""
-    m = re.search(r'name = "cef"\nversion = "[^"+]+\+([^"]+)"', (ROOT / "Cargo.lock").read_text())
+    """CEF's version: the build metadata of the `cef` crate in the workspace Cargo.lock (`156.3.0+156.0.15` is CEF 156.0.15)."""
+    m = re.search(r'name = "cef"\nversion = "[^"+]+\+([^"]+)"', (REPO_ROOT / "Cargo.lock").read_text())
     return m.group(1) if m else "unknown"
 
 
 def cef_full_version(inputs):
-    """CEF's full version (`156.0.15+gcf671c0+chromium-156.0.8078.80`), from inputs.toml, checked against Cargo.lock."""
+    """CEF's full version (`156.0.15+gcf671c0+chromium-156.0.8078.80`), from inputs.toml, checked against the workspace Cargo.lock."""
     full = inputs["cef"]["full_version"]
     if not full.startswith(cef_version() + "+"):
-        sys.exit(f"licenses/inputs.toml: cef.full_version {full} is not CEF {cef_version()} from Cargo.lock; "
+        sys.exit(f"licenses/inputs.toml: cef.full_version {full} is not CEF {cef_version()} from the workspace Cargo.lock; "
                  "copy CEF_VERSION from the cef-dll-sys bindings")
     return full
 
@@ -318,7 +319,7 @@ def sbom(inputs, bundles, dest):
     doc["dependencies"] = [{"ref": r, "dependsOn": sorted(on)} for r, on in sorted(merged.items())]
     doc.pop("serialNumber", None)
     text = json.dumps(doc, indent=2) + "\n"
-    if str(ROOT.parent) in text or "file://" in text:
+    if str(REPO_ROOT) in text or "file://" in text:
         sys.exit("the SBOM still names a local folder; extend the path rewrite in sbom()")
     dest.write_text(text)
     return len(doc["components"])

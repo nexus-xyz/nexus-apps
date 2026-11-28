@@ -24,11 +24,11 @@ legal_files = [
     "rich-text/assets/MERMAID-LICENSE.txt",
 ]
 
-# CEF, which the packages ship beside the app. Its version is the build metadata of the `cef` crate in Cargo.lock.
+# CEF, which the packages ship beside the app. Its version is the build metadata of the `cef` crate in the workspace's Cargo.lock.
 [cef]
 # The full version of the CEF build that download-cef fetches (CEF_VERSION in cef-dll-sys, and the archive name on
 # cef-builds.spotifycdn.com). The written offer names it. notices.py fails when it no longer starts with the version
-# in Cargo.lock, so a CEF update must update it too.
+# in the workspace's Cargo.lock, so a CEF update must update it too.
 full_version = "156.0.15+gcf671c0+chromium-156.0.8078.80"
 license_file = "packaging/CEF-LICENSE.txt"
 # Chromium's credits, a file of the CEF distribution. With --out, the script copies it from $CEF_PATH when it is there.
