@@ -501,7 +501,7 @@ impl CloudPage {
                 ))
             })
             .child(ui::note(
-                "Kept in this computer's keychain and on your cloud machines only. Nexus never sees it.",
+                "Saved once for all your devices. Only your own cloud machines get it, and no one can read it back.",
                 palette,
             ));
         if !claude.connected {

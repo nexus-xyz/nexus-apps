@@ -992,17 +992,31 @@ impl Cloud {
             |vault| vault.set(CLAUDE_ACCOUNT, token),
             |account| nexus_desktop_core::cloud::claude_saved(account, token, now_ms()),
         )?;
+        // Gateway keeps it too, so a session started from the web, the phone or the assistant has it.
+        let inner = self.inner.clone();
+        self.inner.runtime.spawn(async move {
+            inner.claude_to_gateway(owner).await;
+        });
         self.inner.reconnect_connected();
         Ok(self.account_now())
     }
 
+    /// Removes the Claude setup token here and from Gateway: no new session of the person's uses it.
     pub fn claude_clear(&self) -> Result<CloudAccount, String> {
         let owner = self.inner.owner()?;
         self.inner.change_secret(
             owner,
             |vault| vault.delete(CLAUDE_ACCOUNT),
-            nexus_desktop_core::cloud::claude_cleared,
+            |account| {
+                nexus_desktop_core::cloud::claude_cleared(account);
+                // Asked even when this device never put it there: another device may have.
+                account.claude_on_gateway = true;
+            },
         )?;
+        let inner = self.inner.clone();
+        self.inner.runtime.spawn(async move {
+            inner.claude_off_gateway(owner).await;
+        });
         self.inner.reconnect_connected();
         Ok(self.account_now())
     }
@@ -2334,8 +2348,52 @@ impl Inner {
         });
     }
 
-    /// What goes on sign-in `owner`'s machine at this connect: the Claude token (when it saved one here; else the
-    /// machine's stays, unless it cleared it here), the browser, git's identity, its GitHub token, and what the agents
+    /// Puts the Claude token saved here on Gateway, once per save: a token saved before Gateway kept one moves there
+    /// on the next connect. True when Gateway keeps it. False with no token here, or when this Gateway keeps none.
+    async fn claude_to_gateway(&self, owner: Owner) -> bool {
+        let Ok(secrets) = self.secrets(owner) else {
+            return false;
+        };
+        let Some(token) = secrets.claude else {
+            return false;
+        };
+        if secrets.account.claude_on_gateway {
+            return true;
+        }
+        let Ok(gateway) = self.provider(owner) else {
+            return false;
+        };
+        if !matches!(gateway.put_claude_token(&token).await, Ok(true)) {
+            return false;
+        }
+        let _ = self.change_secret(
+            owner,
+            |_| Ok(()),
+            |account| account.claude_on_gateway = !account.claude_cleared,
+        );
+        true
+    }
+
+    /// Removes the Claude token from Gateway after it was removed here. Until Gateway confirms, each connect asks
+    /// again.
+    async fn claude_off_gateway(&self, owner: Owner) {
+        let pending = self
+            .secrets(owner)
+            .is_ok_and(|secrets| secrets.account.claude_cleared && secrets.account.claude_on_gateway);
+        if !pending {
+            return;
+        }
+        let Ok(gateway) = self.provider(owner) else {
+            return;
+        };
+        if gateway.delete_claude_token().await.is_ok() {
+            let _ = self.change_secret(owner, |_| Ok(()), |account| account.claude_on_gateway = false);
+        }
+    }
+
+    /// What goes on sign-in `owner`'s machine at this connect: the Claude token (none when Gateway keeps it, and the
+    /// machine's host writes it; else when it saved one here; else the machine's stays, unless it cleared it here),
+    /// the browser, git's identity, its GitHub token, and what the agents
     /// are told about the machine. Another sign-in's tokens never go.
     async fn provision_for(&self, owner: Owner) -> Result<Provision, String> {
         let secrets = self.secrets(owner)?;
@@ -2353,9 +2411,18 @@ impl Inner {
             let value = String::from_utf8_lossy(&output.stdout).trim().to_string();
             (output.status.success() && !value.is_empty()).then_some(value)
         };
+        // Gateway keeps the Claude token: the machine's host writes it into agent.env itself, so this
+        // connect leaves that file alone. A Gateway that keeps none gets this device's, as before.
+        let cleared = secrets.account.claude_cleared;
+        let on_gateway = if cleared {
+            self.claude_off_gateway(owner).await;
+            false
+        } else {
+            self.claude_to_gateway(owner).await
+        };
         Ok(Provision {
-            agent_env: agent_env(secrets.claude),
-            keep_agent_env: !secrets.account.claude_cleared,
+            agent_env: if on_gateway { None } else { agent_env(secrets.claude) },
+            keep_agent_env: on_gateway || !cleared,
             mcp_json: Some(playwright_config()),
             git_name: git("user.name").await,
             git_email: git("user.email").await,
@@ -2833,6 +2900,14 @@ impl Owned {
 
     async fn machine(&self, id: &str) -> Result<GatewayMachine, CloudError> {
         self.gateway()?.machine(id).await
+    }
+
+    async fn put_claude_token(&self, token: &str) -> Result<bool, CloudError> {
+        self.gateway()?.put_claude_token(token).await
+    }
+
+    async fn delete_claude_token(&self) -> Result<(), CloudError> {
+        self.gateway()?.delete_claude_token().await
     }
 }
 
