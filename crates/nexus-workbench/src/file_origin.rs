@@ -38,15 +38,25 @@ fn command_paths(command: &str) -> Vec<String> {
         .collect()
 }
 
-/// `token` as an absolute path, without a trailing line (`:12`) or punctuation; None for anything else.
+/// `token` as an absolute path, without a trailing line (`:12`) or punctuation; None for anything else. On Windows a
+/// path starts with its drive (`C:\repo\src\a.rs`), whose `:` is not a line.
 fn clean(token: &str) -> Option<String> {
     let token = token.trim_end_matches([',', ':', '.']);
-    let token = match token.split_once(':') {
-        Some((path, rest)) if rest.chars().all(|c| c.is_ascii_digit() || c == ':') => path,
-        _ => token,
+    let (drive, rest) = match token.as_bytes() {
+        [letter, b':', ..] if cfg!(windows) && letter.is_ascii_alphabetic() => token.split_at(2),
+        _ => ("", token),
     };
-    let absolute = token.len() > 1 && token.starts_with('/') && !token.starts_with("//");
-    (absolute && !token.split('/').any(|part| part == "..")).then(|| token.to_string())
+    let rest = match rest.split_once(':') {
+        Some((path, line)) if line.chars().all(|c| c.is_ascii_digit() || c == ':') => path,
+        _ => rest,
+    };
+    let token = &token[..drive.len() + rest.len()];
+    let absolute = if cfg!(windows) {
+        Path::new(token).is_absolute()
+    } else {
+        token.len() > 1 && token.starts_with('/') && !token.starts_with("//")
+    };
+    (absolute && !token.split(['/', '\\']).any(|part| part == "..")).then(|| token.to_string())
 }
 
 /// The folders other than `root` the agent worked in, as the top of each one's git checkout, newest first: at most
