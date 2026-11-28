@@ -277,7 +277,7 @@ pwsh packaging/package.ps1  # Windows (x86_64)
 The scripts build with the `dist` profile in `Cargo.toml`: thin LTO and no symbols.
 It builds slower than `release`, so build it only to ship.
 Set `NO_BUILD=1` to package the `dist` binaries you already built.
-The package lands in `target/package/`:
+The package lands in the workspace's `target/package/` at the repository root:
 
 - Linux: a `.tar.xz` folder. CEF's files sit beside the binary, which finds them through its `$ORIGIN` rpath.
   Run `install.sh` in the folder to add the app to the launcher.
@@ -386,7 +386,7 @@ These choices describe the current implementation and its remaining tradeoffs.
   Longbridge's `gpui-kit` pins a matching set of GPUI snapshots (`gpui-pre` 0.3.11) and adds the components: text
   input, Markdown view, buttons and the title bar. Bump the pin on purpose, because any snapshot can change GPUI's
   API.
-- **Its own Cargo workspace.** The rs workspace never builds GPUI.
+- **Member of the root Cargo workspace.** The app builds in the repository's root workspace with the CLI and shared crates.
 - **The shared keychain entry.** An older Nexus install (0.10.x and before) and this app use the same sign-in.
 - **Colors copied by hand.** The palettes currently duplicate the brand tokens across CSS and Rust.
 - **Esc and Tab through a keystroke interceptor.** GPUI runs keybindings before key listeners, and the composer binds

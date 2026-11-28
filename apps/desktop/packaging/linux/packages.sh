@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Make the Linux system packages from the release tarball that package.sh wrote:
 #
-#   packaging/linux/packages.sh target/package/nexus-desktop-<ver>-linux-x86_64.tar.xz target/package
+#   packaging/linux/packages.sh ../../target/package/nexus-desktop-<ver>-linux-x86_64.tar.xz ../../target/package
 #
 # writes, beside the tarball:
 #   nexus-desktop_<ver>_amd64.deb                 Debian, Ubuntu (22.04 or later: the binary needs glibc 2.35)

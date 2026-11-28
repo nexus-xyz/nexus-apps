@@ -43,7 +43,7 @@ git push origin HEAD:master
 
 ```sh
 packaging/package.sh                                   # or download a release tarball
-packaging/linux/packages.sh target/package/nexus-desktop-*-linux-x86_64.tar.xz target/package
+packaging/linux/packages.sh ../../target/package/nexus-desktop-*-linux-x86_64.tar.xz ../../target/package
 ```
 
 It needs `nfpm` and `appimagetool` on `PATH`. Set `APPIMAGE_RUNTIME` to a downloaded runtime file to avoid appimagetool's own download.
