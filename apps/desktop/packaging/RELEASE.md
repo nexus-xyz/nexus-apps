@@ -44,8 +44,8 @@ signed or published.
 
 The stable folder keeps the layout and headers that Nexus's earlier release used: the same file names, `latest.json`
 laid out the same way (`testdata/stable-0.11.2.json` is its last one, and `test_feed.py` checks it), and
-`Cache-Control: private, no-store, max-age=0` on every object. Do not tag stable here while the earlier release
-(nexus-xyz/nexus `factory-release.yml`) still publishes stable: both would write the same folder. The feed only moves
+`Cache-Control: private, no-store, max-age=0` on every object. Do not tag stable here while the earlier, private release
+pipeline still publishes stable: both would write the same folder. The feed only moves
 forward and only over the generation it read, so neither can take it back, but a version would come from two places.
 
 ## Rehearse
