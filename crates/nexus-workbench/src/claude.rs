@@ -400,7 +400,7 @@ impl Translator {
             "compact_boundary" => {
                 self.compact_boundary = true;
                 vec![Out::Event(WbEvent::Notice {
-                    text: "Claude Code compacted the conversation to fit its context window.".into(),
+                    text: crate::context_breakdown::CLAUDE_COMPACTION_NOTICE.into(),
                 })]
             }
             _ => vec![],

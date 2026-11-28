@@ -5,6 +5,11 @@ use crate::event::WbEvent;
 
 pub const IMAGE_TOKENS: u64 = 1_600;
 
+/// Compaction notice emitted by Claude Code (`claude.rs`).
+pub(crate) const CLAUDE_COMPACTION_NOTICE: &str = "Claude Code compacted the conversation to fit its context window.";
+/// Compaction notice emitted by Codex (`codex.rs`).
+pub(crate) const CODEX_COMPACTION_NOTICE: &str = "Codex compacted the conversation to fit its context window.";
+
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Estimate {
     pub messages: u64,
@@ -54,7 +59,9 @@ impl Estimate {
         let mut outputs = std::collections::HashMap::new();
         for event in events {
             let clear = match event {
-                WbEvent::Notice { text } => text.to_lowercase().contains("compacted the conversation"),
+                WbEvent::Notice { text } => {
+                    matches!(text.as_str(), CLAUDE_COMPACTION_NOTICE | CODEX_COMPACTION_NOTICE)
+                }
                 WbEvent::User { text, .. } => text
                     .trim()
                     .strip_prefix("/clear")
@@ -223,7 +230,8 @@ mod tests {
     #[test]
     fn compaction_and_clear_reset_context() {
         for boundary in [
-            json!({"kind":"notice","text":"Codex compacted the conversation to fit its context window."}),
+            json!({"kind":"notice","text": CLAUDE_COMPACTION_NOTICE}),
+            json!({"kind":"notice","text": CODEX_COMPACTION_NOTICE}),
             json!({"kind":"user","text":" /clear now"}),
         ] {
             let result = estimate(
@@ -241,6 +249,22 @@ mod tests {
             );
         }
         assert!(!estimate(json!([{"kind":"user","text":"/clearly not"}])).since_compaction);
+    }
+
+    #[test]
+    fn steer_notice_mentioning_compaction_does_not_reset_context() {
+        let steer = crate::linked::steer::steer_text(
+            "Coordinator",
+            "t_parent",
+            "Claude compacted the conversation, so re-read X.",
+        );
+        let result = estimate(json!([
+            {"kind":"user","text":"x".repeat(4000)},
+            {"kind":"notice","text": steer},
+            {"kind":"user","text":"x".repeat(40)}
+        ]));
+        assert!(!result.since_compaction);
+        assert_eq!(result.messages, 1010);
     }
 
     #[test]

@@ -102,10 +102,7 @@ impl Workbench {
             return refuse(OrchCode::BadInput, FORGED);
         }
         if self.busy(target_id)? {
-            return refuse(
-                OrchCode::Busy,
-                "That session is at work. Wait for it to finish, then message it.",
-            );
+            return refuse(OrchCode::Busy, super::steer::PEER_BUSY);
         }
         let roots = self.count_turn(&[&caller, &target])?;
         let s = &caller.summary;
@@ -348,16 +345,7 @@ impl Workbench {
 
     /// Whether session `thread_id` is at work: in a turn, with a message waiting, stopping, or starting.
     fn busy(&self, thread_id: &str) -> Result<bool, OrchError> {
-        Ok(match self.live(thread_id) {
-            Some(live) => {
-                let state = live.state();
-                state.done || state.stop.is_some() || !state.turns.is_empty() || !state.unsent.is_empty()
-            }
-            None => self
-                .reader()
-                .thread(thread_id)?
-                .is_some_and(|record| record.summary.status == ThreadStatus::Starting),
-        })
+        Ok(!matches!(self.busy_state(thread_id)?, super::steer::BusyState::Idle))
     }
 
     /// Counts one automatic turn in the tree of each of `sessions` (once per tree), refused when any of them is

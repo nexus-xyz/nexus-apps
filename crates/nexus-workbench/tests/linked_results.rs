@@ -348,8 +348,8 @@ async fn u1_dead_wait_is_cut_at_turn_end() {
 
 /// A child's result never joins its lead's turn under way, as Nexus's own notice can (`Workbench::steer_notice`): a
 /// result goes by one way at a time. With no wait open, it stays
-/// pending until the lead's turn ends, then goes in as a message of its own. `message_session` is pinned the same way
-/// by `message_child_refuses_a_busy_child_and_a_session_that_is_not_its_own`.
+/// pending until the lead's turn ends, then goes in as a message of its own. Non-steering `message_session` targets
+/// stay pinned by `message_child_refuses_a_busy_child_and_a_session_that_is_not_its_own`.
 #[tokio::test]
 async fn a_result_never_joins_the_leads_turn_under_way() {
     for agent in [SessionAgent::Claude, SessionAgent::Codex] {
@@ -840,15 +840,15 @@ async fn the_reaper_keeps_a_lead_whose_child_runs() {
     let _ = std::fs::remove_dir_all(&s.root);
 }
 
-/// `message_session` answers `busy` while the child has a turn, and `not_your_session` for any session that is not a
-/// direct child; `stop_session` stops a child with no halt, so its parent's next message starts it again.
+/// `message_session` answers `busy` while a non-steering child has a turn, and `not_your_session` for any session
+/// that is not a direct child; `stop_session` stops a child with no halt, so its parent's next message starts it again.
 #[tokio::test]
 async fn message_child_refuses_a_busy_child_and_a_session_that_is_not_its_own() {
     let s = setup("message", bounded());
     let lead = root(&s, new_root(&s.project, "Plan the release")).await;
     let other = root(&s, new_root(&s.project, "Plan another")).await;
-    let c = start(&s, &lead.id, SessionAgent::Codex, "Holder", "slow Hold on").await;
-    wait_for(&s.workbench, &c.id, started).await;
+    let c = start(&s, &lead.id, SessionAgent::Antigravity, "Holder", "please run ls").await;
+    approval(&s.workbench, &c.id).await;
     let message = |parent: &str, child: &str| {
         let (workbench, parent, child) = (s.workbench.clone(), parent.to_string(), child.to_string());
         async move {
