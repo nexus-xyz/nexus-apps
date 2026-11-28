@@ -252,10 +252,10 @@ impl SideChat {
             chat.rewrite = Some(composer::Rewrite { seq, from, input });
         }
         // The list takes the retained rows now, so the reader's row is there to go back to.
-        chat.sync_history(crate::palette::Palette::for_choice(
-            super::super::settings_view::saved_theme(),
-            window.appearance(),
-        ));
+        chat.sync_history(
+            crate::palette::Palette::for_choice(super::super::settings_view::saved_theme(), window.appearance()),
+            cx,
+        );
         if !data.tail {
             chat.scroll.list.scroll_to(data.scroll);
         }

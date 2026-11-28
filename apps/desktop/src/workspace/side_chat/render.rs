@@ -32,7 +32,7 @@ impl Render for SideChat {
             (false, Some(_)) => self.working_since = None,
             _ => {}
         }
-        self.sync_history(p);
+        self.sync_history(p, cx);
         let body = div().id("side-chat-log").flex_1().min_h(px(0.)).bg(p.background).child(
             list(
                 self.scroll.list.clone(),
