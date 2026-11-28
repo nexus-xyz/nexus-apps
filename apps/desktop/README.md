@@ -43,7 +43,10 @@ The shared crates are in `crates/`, members of this Cargo workspace: `nexus-work
 - Switch between Claude Code and Codex from a Code session's model picker.
   Confirm which provider receives the original request and recent messages, and who pays for the new agent.
   The old agent and its sub-agents stop. The next message continues in the same thread and worktree.
-  History stays in Nexus. Private reasoning, tool output, and earlier image attachments do not enter the text handoff.
+  History stays in Nexus. The text handoff carries shell commands with the end of their output, and changed files.
+  Private reasoning, what the agents read, other tool output, and earlier image attachments stay out.
+  Switching back to an agent the session used continues that agent's own conversation, told only what it missed.
+  It starts fresh instead after a payer change, a revert of turns it saw, or a move to a new worktree.
   Independently started ChatGPT app runs do not publish their live activity into this session.
 - The session's three-dot menu opens Fork: "Fork from which point?" lists each recorded turn, the latest first.
   The latest turn can also go to another signed-in local subscription, which carries recent conversation text into a

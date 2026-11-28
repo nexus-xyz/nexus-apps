@@ -1690,20 +1690,26 @@ fn seed_of(events: &[StoredEvent]) -> String {
 /// The person's messages and the agent's answers in `events`, in a `<conversation>` block, newest kept when it is
 /// long ([`MAX_SEED`]).
 fn said_of(events: &[StoredEvent]) -> String {
-    let mut lines: Vec<String> = events
-        .iter()
-        .filter_map(|stored| match &stored.event {
-            // A linked session's message is not the person's.
-            WbEvent::User {
-                text,
-                from: Some(Sender::Session { title, .. }),
-                ..
-            } => Some(format!("Session \"{title}\": {text}")),
-            WbEvent::User { text, .. } => Some(format!("User: {text}")),
-            WbEvent::Text { text, .. } => Some(format!("You: {text}")),
-            _ => None,
-        })
-        .collect();
+    conversation_block(
+        events
+            .iter()
+            .filter_map(|stored| match &stored.event {
+                // A linked session's message is not the person's.
+                WbEvent::User {
+                    text,
+                    from: Some(Sender::Session { title, .. }),
+                    ..
+                } => Some(format!("Session \"{title}\": {text}")),
+                WbEvent::User { text, .. } => Some(format!("User: {text}")),
+                WbEvent::Text { text, .. } => Some(format!("You: {text}")),
+                _ => None,
+            })
+            .collect(),
+    )
+}
+
+/// `lines` in a `<conversation>` block, newest kept when it is long ([`MAX_SEED`]).
+fn conversation_block(mut lines: Vec<String>) -> String {
     let mut total = 0;
     let keep = lines
         .iter()

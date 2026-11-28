@@ -907,6 +907,16 @@ impl TaskDetail {
     }
 }
 
+/// An agent's conversation as a switch left it, and who paid for it: only the same payer can go on from it.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LeftConversation {
+    pub native_id: String,
+    pub via: Via,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub account: Option<String>,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "camelCase", rename_all_fields = "camelCase")]
 pub enum WbEvent {
@@ -931,6 +941,10 @@ pub enum WbEvent {
         from: SessionAgent,
         to: SessionAgent,
         text: String,
+        /// The conversation `from` leaves behind: a later switch back to `from` goes on from it (agent_switch.rs).
+        /// None: it had not started, or it was logged before switches went back.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        left: Option<LeftConversation>,
     },
     TurnStart {
         turn_id: String,
