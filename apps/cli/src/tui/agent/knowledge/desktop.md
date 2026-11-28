@@ -84,7 +84,7 @@ Your prompt lists the available MCP servers.
 ## From outside the app
 
 - To reach another session, run `nexus sessions list`, then `nexus sessions send <name> "<message>"`.
-  `nexus sessions` also starts, shows, names and stops them.
+  `nexus sessions` also starts, shows, names, waits for and stops them.
   A session is its id (`t_…`), name (any case) or title. A name wins over a title,
   which must be unique in the newest 200.
   `nexus sessions name` or the app's `/name` sets a unique name for Claude Code's SendMessage.

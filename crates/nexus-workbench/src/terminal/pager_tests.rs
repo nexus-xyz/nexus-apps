@@ -33,27 +33,33 @@ impl Host for NoHost {
 
 /// A workbench whose one session has `mode` as its permission mode.
 fn workbench(mode: &str) -> Workbench {
+    workbench_with_threads(mode, &[THREAD])
+}
+
+fn workbench_with_threads(mode: &str, threads: &[&str]) -> Workbench {
     let store = Store::in_memory().expect("fixture store");
     let project = store.add_project(&std::env::temp_dir(), 100).expect("fixture project");
-    let summary: ThreadSummary = serde_json::from_value(json!({
-        "id":THREAD, "projectId":project.id, "title":"Pager fixture", "agent":"claude",
-        "model":null, "permissionMode":mode, "via":"nexus", "status":"idle", "costUsd":0.,
-        "nexusSessions":[], "createdAt":100, "updatedAt":100, "archived":false
-    }))
-    .expect("fixture thread summary");
-    store
-        .insert_thread(&ThreadRecord {
-            summary,
-            native_id: "native".into(),
-            native_started: false,
-            scope: "scope".into(),
-            fork_from: None,
-            seed: None,
-            automatic_title: false,
-            delivered_seq: 0,
-            halt: None,
-        })
-        .expect("fixture thread");
+    for thread in threads {
+        let summary: ThreadSummary = serde_json::from_value(json!({
+            "id":thread, "projectId":project.id, "title":"Pager fixture", "agent":"claude",
+            "model":null, "permissionMode":mode, "via":"nexus", "status":"idle", "costUsd":0.,
+            "nexusSessions":[], "createdAt":100, "updatedAt":100, "archived":false
+        }))
+        .expect("fixture thread summary");
+        store
+            .insert_thread(&ThreadRecord {
+                summary,
+                native_id: "native".into(),
+                native_started: false,
+                scope: "scope".into(),
+                fork_from: None,
+                seed: None,
+                automatic_title: false,
+                delivered_seq: 0,
+                halt: None,
+            })
+            .expect("fixture thread");
+    }
     Workbench::new(
         store,
         Arc::new(NoHost),
@@ -69,11 +75,15 @@ fn workbench(mode: &str) -> Workbench {
 
 /// Reads `id` until it ends, and returns the last read with all of its output.
 async fn finish(wb: &Workbench, id: &Value) -> (Value, String) {
+    finish_in_thread(wb, THREAD, id).await
+}
+
+async fn finish_in_thread(wb: &Workbench, thread: &str, id: &Value) -> (Value, String) {
     let mut output = String::new();
     let mut after = 0;
     for _ in 0..30 {
         let read = wb
-            .terminal(THREAD, "read", json!({"id":id, "after":after, "wait_ms":1000}), false)
+            .terminal(thread, "read", json!({"id":id, "after":after, "wait_ms":1000}), false)
             .await
             .expect("read the command");
         output.push_str(read["output"].as_str().unwrap_or_default());
@@ -205,4 +215,28 @@ async fn a_read_says_how_long_a_running_command_has_been_silent() {
     let (ended, _) = finish(&wb, &run["id"]).await;
     assert_eq!(ended["terminal"]["status"], "completed");
     assert!(ended["idleMs"].is_null());
+}
+
+#[tokio::test]
+async fn terminal_commands_expand_their_own_session_id() {
+    let wb = workbench_with_threads("auto", &["t_first", "t_second"]);
+    for (thread, human, request_id) in [
+        ("t_first", false, "agent-first"),
+        ("t_second", false, "agent-second"),
+        ("t_first", true, "person-first"),
+    ] {
+        let run = wb
+            .terminal(
+                thread,
+                "run",
+                json!({"command":r#"printf '%s' "$NEXUS_SESSION_ID""#, "request_id":request_id}),
+                human,
+            )
+            .await
+            .expect("run the command");
+        assert_eq!(run["agentWritten"], !human);
+        let (ended, output) = finish_in_thread(&wb, thread, &run["id"]).await;
+        assert_eq!(ended["terminal"]["exitCode"], 0);
+        assert_eq!(output, thread);
+    }
 }

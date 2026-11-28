@@ -142,6 +142,17 @@ pub(crate) fn environment(
     env
 }
 
+pub(super) fn session_environment(
+    app: impl IntoIterator<Item = (String, String)>,
+    marked: bool,
+    agent_written: bool,
+    thread: &str,
+) -> HashMap<String, String> {
+    let mut env = environment(app, marked, agent_written);
+    env.insert("NEXUS_SESSION_ID".into(), thread.into());
+    env
+}
+
 /// Starts the execution's process in `shell` ([`Shell::Login`] in the apps).
 pub(super) fn start(
     entry: &Arc<Execution>,
@@ -211,7 +222,7 @@ pub(super) fn start(
             }
         };
         command.env_clear();
-        for (key, value) in environment(std::env::vars(), marked, state.info.agent_written) {
+        for (key, value) in session_environment(std::env::vars(), marked, state.info.agent_written, &entry.thread) {
             command.env(key, value);
         }
         command.cwd(&state.info.cwd);

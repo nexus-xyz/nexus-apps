@@ -126,6 +126,19 @@ fn a_command_gets_only_the_allowed_variables() {
 }
 
 #[test]
+fn terminal_session_id_replaces_the_apps_value_after_filtering() {
+    let app = || {
+        [("NEXUS_SESSION_ID", "t_outer"), ("NEXUS_API_KEY", "secret")].map(|(key, value)| (key.into(), value.into()))
+    };
+    let filtered = process::environment(app(), false, false);
+    assert!(!filtered.contains_key("NEXUS_SESSION_ID"));
+
+    let env = process::session_environment(app(), false, false, "t_current");
+    assert_eq!(env["NEXUS_SESSION_ID"], "t_current");
+    assert!(!env.contains_key("NEXUS_API_KEY"));
+}
+
+#[test]
 fn a_kept_commit_mark_belongs_to_one_sign_in() {
     let terminals = Terminals::default();
     terminals.context("org", Some("person-a".into()));
