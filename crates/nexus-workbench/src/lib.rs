@@ -101,6 +101,7 @@ mod private_fs;
 pub mod process;
 pub mod project_defaults;
 pub mod project_files;
+pub mod project_lookup;
 pub mod prompt_stash;
 pub mod provider;
 pub mod provision;

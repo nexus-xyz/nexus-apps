@@ -28,7 +28,7 @@ Ask whether the person wants a result back through you, or owns the new session;
 - `start_session` can't reach another project yet. Use `nexus sessions start` there, even for work you coordinate.
 - Start an independent session with `nexus sessions start "<prompt>" --project <owner/repo or the project's folder>`.
   From a worktree, always pass --project: a bare `nexus sessions start` finds no project there.
-  `--project` takes a project's id, a folder inside it, or its GitHub owner/repo. It does not take the project's name.
+  `--project` takes a project's id, a folder inside it, its GitHub owner/repo or its name.
 - To hand work over without replacing this session, first commit your work on its branch.
   Then name the branch in the new session's prompt. It does not get your worktree or uncommitted changes.
 - Use `handoff_session` only when the person asks to replace or archive this session.

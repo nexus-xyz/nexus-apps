@@ -712,7 +712,7 @@ mod tests {
             "When the words are unclear, use `start_session`, and say which tool you chose and why.",
             "`start_session` can't reach another project yet.",
             "`nexus sessions start \"<prompt>\" --project <owner/repo or the project's folder>`",
-            "It does not take the project's name.",
+            "`--project` takes a project's id, a folder inside it, its GitHub owner/repo or its name.",
             "To hand work over without replacing this session, first commit your work on its branch.",
             "say which tool you chose and why",
             "Use `handoff_session` only when the person asks to replace or archive this session.",
