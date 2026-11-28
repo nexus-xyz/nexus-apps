@@ -1,0 +1,434 @@
+# A release of the `nexus` CLI (apps/cli): a `cli-v<VERSION>` tag builds the binary for five platforms, signs each one
+# with the CLI release key, and publishes them to the downloads bucket that https://downloads.nexus.inc/cli/ serves.
+#
+# What a release publishes, in this order (apps/cli/release/stage.sh makes the files):
+#   1. `cli/<channel>/<version>/`: `nexus-darwin-arm64`, `nexus-darwin-x64`, `nexus-linux-x64`, `nexus-linux-arm64`,
+#      `nexus-win32-x64.exe`, a `.sha256` and a `.sig` beside each, the version's `latest.json`, then `SHA256SUMS`
+#      last, as the folder's completion mark. Written once: a run again on the tag uploads nothing.
+#   2. `cli/<channel>/latest.json`, the channel's pointer. It only moves forward.
+#   3. On `stable`, the Homebrew tap's `nexus-cli` formula, when the environment holds the tap App's secrets.
+# The channel is `stable` for X.Y.Z, and `beta` for a prerelease (X.Y.Z-beta.1).
+# Each Gateway's installer and `nexus update` read `cli/stable/<the Gateway's own version>/latest.json`
+# (NEXUS_CLI_DOWNLOADS). So a Gateway offers this CLI only when its version is the same as VERSION here.
+#
+# Who can release: a tag ruleset limits who pushes `cli-v*` tags. The `cli-release` environment allows only `cli-v*`
+# tags, waits for a reviewer who did not push the tag, and holds the publisher's settings. Only the `release` job uses
+# it. The bucket's identity accepts only that environment on a `cli-v*` tag of this repository.
+#
+# Rehearsals publish nothing:
+#   - A manual run (workflow_dispatch) on any branch builds every binary and stages the files, with no environment
+#     and no credential. The files stay as the `rehearsal` artifact for three days.
+#   - A `cli-v0.0.0-test.<N>` tag on main also runs the `release` job: the environment, its approval, the bucket
+#     identity and the signing key. It signs and checks every binary, then uploads nothing, attests nothing and
+#     moves no pointer. Use it after a change to the environment, the identity or the key.
+#
+# Unsigned on macOS and Windows: curl sets no quarantine flag, so Gatekeeper does not check the binary, and the
+# linker's ad hoc signature is what Apple silicon needs. The `.sig` files are the CLI release key's (Cloud KMS).
+#
+# Environment `cli-release`. Variables: CLI_BUCKET, GCP_WORKLOAD_IDENTITY_PROVIDER, GCP_SERVICE_ACCOUNT,
+# CLI_SIGNING_KEY (the KMS key version). Secrets, optional: RELEASE_ENGINE_APP_ID and RELEASE_ENGINE_APP_PRIVATE_KEY
+# (the App that may push to the Homebrew tap). Without them, the tap is not moved and the release still succeeds.
+#
+# Cost per release: one macOS, one Linux and one Windows build (about 15 runner minutes each), and two short jobs.
+name: cli-release
+
+on:
+  push:
+    tags: ["cli-v*"]
+  workflow_dispatch:
+
+permissions: {}
+
+# One run per tag, never cancelled halfway.
+concurrency:
+  group: cli-release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_VERSION: "1.97"
+  DOWNLOADS_URL: https://downloads.nexus.inc
+  # Without these, the release is not served natively: the Gateway's installer reads the version's manifest.
+  REQUIRED_TARGETS: darwin-arm64,darwin-x64,linux-x64,linux-arm64
+
+jobs:
+  # The version and the channel, from VERSION. A tag must name VERSION and sit on main; else nothing builds.
+  plan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    outputs:
+      version: ${{ steps.plan.outputs.version }}
+      channel: ${{ steps.plan.outputs.channel }}
+      publish: ${{ steps.plan.outputs.publish }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+          filter: blob:none
+          sparse-checkout: VERSION
+          sparse-checkout-cone-mode: false
+      - name: The version this run builds
+        id: plan
+        run: |
+          set -euo pipefail
+          stop() { echo "::error::$1"; exit 1; }
+          version="$(tr -d '[:space:]' < VERSION)"
+          if [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            channel=stable
+          elif [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+-[0-9A-Za-z.]+$ ]]; then
+            channel=beta
+          else
+            stop "VERSION is '$version': not a stable (X.Y.Z) or beta (X.Y.Z-<pre>) version."
+          fi
+          publish=false
+          if [ "$GITHUB_EVENT_NAME" = push ]; then
+            named="${GITHUB_REF_NAME#cli-v}"
+            if [[ "$named" =~ ^0\.0\.0-test\.[0-9]+$ ]]; then
+              echo "::notice title=Rehearsal::$GITHUB_REF_NAME signs $version and publishes nothing."
+            elif [ "$named" = "$version" ]; then
+              publish=true
+            else
+              stop "$GITHUB_REF_NAME does not name VERSION ($version). A release is cli-v$version; a rehearsal is cli-v0.0.0-test.<N>."
+            fi
+            git merge-base --is-ancestor "$GITHUB_SHA" origin/main || stop "$GITHUB_REF_NAME is not on main."
+          fi
+          {
+            echo "version=$version"
+            echo "channel=$channel"
+            echo "publish=$publish"
+          } >> "$GITHUB_OUTPUT"
+          echo "$version ($channel), publish: $publish" >> "$GITHUB_STEP_SUMMARY"
+
+  # darwin-arm64 and darwin-x64 on one macOS runner, linux-x64 and linux-arm64 static (musl) on one Linux runner with
+  # cargo-zigbuild, and win32-x64 on Windows. Windows may fail alone: no install path requires it yet.
+  build:
+    needs: plan
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: darwin
+            runner: macos-26
+          - platform: linux
+            runner: ubuntu-22.04
+          - platform: windows
+            runner: windows-2022
+    runs-on: ${{ matrix.runner }}
+    continue-on-error: ${{ matrix.platform == 'windows' }}
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    defaults:
+      run:
+        shell: bash
+    env:
+      VERSION: ${{ needs.plan.outputs.version }}
+      OUT: ${{ github.workspace }}/cli-out
+      ZIG_VERSION: 0.15.2
+      CARGO_ZIGBUILD_VERSION: 0.24.0
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          persist-credentials: false
+      # The binary reports <VERSION>+<sha7> (build/version.rs).
+      - name: Build settings
+        run: |
+          echo "NEXUS_BUILD_SHA=${GITHUB_SHA::7}" >> "$GITHUB_ENV"
+          mkdir -p "$OUT"
+      - name: Rust ${{ env.RUST_VERSION }}
+        run: |
+          rustup toolchain install "$RUST_VERSION" --profile minimal --no-self-update
+          rustup default "$RUST_VERSION"
+
+      - name: macOS, darwin-arm64 and darwin-x64
+        if: matrix.platform == 'darwin'
+        run: |
+          rustup target add aarch64-apple-darwin x86_64-apple-darwin
+          for pair in aarch64-apple-darwin:darwin-arm64 x86_64-apple-darwin:darwin-x64; do
+            cargo build --locked --release -p nexus-cli --features plans --bin nexus --target "${pair%%:*}"
+            cp "target/${pair%%:*}/release/nexus" "$OUT/nexus-${pair##*:}"
+          done
+          file "$OUT"/*
+          "$OUT/nexus-darwin-arm64" --version
+
+      # Static musl, so one file runs on any distribution, glibc or not.
+      - name: Linux, linux-x64 and linux-arm64 (static musl)
+        if: matrix.platform == 'linux'
+        run: |
+          python3 -m pip install --user "ziglang==$ZIG_VERSION" "cargo-zigbuild==$CARGO_ZIGBUILD_VERSION"
+          export PATH="$HOME/.local/bin:$PATH"
+          { grep -l 'packages.sury.org' /etc/apt/sources.list.d/* 2>/dev/null || true; } | xargs -r sudo rm -f  # unused PHP repo; its mid-sync mirror fails apt-get update
+          sudo apt-get update --allow-releaseinfo-change
+          sudo apt-get install -y qemu-user-static
+          rustup target add x86_64-unknown-linux-musl aarch64-unknown-linux-musl
+          for pair in x86_64-unknown-linux-musl:linux-x64 aarch64-unknown-linux-musl:linux-arm64; do
+            cargo zigbuild --locked --release -p nexus-cli --features plans --bin nexus --target "${pair%%:*}"
+            bin="$OUT/nexus-${pair##*:}"
+            cp "target/${pair%%:*}/release/nexus" "$bin"
+            if readelf --program-headers "$bin" | grep -q INTERP || readelf --dynamic "$bin" | grep -q NEEDED; then
+              echo "::error::nexus-${pair##*:} is not statically linked."
+              exit 1
+            fi
+          done
+          file "$OUT"/*
+          "$OUT/nexus-linux-x64" --version
+          qemu-aarch64-static "$OUT/nexus-linux-arm64" --version
+
+      - name: Windows, win32-x64
+        if: matrix.platform == 'windows'
+        run: |
+          rustup target add x86_64-pc-windows-msvc
+          cargo build --locked --release -p nexus-cli --features plans --bin nexus --target x86_64-pc-windows-msvc
+          cp target/x86_64-pc-windows-msvc/release/nexus.exe "$OUT/nexus-win32-x64.exe"
+          "$OUT/nexus-win32-x64.exe" --version
+
+      # The marker the Gateway and `nexus update --rollback` read the version from, checked in every file.
+      - name: Every binary is this release's
+        run: |
+          marker="/* @nexus/cli $VERSION+$NEXUS_BUILD_SHA */"
+          for bin in "$OUT"/nexus-*; do
+            if ! grep -aqF "$marker" "$bin"; then
+              echo "::error::$(basename "$bin") does not carry \"$marker\"."
+              exit 1
+            fi
+            echo "$(basename "$bin"): $marker, $(wc -c < "$bin" | tr -d ' ') bytes"
+          done
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: cli-${{ matrix.platform }}
+          path: ${{ github.workspace }}/cli-out
+          retention-days: 14
+          if-no-files-found: error
+
+  # A manual run's rehearsal: the files a release would publish, without a signature, an environment or a credential.
+  rehearse:
+    needs: [plan, build]
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          persist-credentials: false
+          sparse-checkout: apps/cli/release
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          path: ${{ runner.temp }}/cli
+          pattern: cli-*
+          merge-multiple: true
+      - name: Stage the files
+        env:
+          VERSION: ${{ needs.plan.outputs.version }}
+          CHANNEL: ${{ needs.plan.outputs.channel }}
+        run: |
+          node apps/cli/release/cli-sign.mjs self-test
+          apps/cli/release/stage.sh "$RUNNER_TEMP/cli" "$RUNNER_TEMP/cli" "$VERSION" "$CHANNEL" "$GITHUB_SHA"
+          echo "Rehearsal of $VERSION ($CHANNEL): staged, nothing published." >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: rehearsal
+          path: ${{ runner.temp }}/cli
+          retention-days: 3
+          if-no-files-found: error
+
+  # Signs and publishes. The only job with an environment or a credential; it waits for the environment's reviewer.
+  release:
+    needs: [plan, build]
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    # One publish at a time, so two runs never race the pointer.
+    concurrency:
+      group: cli-release-publish
+      cancel-in-progress: false
+    environment: cli-release
+    permissions:
+      contents: read
+      id-token: write # the bucket's identity (Workload Identity Federation, no key), and provenance
+      attestations: write
+    defaults:
+      run:
+        shell: bash
+    env:
+      VERSION: ${{ needs.plan.outputs.version }}
+      CHANNEL: ${{ needs.plan.outputs.channel }}
+      PUBLISH: ${{ needs.plan.outputs.publish }}
+      CLI_BUCKET: ${{ vars.CLI_BUCKET }}
+      CLI_SIGNING_KEY: ${{ vars.CLI_SIGNING_KEY }}
+      GCP_WORKLOAD_IDENTITY_PROVIDER: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+      GCP_SERVICE_ACCOUNT: ${{ vars.GCP_SERVICE_ACCOUNT }}
+      # The public half of CLI_SIGNING_KEY, and every key the CLI trusts.
+      SIGNING_PUB: apps/cli/keys/primary.pub
+      TRUSTED_KEYS: apps/cli/keys
+    steps:
+      - name: Check the environment
+        run: |
+          missing=()
+          for name in CLI_BUCKET CLI_SIGNING_KEY GCP_WORKLOAD_IDENTITY_PROVIDER GCP_SERVICE_ACCOUNT; do
+            [ -n "${!name}" ] || missing+=("$name")
+          done
+          if [ "${#missing[@]}" -gt 0 ]; then
+            printf '::error::The cli-release environment lacks the variable %s.\n' "${missing[@]}"
+            exit 1
+          fi
+          {
+            echo "BINS=$RUNNER_TEMP/cli"
+            echo "STAGE=$RUNNER_TEMP/stage"
+          } >> "$GITHUB_ENV"
+
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          persist-credentials: false
+          sparse-checkout: |
+            apps/cli/release
+            apps/cli/keys
+
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          path: ${{ runner.temp }}/cli
+          pattern: cli-*
+          merge-multiple: true
+
+      - name: Stage the files
+        run: apps/cli/release/stage.sh "$BINS" "$STAGE" "$VERSION" "$CHANNEL" "$GITHUB_SHA"
+
+      - uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3
+        with:
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.GCP_SERVICE_ACCOUNT }}
+
+      - uses: google-github-actions/setup-gcloud@aa5489c8933f4cc7a4f7d45035b3b1440c9c10db # v3.0.1
+
+      # A version folder is written once. A complete one (SHA256SUMS present) means a run again on the tag: nothing is
+      # uploaded, and the pointer step reads the folder's own manifest. Only "matched no objects" means absent: any
+      # other read error stops the job before it writes.
+      - name: Is cli/${{ env.CHANNEL }}/${{ env.VERSION }}/ published already?
+        id: folder
+        if: env.PUBLISH == 'true'
+        run: |
+          set -euo pipefail
+          listed() {
+            local out
+            if out="$(gcloud storage ls "$1" 2>&1)"; then return 0; fi
+            if grep -q "matched no objects" <<< "$out"; then return 1; fi
+            echo "::error title=Bucket unreadable::$out"
+            exit 1
+          }
+          DEST="gs://$CLI_BUCKET/cli/$CHANNEL/$VERSION"
+          if listed "$DEST/SHA256SUMS"; then
+            echo "::notice title=Already published::cli/$CHANNEL/$VERSION/ is already published; nothing is uploaded."
+            gcloud storage cp "$DEST/latest.json" "$STAGE/latest.json"
+            echo "state=complete" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          # Objects but no SHA256SUMS: a run that died half way. Release builds are not byte-identical, so stop and
+          # let a person clear the folder.
+          if listed "$DEST/"; then
+            echo "::error title=Partial upload::cli/$CHANNEL/$VERSION/ holds objects but no SHA256SUMS. Delete the folder, then run this job again."
+            exit 1
+          fi
+          echo "state=new" >> "$GITHUB_OUTPUT"
+
+      # Each binary gets a `.sig` from the release key in Cloud KMS, checked against apps/cli/keys/ before anything
+      # is written, so a signing failure publishes nothing. A rehearsal signs too.
+      - name: Sign every binary
+        if: env.PUBLISH != 'true' || steps.folder.outputs.state == 'new'
+        run: |
+          set -euo pipefail
+          token="$(gcloud auth print-access-token)"
+          echo "::add-mask::$token"
+          KMS_ACCESS_TOKEN="$token" node apps/cli/release/cli-sign.mjs sign --dir "$BINS" --out "$RUNNER_TEMP/sigs" \
+            --version "$VERSION+${GITHUB_SHA::7}" --kms-key "$CLI_SIGNING_KEY" --pub "$SIGNING_PUB" --keys "$TRUSTED_KEYS"
+
+      - name: Rehearsal, nothing published
+        if: env.PUBLISH != 'true'
+        run: |
+          echo "Rehearsal of $VERSION ($CHANNEL): built, staged and signed. Nothing uploaded, attested or moved." >> "$GITHUB_STEP_SUMMARY"
+
+      # Provenance: which workflow run built each binary, from which commit. Before the upload, so a published binary
+      # always has one.
+      - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        if: env.PUBLISH == 'true' && steps.folder.outputs.state == 'new'
+        with:
+          subject-checksums: ${{ runner.temp }}/stage/SHA256SUMS
+
+      # In order, so a client never sees a name before its file: the binaries, their checksums and signatures, the
+      # version's manifest, and SHA256SUMS last.
+      - name: Upload cli/${{ env.CHANNEL }}/${{ env.VERSION }}/
+        if: env.PUBLISH == 'true' && steps.folder.outputs.state == 'new'
+        run: |
+          set -euo pipefail
+          DEST="gs://$CLI_BUCKET/cli/$CHANNEL/$VERSION"
+          immutable="public, max-age=31536000, immutable"
+          binaries=()
+          for bin in "$BINS"/nexus-*; do
+            case "$bin" in *.sha256) ;; *) binaries+=("$bin") ;; esac
+          done
+          gcloud storage cp --no-clobber --cache-control="$immutable" --content-type=application/octet-stream \
+            "${binaries[@]}" "$DEST/"
+          gcloud storage cp --no-clobber --cache-control="$immutable" --content-type="text/plain; charset=utf-8" \
+            "$BINS"/nexus-*.sha256 "$DEST/"
+          gcloud storage cp --no-clobber --cache-control="$immutable" --content-type="text/plain; charset=utf-8" \
+            "$RUNNER_TEMP/sigs"/nexus-*.sig "$DEST/"
+          gcloud storage cp --no-clobber --cache-control="$immutable" --content-type=application/json \
+            "$STAGE/latest.json" "$DEST/latest.json"
+          gcloud storage cp --no-clobber --cache-control="$immutable" --content-type="text/plain; charset=utf-8" \
+            "$STAGE/SHA256SUMS" "$DEST/SHA256SUMS"
+          echo "Published $DOWNLOADS_URL/cli/$CHANNEL/$VERSION/ ($(jq -r '.targets | keys | join(", ")' "$STAGE/latest.json"))." >> "$GITHUB_STEP_SUMMARY"
+
+      # The pointer only moves forward: a patch of an older line (0.9.1 after 0.10.0) keeps the newer one.
+      - name: Move cli/${{ env.CHANNEL }}/latest.json to it
+        if: env.PUBLISH == 'true'
+        run: |
+          set -euo pipefail
+          POINTER="gs://$CLI_BUCKET/cli/$CHANNEL/latest.json"
+          current=""
+          if listing="$(gcloud storage ls "$POINTER" 2>&1)"; then
+            current="$(gcloud storage cat "$POINTER" | jq -r '.version // empty')"
+          elif ! grep -q "matched no objects" <<< "$listing"; then
+            echo "::error title=Pointer unreadable::$listing"
+            exit 1
+          fi
+          if [ -n "$current" ] && [ "$current" != "$VERSION" ] && \
+            [ "$(printf '%s\n%s\n' "$current" "$VERSION" | sort -V | tail -1)" = "$current" ]; then
+            echo "::notice title=Pointer kept::cli/$CHANNEL/latest.json names $current, newer than $VERSION: not moved."
+            exit 0
+          fi
+          gcloud storage cp --cache-control="public, max-age=60" --content-type=application/json \
+            "$STAGE/latest.json" "$POINTER"
+          echo "Moved $DOWNLOADS_URL/cli/$CHANNEL/latest.json to $VERSION." >> "$GITHUB_STEP_SUMMARY"
+
+      # Homebrew, stable only. A failure here never fails the release: the files and the pointer are out already.
+      - name: Homebrew tap credentials
+        id: tap-app
+        if: env.PUBLISH == 'true' && env.CHANNEL == 'stable'
+        env:
+          HAS_APP: ${{ secrets.RELEASE_ENGINE_APP_ID != '' && secrets.RELEASE_ENGINE_APP_PRIVATE_KEY != '' }}
+        run: |
+          if [ "$HAS_APP" = true ]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice title=Homebrew tap not updated::The cli-release environment has no RELEASE_ENGINE_APP_ID and RELEASE_ENGINE_APP_PRIVATE_KEY."
+          fi
+      - uses: actions/create-github-app-token@f418cff399f7aef4c2f0ad47e25ca7a6abbdd6fc # v3.4.0
+        id: tap
+        if: steps.tap-app.outputs.present == 'true'
+        continue-on-error: true
+        with:
+          app-id: ${{ secrets.RELEASE_ENGINE_APP_ID }}
+          private-key: ${{ secrets.RELEASE_ENGINE_APP_PRIVATE_KEY }}
+          owner: nexus-xyz
+          repositories: homebrew-tap
+          permission-contents: write
+      - name: Move the Homebrew formula to ${{ env.VERSION }}
+        if: steps.tap.outputs.token != ''
+        continue-on-error: true
+        env:
+          TAP_TOKEN: ${{ steps.tap.outputs.token }}
+        run: apps/cli/release/homebrew/update-tap.sh formula "$VERSION"
