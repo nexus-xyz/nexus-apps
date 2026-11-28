@@ -7,8 +7,8 @@ title = "Nexus: internal references"
 [[rules]]
 id = "private-repo-path"
 description = "A path or workflow in Nexus's private repositories. Readers of this repository cannot open it."
-regex = '''eng/factory|oss/(?:export|INVENTORY|go-no-go|split-rehearsal)|factory-release'''
-keywords = ["eng/factory", "oss/", "factory-release"]
+regex = '''eng/factory|oss/(?:export|INVENTORY|go-no-go|split-rehearsal)|factory-release|services/frontend|nexus-gateway/'''
+keywords = ["eng/factory", "oss/", "factory-release", "services/frontend", "nexus-gateway/"]
 
 [[rules]]
 id = "internal-ticket-id"
