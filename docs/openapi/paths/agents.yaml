@@ -903,7 +903,7 @@
         schema:
           type: string
           pattern: ^[A-Za-z0-9_-]+$
-      - $ref: ../components/common.yaml#/parameters/IdempotencyKeyRequired
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKey
     requestBody:
       required: true
       content:
@@ -933,8 +933,6 @@
                       type: integer
                     errorMessage:
                       type: string
-      "428":
-        $ref: ../components/common.yaml#/responses/PreconditionRequired
       "429":
         $ref: ../components/common.yaml#/responses/RateLimited
       default:
@@ -944,4 +942,5 @@
             schema:
               $ref: ../components/schemas.yaml#/Error
     x-nexus-permission: products.use
-    x-idempotency: required
+    x-idempotency: optional
+    description: "Exempt: an OpenTelemetry export. The exporter sends only `Authorization`, and a repeated record counts once."

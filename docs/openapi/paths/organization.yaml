@@ -1617,7 +1617,7 @@
               kind: company
               role: owner
               current: true
-              imageUrl: https://storage.googleapis.com/nexus-org-logos/org-logos/ten_8Hq2LmP4xRtK/3f2a9c1d8e7b6a50
+              imageUrl: https://storage.example.com/org-logos/ten_8Hq2LmP4xRtK/3f2a9c1d8e7b6a50
       "400":
         $ref: ../components/common.yaml#/responses/BadRequest
       "409":
@@ -1876,8 +1876,8 @@
             example:
               error:
                 message: >-
-                  Nexus Gateway has no CLERK_SECRET_KEY, so it cannot take them out of the Clerk organization; remove
-                  them in Nexus UI (Members)
+                  Nexus Gateway has no identity provider secret key, so it cannot take them out of the Clerk
+                  organization; remove them in Nexus UI (Members)
                 type: not_configured
                 code: not_configured
       default:
@@ -2031,7 +2031,9 @@
               $ref: ../components/schemas.yaml#/Error
             example:
               error:
-                message: Nexus Gateway has no CLERK_SECRET_KEY, so it cannot add them back to the Clerk organization
+                message: >-
+                  Nexus Gateway has no identity provider secret key, so it cannot add them back to the Clerk
+                  organization
                 type: not_configured
                 code: not_configured
       default:
