@@ -22,12 +22,12 @@ nexus-workbench = { path = "../nexus-workbench", features = ["memory-mcp"] }
 nexus-remote = { path = "../nexus-remote" }
 serde = { version = "=1.0.229", features = ["derive"] }
 serde_json = { version = "=1.0.154", features = ["preserve_order"] }
-tokio = { version = "=1.53.3", features = ["sync", "time"] }
+tokio = { version = "=1.54.1", features = ["sync", "time"] }
 # request_secret's request ids and file names.
-uuid = { version = "=1.28.0", features = ["v4"] }
+uuid = { version = "=1.29.3", features = ["v4"] }
 
 [dev-dependencies]
-tokio = { version = "=1.53.3", features = ["macros", "rt"] }
+tokio = { version = "=1.54.1", features = ["macros", "rt"] }
 
 [lints.rust]
 unsafe_code = "forbid"

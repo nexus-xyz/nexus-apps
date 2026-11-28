@@ -27,15 +27,15 @@ base64 = "=0.22.1"
 # The token in the OS credential store: Keychain (macOS), Credential Manager (Windows), Secret Service (Linux).
 keyring = "=4.2.0"
 # The device key is wiped from memory after use: nexus-client's pin.
-zeroize = "=1.9.1"
+zeroize = "=1.9.2"
 # The OS's config folder (src/settings.rs `config_dir`).
 dirs = "=7.0.0"
 # The agent API's base URL and the links a reply carries (src/agent.rs).
 url = "=2.5.9"
 # The organization's notifications loop (src/path_notices.rs): its waits, its lock and its wake-up.
-tokio = { version = "=1.53.3", features = ["macros", "sync", "time"] }
+tokio = { version = "=1.54.1", features = ["macros", "sync", "time"] }
 # This computer's notification device token (src/path_notices.rs).
-uuid = { version = "=1.28.0", features = ["v4"] }
+uuid = { version = "=1.29.3", features = ["v4"] }
 # The Assistant's times in the person's own zone (src/agent_privacy.rs, src/agent_vault.rs): the version both apps lock.
 chrono = { version = "=0.4.45", default-features = false, features = ["clock", "std"] }
 
@@ -57,7 +57,7 @@ winreg = "=0.56.0"
 
 [dev-dependencies]
 # src/path_notices.rs's and src/signals.rs's tests run against a fake Gateway on a local port.
-tokio = { version = "=1.53.3", features = ["io-util", "macros", "net", "rt-multi-thread", "sync", "time"] }
+tokio = { version = "=1.54.1", features = ["io-util", "macros", "net", "rt-multi-thread", "sync", "time"] }
 
 [lints.rust]
 # Denied, not forbidden: src/policy.rs's macOS reader calls CFPreferences (two FFI calls), allowed in that module alone.

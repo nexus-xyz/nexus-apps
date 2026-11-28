@@ -19,14 +19,14 @@ nexus-workbench = { path = "../nexus-workbench" }
 nexus-remote = { path = "../nexus-remote" }
 serde = { version = "=1.0.229", features = ["derive"] }
 serde_json = { version = "=1.0.154", features = ["preserve_order"] }
-tokio = { version = "=1.53.3", features = ["macros", "sync", "time"] }
+tokio = { version = "=1.54.1", features = ["macros", "sync", "time"] }
 
 # Parse review previews with the same GFM parser as the native Markdown view.
 markdown = "=1.0.0"
 
 [dev-dependencies]
-tokio = { version = "=1.53.3", features = ["macros", "rt-multi-thread"] }
-uuid = { version = "=1.28.0", features = ["v4"] }
+tokio = { version = "=1.54.1", features = ["macros", "rt-multi-thread"] }
+uuid = { version = "=1.29.3", features = ["v4"] }
 
 [lints.rust]
 unsafe_code = "forbid"
