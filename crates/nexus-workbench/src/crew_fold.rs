@@ -1554,6 +1554,7 @@ impl FoldState {
                 cache_write_tokens,
                 cost_usd,
                 parent,
+                ..
             } => self.usage(
                 parent.as_deref(),
                 model,

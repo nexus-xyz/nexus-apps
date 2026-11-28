@@ -1041,6 +1041,7 @@ impl Workspace {
                                     || crate::plan_book::changes() != this.plan_book_seen
                             }))
                         || this.crew_clock_shown()
+                        || this.cache_clock_ticking()
                     {
                         cx.notify();
                     }

@@ -707,6 +707,7 @@ async fn never_leaves_sends_only_allowlisted_observations_and_no_keys() {
                 output_tokens: 3,
                 cache_read_tokens: 4,
                 cache_write_tokens: 5,
+                cache_writes: None,
                 cost_usd: 0.0000001,
                 parent: Some("secret-parent".into()),
             },

@@ -4,6 +4,10 @@
 //! summary (`cost_usd`, `context_tokens` and `context_window`, as the agent reports them), as the Nexus app does.
 //!
 //! Context shares use the shared rules; the loaded log supplies estimates, never exact billing figures.
+//!
+//! A Claude Code session's next turn costs less while its prompt cache is warm, so the tooltip and the card also say
+//! how long it stays warm ("Cache warm · 4:12 left", then "Cache cold"), by `nexus_workbench::prompt_cache`'s rules.
+//! Codex and the Nexus agent report no cache lifetime and show no timer.
 
 use crate::workspace::MenuTrigger;
 use crate::workspace::overlay::{Overlay, OverlaySlot};
@@ -13,6 +17,7 @@ use gpui_kit::component::v_flex;
 use gpui_kit::prelude::*;
 use gpui_kit::*;
 use nexus_workbench::event::{PermissionMode, SessionAgent, Via};
+use nexus_workbench::prompt_cache::{CacheClock, Warmth, countdown};
 
 use super::TopPanel;
 use super::git_panel::popover;
@@ -72,6 +77,25 @@ pub(in crate::workspace) fn share(context: Option<(u64, u64)>) -> Option<(f32, u
     Some((share as f32, (share * 100.0).round() as u32))
 }
 
+/// The card's line on the prompt cache: "Cache warm · 4:12 left", or "Cache cold"; None without a clock.
+pub(super) fn cache_line(clock: &CacheClock, now: i64) -> Option<String> {
+    Some(match clock.at(now)? {
+        Warmth::Warm { left_ms } => format!("Cache warm · {} left", countdown(left_ms)),
+        Warmth::Cold => "Cache cold".into(),
+    })
+}
+
+/// The same, as a part of the pill's tooltip: "cache warm, 4:12 left", or "cache cold".
+fn cache_tip(clock: &CacheClock, now: i64) -> Option<String> {
+    Some(match clock.at(now)? {
+        Warmth::Warm { left_ms } => format!("cache warm, {} left", countdown(left_ms)),
+        Warmth::Cold => "cache cold".into(),
+    })
+}
+
+/// How long the repaint goes on after the cache goes cold, so the card turns to "Cache cold".
+const COLD_REPAINT_MS: i64 = 2_000;
+
 pub(in crate::workspace) fn agent_name(agent: SessionAgent) -> &'static str {
     nexus_workbench::driver::label(agent)
 }
@@ -95,6 +119,27 @@ impl Workspace {
             _ => self.open_overlay(Overlay::CodeTop(TopPanel::Meter(id.to_string()))),
         }
         cx.notify();
+    }
+
+    /// The prompt cache clock of `session`, while its transcript is the one read.
+    fn cache_clock(&self, session: &CodeSession) -> Option<CacheClock> {
+        match &self.view {
+            View::Code(view) if view.id == session.id && view.loaded => Some(view.cache),
+            _ => None,
+        }
+    }
+
+    /// The meter's card is open on a session whose cache clock still counts down (or just went cold): the working
+    /// tick repaints it each second. The tooltip reads the clock when it opens, so it needs no repaint.
+    pub(in crate::workspace) fn cache_clock_ticking(&self) -> bool {
+        let View::Code(view) = &self.view else {
+            return false;
+        };
+        matches!(self.overlay.code_top(), Some(TopPanel::Meter(id)) if *id == view.id)
+            && view
+                .cache
+                .cold_at()
+                .is_some_and(|cold| crate::code::now_ms() < cold + COLD_REPAINT_MS)
     }
 
     /// The pill's words: the session's cost, and while a turn runs, its cost so far ("$0.42 this turn").
@@ -129,6 +174,7 @@ impl Workspace {
             Some((_, percent)) => format!("Session cost {cost} · context {percent}%").into(),
             None => format!("Session cost {cost}").into(),
         };
+        let clock = self.cache_clock(session);
         let pill = h_flex()
             .id("code-meter")
             .flex_none()
@@ -142,7 +188,14 @@ impl Workspace {
             .cursor_pointer()
             .hover(|style| style.bg(palette.hover).text_color(palette.foreground))
             .when(!open, |pill| {
-                pill.tooltip(move |window, cx| Tooltip::new(tip.clone()).build(window, cx))
+                pill.tooltip(move |window, cx| {
+                    // Read when the tooltip opens, so the time left is current without a repaint.
+                    let tip: SharedString = match clock.and_then(|clock| cache_tip(&clock, crate::code::now_ms())) {
+                        Some(cache) => format!("{tip} · {cache}").into(),
+                        None => tip.clone().into(),
+                    };
+                    Tooltip::new(tip).build(window, cx)
+                })
             })
             .menu_trigger(
                 open,
@@ -252,6 +305,21 @@ impl Workspace {
             ),
             _ => card.child(quiet("The agent has not reported context usage.".into())),
         };
+        if let Some(line) = self
+            .cache_clock(session)
+            .and_then(|clock| cache_line(&clock, crate::code::now_ms()))
+        {
+            card = card.child(
+                div()
+                    .id("code-meter-cache")
+                    .text_size(px(12.))
+                    .text_color(palette.faint)
+                    .tooltip(|window, cx| {
+                        Tooltip::new("The next turn costs less while the prompt cache is warm.").build(window, cx)
+                    })
+                    .child(line),
+            );
+        }
         if let (Some((tokens, _)), crate::workspace::View::Code(view)) = (session.context, &self.view)
             && view.id == session.id
             && view.loaded
@@ -335,7 +403,66 @@ fn grouped(value: u64) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{compact, grouped, share, usd};
+    use super::{cache_line, cache_tip, compact, grouped, share, usd};
+    use crate::code::Transcript;
+    use nexus_workbench::event::{CacheWrites, WbEvent};
+    use nexus_workbench::prompt_cache::{FIVE_MINUTES_MS, ONE_HOUR_MS};
+
+    fn usage(read: u64, writes: Option<CacheWrites>) -> WbEvent {
+        WbEvent::Usage {
+            model: "m".into(),
+            input_tokens: 10,
+            output_tokens: 20,
+            cache_read_tokens: read,
+            cache_write_tokens: writes.map_or(0, |w| w.five_minute_tokens + w.one_hour_tokens),
+            cache_writes: writes,
+            cost_usd: 0.01,
+            parent: None,
+        }
+    }
+
+    #[test]
+    fn a_claude_session_shows_how_long_its_cache_stays_warm() {
+        let start = 1_000_000;
+        let five = Some(CacheWrites {
+            five_minute_tokens: 4_000,
+            one_hour_tokens: 0,
+        });
+        let read = Transcript::of(vec![(1, start, usage(0, five))]);
+        assert_eq!(
+            cache_line(&read.cache, start + 48_000).as_deref(),
+            Some("Cache warm · 4:12 left")
+        );
+        assert_eq!(
+            cache_tip(&read.cache, start + 48_000).as_deref(),
+            Some("cache warm, 4:12 left")
+        );
+        assert_eq!(
+            cache_line(&read.cache, start + FIVE_MINUTES_MS).as_deref(),
+            Some("Cache cold")
+        );
+        let hour = Some(CacheWrites {
+            five_minute_tokens: 0,
+            one_hour_tokens: 4_000,
+        });
+        let read = Transcript::of(vec![(1, start, usage(0, hour)), (2, start + 1_000, usage(4_000, hour))]);
+        assert_eq!(
+            cache_line(&read.cache, start + 1_000).as_deref(),
+            Some("Cache warm · 60:00 left")
+        );
+        assert_eq!(
+            cache_line(&read.cache, start + 1_000 + ONE_HOUR_MS).as_deref(),
+            Some("Cache cold")
+        );
+    }
+
+    #[test]
+    fn codex_usage_shows_no_timer() {
+        // Codex reports cached input, but no cache lifetime.
+        let read = Transcript::of(vec![(1, 1_000_000, usage(11_520, None))]);
+        assert_eq!(cache_line(&read.cache, 1_000_000), None);
+        assert_eq!(cache_tip(&read.cache, 1_000_000), None);
+    }
 
     #[test]
     fn cost_reads_as_nexus_ui_writes_it() {

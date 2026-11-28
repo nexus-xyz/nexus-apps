@@ -211,6 +211,8 @@ pub(super) struct CodeView {
     pub thoughts_open: HashSet<isize>,
     /// What the turn still running has cost so far: the working line's "$0.84 so far".
     pub turn_cost: Option<f64>,
+    /// How long the session's prompt cache stays warm: the meter's "Cache warm · 4:12 left" (`code_meter.rs`).
+    pub cache: nexus_workbench::prompt_cache::CacheClock,
     /// A turn ended interrupted since the person's last message, and what its crew still runs (`interrupt_bars.rs`).
     pub interrupted: bool,
     pub crew: nexus_workbench::crew_fold::CrewCounts,
@@ -283,6 +285,7 @@ impl CodeView {
             fold_all: HashSet::new(),
             thoughts_open: HashSet::new(),
             turn_cost: None,
+            cache: Default::default(),
             interrupted: false,
             crew: Default::default(),
             continued_at: None,
@@ -363,6 +366,7 @@ impl CodeView {
             start,
             more,
             turn_cost,
+            cache,
             interrupted,
             crew,
             ..
@@ -442,6 +446,7 @@ impl CodeView {
         self.starts = starts;
         self.texts = texts;
         self.turn_cost = turn_cost;
+        self.cache = cache;
         if above > 0 {
             // The places from the last layout sit `above` blocks lower now.
             self.folds.splice(0..0, std::iter::repeat_n(Default::default(), above));

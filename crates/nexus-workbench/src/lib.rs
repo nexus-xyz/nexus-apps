@@ -101,6 +101,7 @@ mod private_fs;
 pub mod process;
 pub mod project_defaults;
 pub mod project_files;
+pub mod prompt_cache;
 pub mod prompt_stash;
 pub mod provider;
 pub mod provision;
@@ -5851,6 +5852,7 @@ impl Workbench {
                         output_tokens: usage.output_tokens,
                         cache_read_tokens: usage.cache_read_tokens,
                         cache_write_tokens: usage.cache_write_tokens,
+                        cache_writes: usage.cache_writes,
                         cost_usd: cost,
                         parent,
                     },

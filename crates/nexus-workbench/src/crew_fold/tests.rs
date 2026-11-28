@@ -160,6 +160,7 @@ impl Log {
                 output_tokens: output,
                 cache_read_tokens: 0,
                 cache_write_tokens: 0,
+                cache_writes: None,
                 cost_usd: cost,
                 parent: parent.map(str::to_string),
             },
