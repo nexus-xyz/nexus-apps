@@ -260,7 +260,7 @@ fn gpu_socket(process: &mut Process) -> Option<(std::os::fd::OwnedFd, std::os::f
         return None;
     }
     let (app_end, host_end) = super::frames::pair()
-        .inspect_err(|error| eprintln!("nexus-desktop-gpui: GPU frame socket: {error}"))
+        .inspect_err(|error| log::warn!("GPU frame socket: {error}"))
         .ok()?;
     let fd = host_end.as_raw_fd();
     process.env(super::frames::FD_ENV, fd.to_string());
@@ -319,7 +319,7 @@ fn send(input: &Input, command: &Command) {
 pub(super) fn warm() {
     match Host::get() {
         Ok(_) => used(false),
-        Err(error) => eprintln!("nexus-desktop-gpui: web host: {error}"),
+        Err(error) => log::warn!("web host: {error}"),
     }
 }
 
@@ -550,7 +550,7 @@ fn read_events(output: impl std::io::Read, pages: &Pages, input: &Input) {
         let event = match serde_json::from_str::<Event>(&line) {
             Ok(event) => event,
             Err(error) => {
-                eprintln!("nexus-desktop-gpui: web host said something unknown ({error}): {line}");
+                log::warn!("web host said something unknown ({error}): {line}");
                 continue;
             }
         };
@@ -599,7 +599,7 @@ fn read_events(output: impl std::io::Read, pages: &Pages, input: &Input) {
                         shared.changed();
                     }
                     Err(error) => {
-                        eprintln!("nexus-desktop-gpui: frame of page {id} at {path}: {error}");
+                        log::warn!("frame of page {id} at {path}: {error}");
                         // The view still gets the frame it had not taken.
                         let mut shared = shared.lock().expect("web view state");
                         if shared.frame.is_none() {

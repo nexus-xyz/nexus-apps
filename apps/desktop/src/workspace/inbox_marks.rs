@@ -35,7 +35,7 @@ fn save(scope: &str, marks: &Marks) {
     let Ok(text) = serde_json::to_string(marks) else { return };
     let written = std::fs::create_dir_all(parent).and_then(|()| std::fs::write(file, text));
     if let Err(error) = written {
-        eprintln!("nexus-desktop-gpui: Inbox marks could not be saved: {error}");
+        log::warn!("Inbox marks could not be saved: {error}");
     }
 }
 

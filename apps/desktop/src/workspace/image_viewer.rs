@@ -133,7 +133,7 @@ impl Workspace {
                 Ok(Ok(Some(path))) => path,
                 Ok(Ok(None)) | Err(_) => return,
                 Ok(Err(error)) => {
-                    eprintln!("nexus-desktop-gpui: download dialog: {error}");
+                    log::warn!("download dialog: {error}");
                     return;
                 }
             };
@@ -141,7 +141,7 @@ impl Workspace {
                 .background_spawn(async move { std::fs::write(&path, bytes.as_slice()).map_err(|error| (path, error)) })
                 .await;
             if let Err((path, error)) = written {
-                eprintln!("nexus-desktop-gpui: download {}: {error}", path.display());
+                log::warn!("download {}: {error}", path.display());
             }
         })
         .detach();

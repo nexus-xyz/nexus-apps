@@ -486,7 +486,7 @@ mod x11 {
         let window = handle.window.get();
         std::thread::spawn(move || {
             if let Err(error) = send(window) {
-                eprintln!("nexus-desktop-gpui: the panel could not stay on top: {error}");
+                log::warn!("the panel could not stay on top: {error}");
             }
         });
     }

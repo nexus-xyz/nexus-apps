@@ -54,6 +54,7 @@ mod links;
 mod live_fields;
 mod local_providers_opt_in;
 mod local_store;
+mod logging;
 mod machine_view;
 mod machines;
 mod managed;
@@ -200,6 +201,8 @@ fn key_bindings() -> Vec<KeyBinding> {
 fn main() {
     // `npm run measure`'s first mark, the process start (`measure.rs`).
     measure::start();
+    // Log lines on stderr at `NEXUS_LOG`'s level (`logging.rs`), in every process this binary runs.
+    logging::install();
     // Chromium's helper processes, the web host process, Code sessions' built-in MCP server and the launcher of an
     // Antigravity session's servers, the background service that keeps agents running (`service.rs`) and the work on
     // a screen recording (`--process-recording`, `--frames`, `record.rs`) are this binary too: they stop here.
@@ -219,6 +222,12 @@ fn main() {
     // First in the app's own process: the version the core reports, and a panic anywhere after is kept for the next
     // start's crash prompt (`crash.rs`).
     crash::install();
+    log::info!(
+        "Nexus {} starting on {} (pid {})",
+        env!("CARGO_PKG_VERSION"),
+        crash::platform(),
+        std::process::id()
+    );
     // One copy per person: a second launch hands its arguments to the first, which comes forward, and exits.
     // A copy the running one started in its place (`workspace/sign_in.rs`) waits for it to quit instead.
     let run = paths::cache_dir().join("run");
@@ -229,9 +238,12 @@ fn main() {
     };
     let instance = match launch {
         single_instance::Launch::First(instance) => Some(instance),
-        single_instance::Launch::HandedOff => return,
+        single_instance::Launch::HandedOff => {
+            log::info!("another copy is running: it takes this launch, and this one exits");
+            return;
+        }
         single_instance::Launch::Unchecked(why) => {
-            eprintln!("nexus-desktop-gpui: starting without the single-instance check: {why}");
+            log::warn!("starting without the single-instance check: {why}");
             None
         }
     };
@@ -262,10 +274,12 @@ fn main() {
     if !(nexus_desktop_core::prefs::menu_bar_only(&desktop_settings::load()) || prefs::autostarted()) {
         workspace::prewarm_backdrop(palette::Palette::expected_at_launch());
     }
+    log::debug!("start: the Gateway client");
     let (gateway, events) = gateway::Gateway::start();
     // Who is signed in, before the first window: it opens on the workspace or on sign-in, never on one then the other.
     gateway.preload(std::time::Duration::from_millis(1500));
     let gateway: std::sync::Arc<dyn backend::Backend> = std::sync::Arc::new(gateway);
+    log::debug!("start: GPUI");
     // The last light or dark, for windows that open before the desktop says which (`appearance.rs`).
     appearance::start();
     // The interface's language, before any text is drawn (`i18n.rs`).
@@ -276,6 +290,7 @@ fn main() {
     }
     app.run(move |cx: &mut App| {
         ui_thread::mark();
+        log::debug!("start: GPUI runs (+{} ms)", logging::since_start_ms());
         gpui_kit::init(cx);
         local_providers_opt_in::start(cx);
         pages::local_providers::start(cx);
@@ -297,7 +312,7 @@ fn main() {
             .text_system()
             .add_fonts(fonts.into_iter().map(std::borrow::Cow::Borrowed).collect())
         {
-            eprintln!("nexus-desktop-gpui: fonts: {error}");
+            log::warn!("fonts: {error}");
         }
         // The keys a person set in Settings › Keyboard shortcuts (`key_bindings.rs`), before the keymap is made.
         key_bindings::load();
@@ -344,6 +359,9 @@ fn main() {
             cx.set_activation_policy(ActivationPolicy::Accessory);
         }
         let open_now = commands.is_none() || window_at_launch;
+        if !open_now {
+            log::info!("no window at start (menu-bar only, or started at login): the tray opens one");
+        }
         windows::start(gateway, events, arrivals, commands, open_now, cx);
         // Development and checks: open the panel once launched, as the tray's Ask Nexus does.
         if std::env::var("NEXUS_DESKTOP_SHOW_PANEL").is_ok_and(|value| !value.is_empty()) {

@@ -82,7 +82,7 @@ impl Workspace {
                     };
                 }
                 other => {
-                    eprintln!("nexus-desktop-gpui: measure: no session: {other:?}");
+                    log::warn!("measure: no session: {other:?}");
                     this.measure = MeasureStep::Done;
                     crate::measure::finish();
                 }

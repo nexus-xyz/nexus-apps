@@ -73,10 +73,7 @@ fn flush(cx: &mut App) {
             .and_then(|()| std::fs::write(&file, marks.seen.to_json()));
         if let Err(error) = written {
             // Remembered until the app quits.
-            eprintln!(
-                "nexus-desktop-gpui: read marks not saved to {}: {error}",
-                file.display()
-            );
+            log::warn!("read marks not saved to {}: {error}", file.display());
         }
     });
 }

@@ -148,7 +148,7 @@ fn run(rx: mpsc::Receiver<Command>, mut enabled: bool) {
         let busy = if enabled { active(engine.as_ref()) } else { Some(false) };
         let result = controller.update(Instant::now(), enabled, busy, NativeGuard::acquire);
         if let Err(error) = result {
-            eprintln!("keep awake: {error}");
+            log::warn!("keep awake: {error}");
             *ERROR.lock().unwrap_or_else(|p| p.into_inner()) = Some(error);
         } else if controller.guard.is_some() || !enabled || busy == Some(false) {
             *ERROR.lock().unwrap_or_else(|p| p.into_inner()) = None;

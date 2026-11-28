@@ -53,7 +53,7 @@ fn clear_in(folder: &Path) {
     if let Err(error) = std::fs::remove_dir_all(folder)
         && error.kind() != std::io::ErrorKind::NotFound
     {
-        eprintln!("nexus-desktop-gpui: page snapshots: {error}");
+        log::warn!("page snapshots: {error}");
     }
 }
 

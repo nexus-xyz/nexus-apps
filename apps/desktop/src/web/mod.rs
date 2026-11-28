@@ -1022,7 +1022,7 @@ impl WebView {
             )
             .map(Engine::Cef)
             .map_err(|error| {
-                eprintln!("nexus-desktop-gpui: web host: {error}");
+                log::warn!("web host: {error}");
                 "Pages can't show here: the web engine did not start.".to_string()
             })
         };
@@ -1278,7 +1278,7 @@ impl WebView {
             cx.background_executor()
                 .spawn(async move {
                     if let Err(error) = snapshot::save(&file, &data) {
-                        eprintln!("nexus-desktop-gpui: page snapshot: {error}");
+                        log::warn!("page snapshot: {error}");
                     }
                 })
                 .await;

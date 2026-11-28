@@ -75,7 +75,7 @@ impl PromptStash {
             && let Err(error) = save_to(file, &self.stash)
         {
             // The stash still lasts for this run.
-            eprintln!("nexus: could not keep the prompt stash: {error}");
+            log::warn!("could not keep the prompt stash: {error}");
         }
     }
 }

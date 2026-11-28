@@ -98,14 +98,14 @@ pub fn start(cx: &mut App) {
     let hotkeys = match GlobalHotKeyManager::new() {
         Ok(manager) => Some(manager),
         Err(error) => {
-            eprintln!("nexus-desktop-gpui: no global shortcuts: {error}");
+            log::warn!("no global shortcuts: {error}");
             None
         }
     };
     let launcher = match launcher() {
         Ok(launcher) => Some(launcher),
         Err(error) => {
-            eprintln!("nexus-desktop-gpui: no login item: {error}");
+            log::warn!("no login item: {error}");
             None
         }
     };
@@ -118,10 +118,10 @@ pub fn start(cx: &mut App) {
     for slot in [Slot::Panel, Slot::Record] {
         let shortcut = saved(slot);
         match register(cx, slot, &shortcut) {
-            Ok(()) => eprintln!("nexus-desktop-gpui: global shortcut {shortcut} registered"),
+            Ok(()) => log::debug!("global shortcut {shortcut} registered"),
             // Off macOS the recording's is refused by design: nothing to say.
             Err(_) if slot == Slot::Record && !nexus_desktop_record::available(true) => {}
-            Err(error) => eprintln!("nexus-desktop-gpui: {error}"),
+            Err(error) => log::warn!("{error}"),
         }
     }
     apply_managed_launch_at_login(cx);
@@ -224,7 +224,7 @@ fn register(cx: &mut App, slot: Slot, accelerator: &str) -> Result<(), String> {
             Ok(())
         }
         Err(error) => {
-            eprintln!("nexus-desktop-gpui: {accelerator} not registered: {error}");
+            log::warn!("{accelerator} not registered: {error}");
             let message = "Another app uses that shortcut. Try other keys.".to_string();
             // Put the previous one back.
             let restored = previous.filter(|previous| hotkeys.register(*previous).is_ok());
@@ -298,7 +298,7 @@ fn apply_launch_at_login(cx: &App, on: bool) -> Result<(), String> {
         .ok_or("This build can't add itself to the login items here.")?;
     let result = if on { launcher.enable() } else { launcher.disable() };
     result.map_err(|error| {
-        eprintln!("nexus-desktop-gpui: launch at login: {error}");
+        log::warn!("launch at login: {error}");
         "Couldn't change Open at login. Try again.".to_string()
     })
 }
@@ -309,7 +309,7 @@ fn apply_managed_launch_at_login(cx: &App) {
         && launch_at_login(cx) != on
         && let Err(error) = apply_launch_at_login(cx, on)
     {
-        eprintln!("nexus-desktop-gpui: {error}");
+        log::warn!("{error}");
     }
 }
 

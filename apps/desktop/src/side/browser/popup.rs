@@ -57,7 +57,7 @@ impl Popup {
         match opened {
             Ok((window, _)) => Some(window),
             Err(error) => {
-                eprintln!("nexus-desktop-gpui: a browser popup did not open: {error}");
+                log::error!("a browser popup did not open: {error}");
                 None
             }
         }

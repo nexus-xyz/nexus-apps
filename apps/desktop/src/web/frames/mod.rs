@@ -52,7 +52,7 @@ pub(super) fn wanted() -> bool {
 /// Turn GPU frames off for the app's life, and open this page again with CPU frames.
 fn turn_off(shared: &mut Shared, why: &str) {
     if !OFF.swap(true, Ordering::Relaxed) {
-        eprintln!("nexus-desktop-gpui: GPU frames off, pages use CPU frames: {why}");
+        log::warn!("GPU frames off, pages use CPU frames: {why}");
     }
     shared.gpu_failed = true;
 }

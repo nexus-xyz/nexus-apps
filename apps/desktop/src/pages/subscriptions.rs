@@ -681,10 +681,10 @@ fn remove_account(agent: SessionAgent, id: Option<String>) -> Result<(), String>
                         .await
                         .is_err()
                     {
-                        eprintln!("nexus-desktop-gpui: signing {id} out did not end; removing it anyway");
+                        log::warn!("signing {id} out did not end; removing it anyway");
                     }
                 }
-                Err(error) => eprintln!("nexus-desktop-gpui: could not sign {id} out: {error}; removing it anyway"),
+                Err(error) => log::warn!("could not sign {id} out: {error}; removing it anyway"),
             }
         });
     }

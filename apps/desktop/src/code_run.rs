@@ -571,7 +571,7 @@ async fn sweep_once(
     let _one = sweeps.running.lock().await;
     let last = sweep_everywhere(api, rules).await;
     for problem in &last.problems {
-        eprintln!("nexus-desktop-gpui: worktree cleanup: {problem}");
+        log::warn!("worktree cleanup: {problem}");
     }
     if !last.removed.is_empty() {
         // The app's reader, which hands it to every window (`windows.rs`).
@@ -792,7 +792,7 @@ impl CodeRunner {
         if let Some(prefix) = &settings.branch_prefix
             && let Err(error) = workbench.set_branch_prefix(prefix)
         {
-            eprintln!("nexus-desktop-gpui: branch prefix {prefix}: {error}");
+            log::warn!("branch prefix {prefix}: {error}");
         }
         apply_accounts(&workbench, &settings);
         let machine = Arc::new(GpuiMachine {
@@ -845,7 +845,7 @@ impl CodeRunner {
                 Some(socket)
             }
             Err(error) => {
-                eprintln!("nexus-desktop-gpui: the built-in server's socket: {error}");
+                log::warn!("the built-in server's socket: {error}");
                 None
             }
         };
@@ -1095,7 +1095,7 @@ impl CodeRunner {
             remote.drop_connection();
             self.runtime.spawn(async move {
                 if let Err(error) = local.stop().await {
-                    eprintln!("nexus-desktop-gpui: background service: {error}");
+                    log::warn!("background service: {error}");
                 }
             });
         }
@@ -1117,7 +1117,7 @@ impl CodeRunner {
             && let Some(local) = self.service.clone()
             && let Err(error) = self.runtime.block_on(async move { local.stop().await })
         {
-            eprintln!("nexus-desktop-gpui: background service: {error}");
+            log::warn!("background service: {error}");
         }
     }
 
@@ -1202,7 +1202,7 @@ impl CodeRunner {
         }
         apply_accounts(workbench, settings);
         if let Err(error) = workbench.set_branch_prefix(&settings.branch_prefix_or_default()) {
-            eprintln!("nexus-desktop-gpui: branch prefix: {error}");
+            log::warn!("branch prefix: {error}");
         }
         let _ = self.hand_mcp_servers(settings.mcp_servers.clone());
         self.hand_server_mcp_servers(settings.mcp_servers.clone());
@@ -1253,7 +1253,7 @@ impl CodeRunner {
                 return;
             };
             if let Err(error) = remote.call(nexus_desktop_mcp::mcp::SERVICE_CALL, handed).await {
-                eprintln!("nexus-desktop-gpui: could not hand the background service the MCP servers: {error}");
+                log::warn!("could not hand the background service the MCP servers: {error}");
             }
         }))
     }
@@ -2800,7 +2800,7 @@ impl Host for GpuiHost {
             match client.post(&path, body).await {
                 Ok(_) => true,
                 Err(error) => {
-                    eprintln!("nexus-desktop-gpui: could not end agent session {nexus_session}: {error}");
+                    log::warn!("could not end agent session {nexus_session}: {error}");
                     end_refused(&error)
                 }
             }
@@ -2998,7 +2998,7 @@ impl ServiceSink {
                     });
                     let answered = runtime.block_on(remote.call(nexus_desktop_mcp::app_socket::REPLY_CALL, args));
                     if let Err(error) = answered {
-                        eprintln!("nexus-desktop-gpui: could not answer the background service: {error}");
+                        log::warn!("could not answer the background service: {error}");
                     }
                 });
             }
@@ -3084,7 +3084,7 @@ impl nexus_remote::machine::Sink for ServiceSink {
                 }
             }
             Status::NeedsUpdate { error, .. } | Status::Unreachable { error, .. } => {
-                eprintln!("nexus-desktop-gpui: background service: {error}");
+                log::warn!("background service: {error}");
             }
             _ => {}
         }
