@@ -105,19 +105,55 @@ fn write(path: &Path, text: &str) -> io::Result<()> {
     Ok(())
 }
 
-fn without_frontmatter(text: &str) -> &str {
+#[derive(Default, serde::Deserialize)]
+struct NoteMetadata {
+    name: Option<String>,
+    description: Option<String>,
+}
+
+fn note_metadata(text: &str) -> (NoteMetadata, &str) {
     let mut lines = text.split_inclusive('\n');
-    if lines.next().map(str::trim_end) != Some("---") {
-        return text;
-    }
-    let mut offset = text.find('\n').map_or(text.len(), |index| index + 1);
+    let Some(open) = lines.next().filter(|line| line.trim_end() == "---") else {
+        return (NoteMetadata::default(), text);
+    };
+    let mut offset = open.len();
     for line in lines {
-        offset += line.len();
         if line.trim_end() == "---" {
-            return &text[offset..];
+            let header = &text[open.len()..offset];
+            // Native notes can contain unescaped punctuation in a header value. Keep its text
+            // and the note body even when YAML cannot parse the header.
+            let metadata = yaml_serde::from_str(header).unwrap_or_else(|_| NoteMetadata {
+                name: header.lines().find_map(|line| metadata_value(line, "name:")),
+                description: header.lines().find_map(|line| metadata_value(line, "description:")),
+            });
+            return (metadata, &text[offset + line.len()..]);
+        }
+        offset += line.len();
+    }
+    (NoteMetadata::default(), text)
+}
+
+fn metadata_value(line: &str, key: &str) -> Option<String> {
+    let value = line.strip_prefix(key)?.trim();
+    let unquoted = ['"', '\'']
+        .into_iter()
+        .find_map(|quote| quoted_metadata_value(value, quote))
+        .unwrap_or(value);
+    Some(unquoted.to_owned())
+}
+
+fn quoted_metadata_value(value: &str, quote: char) -> Option<&str> {
+    let inner = value.strip_prefix(quote)?.strip_suffix(quote)?;
+    let mut chars = inner.chars();
+    while let Some(ch) = chars.next() {
+        // Honor quoted scalar delimiters without decoding the literal text.
+        if quote == '"' && ch == '\\' {
+            chars.next()?;
+        } else if ch == quote && (quote == '"' || chars.next() != Some(quote)) {
+            return None;
         }
     }
-    text
+    Some(inner)
 }
 
 #[cfg(test)]
