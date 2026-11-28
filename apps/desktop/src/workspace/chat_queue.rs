@@ -432,6 +432,13 @@ impl Workspace {
                             let key = this.queue_key();
                             this.chat_queue.queues.update(&key, |queue| queue.remove(seq));
                             this.commit_gateway_queues(cx);
+                            // The message being rewritten went: its pause goes with it, and the queue goes on.
+                            if this.chat_queue.editing == Some(seq) {
+                                this.chat_queue.editing = None;
+                                if this.asking.is_none() && !this.chat_busy() {
+                                    this.send_first_queued(false, cx);
+                                }
+                            }
                             this.focus_composer(window, cx);
                             cx.notify();
                         })),
