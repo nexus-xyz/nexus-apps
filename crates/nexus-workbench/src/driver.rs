@@ -49,9 +49,10 @@ pub const FILE_LINK_GUIDANCE: &str = "Nexus opens each file your reply links or 
 pub const TERMINAL_GUIDANCE: &str = include_str!("terminal/instructions.txt").trim_ascii_end();
 
 /// How an agent reaches another of the app's sessions by its name, and starts an independent one: the `nexus` CLI's
-/// `sessions` commands, through the app's Outside access. No tool of its own. Said to every agent, with or without the
-/// subsession tools, with when it may archive or hand off its own session.
-pub const SESSIONS_GUIDANCE: &str = "To reach another Nexus for desktop session, run `nexus sessions list`, then `nexus sessions send <name> \"<message>\"`. For a new, separate or independent session, or to hand work over, run `nexus sessions start`, with `--project <folder or owner/repo>` for another project. When the person needs its result, ask in its prompt for a report to `$NEXUS_SESSION_ID` with `nexus sessions send`, or run `nexus sessions wait <id>`. Never archive or hand off your own session unless the person or a saved memory says so. Save a standing preference, such as \"always archive\", with shared memory (`remember`), or say it is unavailable.";
+/// `sessions` commands, through the app's Outside access. No tool of its own. Said to every agent whose prompt the
+/// workbench builds, with or without the subsession tools; an agent with its own prompt (`Instructions::OwnPrompt`:
+/// OpenCode, Cursor, Nexus) does not get it. When to archive or hand off is in the subsession tools' own text.
+pub const SESSIONS_GUIDANCE: &str = "To reach another Nexus for desktop session, run `nexus sessions list`, then `nexus sessions send <name> \"<message>\"`. For a new, separate or independent session, run `nexus sessions start \"<prompt>\" --project <owner/repo or the project's folder>`. From a worktree, always pass --project. To hand work over without replacing this session, first commit your work on its branch, then start one the same way and name the branch in its prompt. When the person needs its result, ask in its prompt for a report to `$NEXUS_SESSION_ID` with `nexus sessions send`, or run `nexus sessions wait <id>`.";
 
 /// What the workbench adds to every agent's system prompt: Claude Code's `--append-system-prompt`, Codex's
 /// `developerInstructions`. The commit trailer's note holds with or without the hook (only some accounts get it), so every session gets it.
@@ -565,25 +566,26 @@ mod tests {
         }
     }
 
-    /// Every agent, with or without the subsession tools, is told how to start an independent session and get its
-    /// result, when it may archive or hand off its own session, and to save a standing preference. Agents that take
-    /// their servers in the session get the same words.
+    /// Every agent whose prompt the workbench builds, with or without the subsession tools, is told how to start an
+    /// independent session, hand work over without replacing its own, and get the result. Agents that take their
+    /// servers in the session get the same words. Archiving is not here: such an agent may have no tool for it.
     #[test]
-    fn every_agent_is_told_how_to_start_an_independent_session_and_when_to_archive_its_own() {
+    fn every_agent_is_told_how_to_start_an_independent_session_and_get_its_result() {
         for phrase in [
-            "For a new, separate or independent session, or to hand work over, run `nexus sessions start`",
-            "`--project <folder or owner/repo>` for another project",
+            "For a new, separate or independent session, run `nexus sessions start \"<prompt>\" --project",
+            "To hand work over without replacing this session, first commit your work on its branch",
             "ask in its prompt for a report to `$NEXUS_SESSION_ID` with `nexus sessions send`",
             "`nexus sessions wait <id>`",
-            "Never archive or hand off your own session unless the person or a saved memory says so.",
-            "with shared memory (`remember`), or say it is unavailable.",
         ] {
             assert!(SESSIONS_GUIDANCE.contains(phrase), "SESSIONS_GUIDANCE lacks: {phrase}");
+        }
+        for word in ["archive", "remember"] {
+            assert!(!SESSIONS_GUIDANCE.contains(word), "SESSIONS_GUIDANCE names {word}");
         }
         for text in [instructions(), session_tool_instructions()] {
             assert!(text.contains(SESSIONS_GUIDANCE));
         }
-        // It is in every agent's prompt: keep it short.
+        // It is in many agents' prompts: keep it short.
         let words = SESSIONS_GUIDANCE.split_whitespace().count();
         assert!(words <= 100, "SESSIONS_GUIDANCE holds {words} words");
     }

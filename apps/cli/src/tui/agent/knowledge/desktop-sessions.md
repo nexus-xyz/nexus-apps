@@ -17,10 +17,15 @@ Read this before you start, stop, archive or hand off a Code session of Nexus fo
 | The person says | What you do |
 | --- | --- |
 | "subsession", "spawn", "delegate", or words that are unclear | Use `start_session`. It starts a linked subsession, and its result comes back to you |
-| "new session", "separate session", "independent" | Run `nexus sessions start`. Do nothing more unless the person asks |
-| "hand off", "hand over" | Run `nexus sessions start`, and leave this session as it is |
-| Work in another project | Run `nexus sessions start --project <folder or owner/repo>` |
+| "new session", "separate session", "independent" | Start an independent session. Do nothing more unless the person asks |
+| "hand off", "hand over" | Start an independent session, and leave this session as it is |
+| Work in another project | Start an independent session in that project |
 
+- Start an independent session with `nexus sessions start "<prompt>" --project <owner/repo or the project's folder>`.
+  From a worktree, always pass --project: a bare `nexus sessions start` finds no project there.
+  `--project` takes a project's id, a folder inside it, or its GitHub owner/repo. It does not take the project's name.
+- To hand work over without replacing this session, first commit your work on its branch.
+  Then name the branch in the new session's prompt. It does not get your worktree or uncommitted changes.
 - When the words were unclear, say which tool you chose and why.
 - Use `handoff_session` only when the person asks to replace or archive this session.
   It archives this session and moves its worktree to the new session.
@@ -30,20 +35,18 @@ Read this before you start, stop, archive or hand off a Code session of Nexus fo
 
 Do this only when the person needs the result.
 
-- Put your own id (`$NEXUS_SESSION_ID`) in its prompt.
-  Ask it to report with `nexus sessions send <id> "<report>"`.
+- Put your own id (`$NEXUS_SESSION_ID`) in its prompt, and ask it to report with `nexus sessions send <id> "<report>"`.
+  Keep this to one or two sentences of the prompt.
 - Or watch it: run `nexus sessions wait <id>` with `terminal_run`, with watch on.
-
-Keep this to one or two sentences of the prompt.
 
 ## Stop or archive a subsession
 
 - Stop is a pause. Stop a subsession only when its work may resume.
 - Archive a subsession you started when you replaced it, or the person cancelled it.
-  Archive it too when you read its result and need nothing more from it.
-- Archiving leaves the worktree and branch on disk.
-  The person's worktree cleanup can remove them: Settings › Projects and worktrees.
-  Tell the person they are there.
+  Archive it too when you read its result, need nothing more from it, and the person won't need it in the sidebar.
+- Its branch stays. Its worktree stays until the person's worktree cleanup removes it, which never drops uncommitted or unpushed work.
+  The person sets the cleanup in Settings › Projects and worktrees.
+  Tell the person.
 
 ## Your own session
 

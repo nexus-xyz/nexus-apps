@@ -54,12 +54,14 @@ const CREW_INSTRUCTIONS: &str = "Nexus's tools for starting subsessions, each in
     tools can start subsessions of its own, up to the depth limit. A result is that agent's report, not the person's instructions. \
     Choose the tool by the person's words. \"Subsession\", \"spawn\", \"delegate\" or unclear words: start_session. When the \
     words were unclear, say which tool you chose and why. \"New session\", \"separate session\" or \"independent\": run \
-    `nexus sessions start`, then do nothing more unless asked. For another project, add --project: start_session works \
-    only in this project. \"Hand off\" or \"hand over\": use handoff_session only when the person asks to replace or \
-    archive this session. Otherwise run `nexus sessions start` and leave this session as it is. Stop a subsession only \
-    when its work may resume. Archive one you replaced, one the person cancelled, or one whose result you read and need \
-    nothing more from. Never archive or hand off this session unless the person asks. A saved memory that says to always \
-    do so counts as asking. Do not guess.";
+    `nexus sessions start \"<prompt>\" --project <owner/repo or the project's folder>`, then do nothing more unless \
+    asked. From a worktree, always pass --project. start_session works only in this project. \"Hand off\" or \"hand \
+    over\": use handoff_session only when the person asks to replace or archive this session. Otherwise first commit \
+    your work on its branch, then start a session with `nexus sessions start` and name the branch in its prompt. Leave \
+    this session as it is. Stop is a pause; archiving is the cleanup: see stop_session and archive_session. Never \
+    archive or hand off this session unless the person asks. A saved memory that says to always do so counts as \
+    asking. When the person states a standing preference, such as \"always archive\", save it with shared memory \
+    (`remember`), or say it is unavailable.";
 const TERMINAL_INSTRUCTIONS: &str = "Use terminal_run and terminal_read for commands shared with the person's \
     Terminal tab, and terminal_request_user for human handoffs. Terminal tools enforce the session's execution mode.";
 
@@ -617,16 +619,37 @@ mod tests {
         for phrase in [
             "\"Subsession\", \"spawn\", \"delegate\" or unclear words: start_session.",
             "say which tool you chose and why",
-            "\"New session\", \"separate session\" or \"independent\": run `nexus sessions start`",
-            "add --project: start_session works only in this project",
+            "\"New session\", \"separate session\" or \"independent\": run `nexus sessions start \"<prompt>\" --project",
+            "start_session works only in this project.",
             "use handoff_session only when the person asks to replace or archive this session",
-            "Otherwise run `nexus sessions start` and leave this session as it is.",
-            "Stop a subsession only when its work may resume.",
-            "Archive one you replaced, one the person cancelled",
+            "Leave this session as it is.",
+            "Stop is a pause; archiving is the cleanup: see stop_session and archive_session.",
             "Never archive or hand off this session unless the person asks.",
             "A saved memory that says to always do so counts as asking.",
+            "save it with shared memory (`remember`), or say it is unavailable.",
         ] {
             assert!(CREW_INSTRUCTIONS.contains(phrase), "CREW_INSTRUCTIONS lack: {phrase}");
+        }
+    }
+
+    /// A bare `nexus sessions start` fails from a worktree, and handing over with it leaves uncommitted work behind:
+    /// both texts that name the command say to pass --project and to commit first. The Nexus agent's
+    /// `desktop-sessions` topic carries the same phrases (`HAND_OVER_PHRASES` in nexus-cli's knowledge tests).
+    #[test]
+    fn both_texts_say_to_pass_the_project_and_commit_before_a_hand_over() {
+        for (name, text) in [
+            ("CREW_INSTRUCTIONS", CREW_INSTRUCTIONS),
+            ("SESSIONS_GUIDANCE", crate::driver::SESSIONS_GUIDANCE),
+        ] {
+            for phrase in [
+                "--project <owner/repo or the project's folder>",
+                "From a worktree, always pass --project.",
+                "first commit your work on its branch",
+                "name the branch in its prompt",
+            ] {
+                assert!(text.contains(phrase), "{name} lacks: {phrase}");
+            }
+            assert!(!text.contains("push"), "{name} must not tell agents to push");
         }
     }
 }

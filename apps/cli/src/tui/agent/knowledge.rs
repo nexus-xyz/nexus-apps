@@ -294,6 +294,7 @@ const ALIASES: &[(&str, &str)] = &[
     ("workbench", "desktop"),
     ("sessions", "desktop-sessions"),
     ("handoff", "desktop-sessions"),
+    ("hand-off", "desktop-sessions"),
     ("browser", "desktop"),
     ("recordings", "desktop"),
     ("error", "errors"),
@@ -672,6 +673,27 @@ mod tests {
         }
         assert!(topic_text("desktop").contains("See `desktop-sessions` to use Code sessions from outside the app."));
         assert_eq!(read("sessions", &offline).0, "desktop-sessions");
+        assert_eq!(read("hand off", &offline).0, "desktop-sessions");
+    }
+
+    /// The phrases that the workbench's `CREW_INSTRUCTIONS` and `SESSIONS_GUIDANCE` carry too (nexus-workbench's
+    /// `both_texts_say_to_pass_the_project_and_commit_before_a_hand_over`): a bare `nexus sessions start` fails from a
+    /// worktree, and handing over with it leaves uncommitted work behind.
+    #[test]
+    fn the_desktop_sessions_topic_says_to_pass_the_project_and_commit_before_a_hand_over() {
+        let sessions = topic_text("desktop-sessions");
+        for phrase in [
+            "--project <owner/repo or the project's folder>",
+            "From a worktree, always pass --project",
+            "first commit your work on its branch",
+            "name the branch in",
+        ] {
+            assert!(sessions.contains(phrase), "desktop-sessions.md lacks: {phrase}");
+        }
+        assert!(
+            !sessions.contains("push your"),
+            "the topic must not tell agents to push"
+        );
     }
 
     /// The person's words pick the tool, a stop is a pause, and the agent archives or hands off its own session only
@@ -681,16 +703,21 @@ mod tests {
         let sessions = topic_text("desktop-sessions");
         for phrase in [
             "| \"subsession\", \"spawn\", \"delegate\", or words that are unclear | Use `start_session`.",
-            "| \"new session\", \"separate session\", \"independent\" | Run `nexus sessions start`.",
-            "| \"hand off\", \"hand over\" | Run `nexus sessions start`, and leave this session as it is |",
-            "`nexus sessions start --project <folder or owner/repo>`",
+            "| \"new session\", \"separate session\", \"independent\" | Start an independent session.",
+            "| \"hand off\", \"hand over\" | Start an independent session, and leave this session as it is |",
+            "| Work in another project | Start an independent session in that project |",
+            "`nexus sessions start \"<prompt>\" --project <owner/repo or the project's folder>`",
+            "It does not take the project's name.",
+            "To hand work over without replacing this session, first commit your work on its branch.",
             "say which tool you chose and why",
             "Use `handoff_session` only when the person asks to replace or archive this session.",
             "`$NEXUS_SESSION_ID`",
             "`nexus sessions wait <id>`",
             "Stop is a pause. Stop a subsession only when its work may resume.",
             "Archive a subsession you started when you replaced it, or the person cancelled it.",
-            "Archiving leaves the worktree and branch on disk.",
+            "the person won't need it in the sidebar.",
+            "Its branch stays. Its worktree stays until the person's worktree cleanup removes it, which never drops \
+             uncommitted or unpushed work.",
             "Never archive your own session (`archive_session` with no `session_id`) unless the person says so.",
             "A saved memory that says to always do so counts. Do not guess.",
             "Save it with shared memory (`remember`)",
