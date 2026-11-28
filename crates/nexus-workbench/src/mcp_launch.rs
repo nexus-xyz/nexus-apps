@@ -5,13 +5,17 @@
 //! The app answers each server once, and the credential ends with the run, so a copy on disk starts nothing else.
 //! Claude Code starts each of its stdio servers through it too, with its whole environment: the launcher removes the
 //! credential variables from it first ([`crate::credential_env`]).
+//! Codex starts each plugin through it as well, with the launch credential under its own names
+//! ([`crate::mcp_servers::LAUNCH_TOKEN_VAR`]). A plugin runs in its own folder (`cwd`).
 
 use std::ffi::OsString;
 use std::process::Command;
 use std::time::Duration;
 
 use crate::app_socket::LAUNCH_TOOLS;
-use crate::mcp_servers::{APP_ADDRESS_VAR, APP_TOKEN_VAR, InheritedEnv, Launchable};
+use crate::mcp_servers::{
+    APP_ADDRESS_VAR, APP_TOKEN_VAR, InheritedEnv, LAUNCH_ADDRESS_VAR, LAUNCH_TOKEN_VAR, Launchable,
+};
 use serde_json::{Value, json};
 
 pub use crate::mcp_servers::LAUNCH_ARG as ARG;
@@ -47,6 +51,9 @@ pub fn answer(reply: &str) -> Result<Launchable, String> {
 pub fn command(server: &Launchable, inherited: impl IntoIterator<Item = (OsString, OsString)>) -> Command {
     let mut command = crate::process::command(&server.command);
     command.args(&server.args);
+    if let Some(cwd) = &server.cwd {
+        command.current_dir(cwd);
+    }
     match server.inherited {
         InheritedEnv::AppCredentialOnly => {}
         InheritedEnv::NoCredentials => {
@@ -60,6 +67,8 @@ pub fn command(server: &Launchable, inherited: impl IntoIterator<Item = (OsStrin
     command
         .env_remove(APP_ADDRESS_VAR)
         .env_remove(APP_TOKEN_VAR)
+        .env_remove(LAUNCH_ADDRESS_VAR)
+        .env_remove(LAUNCH_TOKEN_VAR)
         .envs(&server.env);
     command
 }
@@ -97,7 +106,10 @@ pub fn serve() -> Option<i32> {
         eprintln!("{ARG} {name}: {why}");
         Some(1)
     };
-    let Some((address, token)) = crate::mcp_bridge::app_socket_env() else {
+    // A plugin under Codex names the launch variables; every other server finds the credential in the app's.
+    let socket =
+        crate::mcp_bridge::socket_env(LAUNCH_ADDRESS_VAR, LAUNCH_TOKEN_VAR).or_else(crate::mcp_bridge::app_socket_env);
+    let Some((address, token)) = socket else {
         return fail(format!(
             "start it from a Nexus session ({APP_ADDRESS_VAR} and {APP_TOKEN_VAR})."
         ));
@@ -161,6 +173,7 @@ mod tests {
             args: vec!["--stdio".into()],
             env: BTreeMap::from([("DB_TOKEN".into(), "s1".into())]),
             inherited: InheritedEnv::AppCredentialOnly,
+            cwd: None,
         };
         let command = command(&server, std::iter::empty());
         let envs: Vec<_> = command.get_envs().collect();
@@ -201,6 +214,7 @@ mod tests {
                 .map(|(key, value)| (key.to_string(), value.to_string()))
                 .collect(),
             inherited,
+            cwd: None,
         };
         let removed = |command: &Command| -> Vec<String> {
             let mut names: Vec<String> = command
@@ -227,9 +241,10 @@ mod tests {
             .iter()
             .map(|(name, _)| name.to_string_lossy().into_owned())
             .filter(|name| !["GOOGLE_CLOUD_PROJECT", "PATH"].contains(&name.as_str()))
-            .chain([APP_ADDRESS_VAR.to_string(), APP_TOKEN_VAR.to_string()])
+            .chain([APP_ADDRESS_VAR, APP_TOKEN_VAR, LAUNCH_ADDRESS_VAR, LAUNCH_TOKEN_VAR].map(String::from))
             .collect();
         expected.sort();
+        expected.dedup();
         assert_eq!(removed(&db), expected);
         assert_eq!(value(&db, "DB_TOKEN").as_deref(), Some("s1"));
 
@@ -246,9 +261,12 @@ mod tests {
         assert_eq!(value(&nexus, APP_TOKEN_VAR).as_deref(), Some("tools_tok"));
         assert_eq!(value(&nexus, "ANTHROPIC_AUTH_TOKEN"), None);
 
-        // agy's servers keep today's two removals.
+        // agy's servers lose only the launcher's own credentials, under either pair of names.
         let agy = command(&server("db-mcp", &[], InheritedEnv::AppCredentialOnly), inherited);
-        assert_eq!(removed(&agy), [APP_ADDRESS_VAR, APP_TOKEN_VAR]);
+        assert_eq!(
+            removed(&agy),
+            [APP_ADDRESS_VAR, APP_TOKEN_VAR, LAUNCH_ADDRESS_VAR, LAUNCH_TOKEN_VAR]
+        );
     }
 
     /// The answer crosses the app socket: the field keeps its name, each kind its own, and an answer without the field
@@ -260,6 +278,7 @@ mod tests {
             args: Vec::new(),
             env: BTreeMap::new(),
             inherited,
+            cwd: None,
         };
         let sent = serde_json::to_value(server(InheritedEnv::NoCredentials)).unwrap_or_default();
         assert_eq!(sent["strip_credentials"], "no_credentials");
@@ -286,6 +305,7 @@ mod tests {
             args: vec!["--mcp".into()],
             env: BTreeMap::from([(APP_TOKEN_VAR.into(), "tools_tok".into())]),
             inherited: InheritedEnv::AppCredentialOnly,
+            cwd: None,
         };
         let command = command(&server, std::iter::empty());
         let last = command.get_envs().filter(|(key, _)| *key == APP_TOKEN_VAR).last();

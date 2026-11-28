@@ -1204,7 +1204,8 @@ impl CodeRunner {
         if let Err(error) = workbench.set_branch_prefix(&settings.branch_prefix_or_default()) {
             eprintln!("nexus-desktop-gpui: branch prefix: {error}");
         }
-        let _ = self.hand_mcp_servers(settings.mcp_servers.clone());
+        // The service on this computer gets the approved plugins too; a server over SSH has none of their folders.
+        let _ = self.hand_mcp_servers(crate::mcp::session_servers(settings));
         self.hand_server_mcp_servers(settings.mcp_servers.clone());
         self.hand_accounts(settings);
     }
@@ -2196,7 +2197,7 @@ impl GpuiHost {
         }
         // Settings' MCP servers with their keychain values: the service's agents start with them, as this build's own.
         let settings = crate::desktop_settings::load();
-        sign_in["mcp"] = crate::mcp::for_service(&settings.mcp_servers);
+        sign_in["mcp"] = crate::mcp::for_service(&crate::mcp::session_servers(&settings));
         // Settings' plan accounts: the service's new sessions start on them, as this build's own.
         sign_in["accounts"] = json!(account_choices(&settings));
         Some(sign_in)
@@ -2218,7 +2219,7 @@ impl GpuiHost {
             };
             let settings = crate::desktop_settings::load();
             Some(json!({
-                (mcp_field): crate::mcp::for_service(&settings.mcp_servers),
+                (mcp_field): crate::mcp::for_service(&crate::mcp::session_servers(&settings)),
                 "accounts": account_choices(&settings),
             }))
         })
@@ -2259,7 +2260,7 @@ async fn launch_local(
     match route {
         LocalLaunch::SavedProvider(local) => {
             let settings = nexus_desktop_core::provider_settings::read_for_launch().await?;
-            let servers = crate::desktop_settings::load().mcp_servers;
+            let servers = crate::mcp::session_servers(&crate::desktop_settings::load());
             let values = crate::mcp::values(&servers);
             let exe = std::env::current_exe().ok();
             nexus_workbench::local_provider::prepare(
@@ -2286,7 +2287,7 @@ async fn launch_local(
                 accounts::share(dir, agent, &agent_home(agent, &env));
             }
             nexus_workbench::agent_launch::local_subscription(admission, &request, program, env, |launch| {
-                let servers = crate::desktop_settings::load().mcp_servers;
+                let servers = crate::mcp::session_servers(&crate::desktop_settings::load());
                 let values = crate::mcp::values(&servers);
                 let exe = std::env::current_exe().ok();
                 nexus_workbench::mcp_servers::configure_local(
@@ -2589,7 +2590,7 @@ impl Host for GpuiHost {
             let mut env = agent_env();
             // Read Settings only for agents with an app-tool transport.
             let mut servers = if offers_tools {
-                crate::desktop_settings::load().mcp_servers
+                crate::mcp::session_servers(&crate::desktop_settings::load())
             } else {
                 Default::default()
             };

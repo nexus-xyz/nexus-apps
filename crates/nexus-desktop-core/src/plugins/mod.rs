@@ -3,10 +3,12 @@
 //!
 //! - [`store`]: the plugins folder, `<config>/plugins/<id>/`: install from a folder, list, remove.
 //! - [`approval`]: what the person approved, kept in `settings.json` (`plugins`), and what a new version changes.
+//! - [`session`]: the approved, enabled plugins as the sessions' MCP servers, and their secrets' keychain entry.
 //!
 //! All of it is off unless `NEXUS_DESKTOP_PLUGINS=1` ([`enabled`]): the app shows no plugin and starts none.
 
 pub mod approval;
+pub mod session;
 pub mod store;
 
 use std::path::{Path, PathBuf};

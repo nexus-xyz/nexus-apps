@@ -410,6 +410,7 @@ mod tests {
             args: vec!["--stdio".into()],
             env: std::collections::BTreeMap::from([("DB_TOKEN".into(), "s1".into())]),
             inherited: crate::mcp_servers::InheritedEnv::AppCredentialOnly,
+            cwd: None,
         };
         let launchables = Launchables::from([("db".into(), server.clone()), ("cache".into(), server)]);
         let token = grants.add_launch(grant.clone(), launchables);
@@ -470,6 +471,7 @@ mod tests {
             args: Vec::new(),
             env: Default::default(),
             inherited: InheritedEnv::NoCredentials,
+            cwd: None,
         };
         let token = grants.add_local_launch("local_first", Launchables::from([("db".into(), server.clone())]));
         let other = grants.add_local_launch("local_other", Launchables::from([("db".into(), server)]));

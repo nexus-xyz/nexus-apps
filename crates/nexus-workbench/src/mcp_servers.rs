@@ -44,6 +44,17 @@ pub struct McpServer {
     /// Not in Settings: only the built-in server sets it, for `request_secret`, which waits for the person.
     #[serde(skip)]
     pub tool_timeout_sec: Option<u64>,
+    /// A plugin's folder (plugin API v0, [`crate::plugins`]). A local plugin runs there, and only through the launcher
+    /// with no credential variable, under every agent ([`through_launcher_or_builtin`]). Settings' servers have none.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub plugin: Option<String>,
+}
+
+impl McpServer {
+    /// A local plugin: it never starts but through the launcher.
+    pub fn launcher_only(&self) -> bool {
+        self.plugin.is_some() && self.command.is_some()
+    }
 }
 
 fn on() -> bool {
@@ -53,8 +64,14 @@ fn on() -> bool {
 /// What a session's agent starts with for the enabled servers: arguments to put before its own, and variables to add
 /// to its environment (before Nexus's own, which win).
 /// An agent that takes its servers in its session ([`session`]) gets none here.
+/// A local plugin is never among them: it starts only through the launcher ([`through_launcher_or_builtin`]).
 pub fn launch(agent: SessionAgent, servers: &[McpServer], values: &Values) -> (Vec<String>, Vec<(String, String)>) {
-    match harness(agent).mcp_servers(servers, values) {
+    let direct: Vec<McpServer> = servers
+        .iter()
+        .filter(|server| !server.launcher_only())
+        .cloned()
+        .collect();
+    match harness(agent).mcp_servers(&direct, values) {
         McpDelivery::Args { args, env } => (args, env),
         McpDelivery::Session(_) | McpDelivery::NotOffered => (Vec::new(), Vec::new()),
     }
@@ -86,6 +103,9 @@ pub struct Launchable {
     /// it as `strip_credentials`; an answer without it keeps today's [`InheritedEnv::AppCredentialOnly`].
     #[serde(default, rename = "strip_credentials")]
     pub inherited: InheritedEnv,
+    /// The folder it runs in: a plugin's own. None runs it where the agent runs.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cwd: Option<String>,
 }
 
 /// What a server the launcher starts keeps of the environment the launcher inherited from the agent.
@@ -147,11 +167,17 @@ pub(crate) fn session_servers(servers: &[McpServer], values: &Values) -> Session
             .iter()
             .filter_map(|secret| Some((secret.clone(), own?.get(secret)?.clone())))
             .collect();
+        // A plugin keeps no credential variable under any agent, Antigravity's included.
+        let inherited = match server.plugin {
+            Some(_) => InheritedEnv::NoCredentials,
+            None => InheritedEnv::AppCredentialOnly,
+        };
         let launchable = Launchable {
             command: command.clone(),
             args: server.args.clone(),
             env,
-            inherited: InheritedEnv::AppCredentialOnly,
+            inherited,
+            cwd: server.plugin.clone(),
         };
         session.launchable.insert(server.name.clone(), launchable);
     }
@@ -246,7 +272,8 @@ pub struct LauncherLaunch {
 /// The servers of an agent that starts them through the launcher, None for any other agent. `grant` makes the run's
 /// launch credential for the servers it is given, and answers the app socket's address and the credential. Without
 /// one, there is no launcher, and only the built-in server starts, directly: no other server starts with the agent's
-/// environment.
+/// environment. An agent that starts its servers itself (Codex) still starts each local plugin through the launcher
+/// ([`direct_with_plugins`]); it gets None only when there is no plugin.
 pub fn through_launcher_or_builtin(
     agent: SessionAgent,
     program: &str,
@@ -254,11 +281,14 @@ pub fn through_launcher_or_builtin(
     values: &Values,
     grant: impl FnOnce(crate::app_socket::Launchables) -> Option<(String, String)>,
 ) -> Option<LauncherLaunch> {
-    let LauncherConfig {
+    let Some(LauncherConfig {
         args,
         mut env,
         launchable,
-    } = launcher_config(agent, program, servers, values)?;
+    }) = launcher_config(agent, program, servers, values)
+    else {
+        return direct_with_plugins(agent, program, servers, values, grant);
+    };
     if let Some((address, token)) = grant(launchable) {
         env.push((APP_ADDRESS_VAR.into(), address));
         env.push((APP_TOKEN_VAR.into(), token));
@@ -318,6 +348,68 @@ fn codex_launcher(program: &str, servers: &[McpServer], values: &Values) -> Laun
     LauncherConfig { args, env, launchable }
 }
 
+/// For an agent that starts its servers itself (Codex): its servers, with each local plugin replaced by the
+/// launcher's entry, `program --mcp-launch=<id>`. Codex gives a server only a base environment and the variables its
+/// `env_vars` names, so the entry names the launch credential's own two ([`LAUNCH_ADDRESS_VAR`],
+/// [`LAUNCH_TOKEN_VAR`]). The launcher adds the plugin's values from the app and strips every credential variable;
+/// the values never reach Codex's environment. `grant` gets the plugins as the launcher starts them. Without a
+/// credential, no plugin starts and the other servers start as before. None when the agent has no local plugin, or
+/// does not start its servers so.
+fn direct_with_plugins(
+    agent: SessionAgent,
+    program: &str,
+    servers: &[McpServer],
+    values: &Values,
+    grant: impl FnOnce(crate::app_socket::Launchables) -> Option<(String, String)>,
+) -> Option<LauncherLaunch> {
+    let plugins: Vec<McpServer> = servers
+        .iter()
+        .filter(|server| server.enabled && server.launcher_only())
+        .cloned()
+        .collect();
+    let starts_its_own = matches!(
+        harness(agent).mcp_servers(&[], &Values::new()),
+        McpDelivery::Args { .. }
+    );
+    if plugins.is_empty() || !starts_its_own {
+        return None;
+    }
+    let launchable = session_servers(&plugins, values).launchable;
+    let names: Vec<String> = launchable.keys().cloned().collect();
+    let mut direct: Vec<McpServer> = servers
+        .iter()
+        .filter(|server| !server.launcher_only())
+        .cloned()
+        .collect();
+    let mut values = values.clone();
+    let credential = if program.is_empty() { None } else { grant(launchable) };
+    let left_out = match credential {
+        Some((address, token)) => {
+            for name in names {
+                let own = BTreeMap::from([
+                    (LAUNCH_ADDRESS_VAR.to_string(), address.clone()),
+                    (LAUNCH_TOKEN_VAR.to_string(), token.clone()),
+                ]);
+                values.insert(name.clone(), own);
+                direct.push(McpServer {
+                    args: vec![launch_arg(&name)],
+                    name,
+                    enabled: true,
+                    command: Some(program.into()),
+                    url: None,
+                    secrets: vec![LAUNCH_ADDRESS_VAR.into(), LAUNCH_TOKEN_VAR.into()],
+                    tool_timeout_sec: None,
+                    plugin: None,
+                });
+            }
+            Vec::new()
+        }
+        None => names,
+    };
+    let (args, env) = launch(agent, &direct, &values);
+    Some(LauncherLaunch { args, env, left_out })
+}
+
 /// Configures Settings servers for a signed-out run. The socket only grants server starts.
 pub fn configure_local(
     launch: &mut crate::Launch,
@@ -356,7 +448,14 @@ pub fn configure_local(
             launch.session_mcp.skipped = enabled(servers).map(|(_, server)| server.name.clone()).collect();
             return;
         }
-        let (args, env) = self::launch(agent, servers, values);
+        let direct = direct_with_plugins(agent, exe, servers, values, |launchable| grant(run, launchable));
+        let (args, env) = match direct {
+            Some(launched) => {
+                launch.session_mcp.skipped = launched.left_out;
+                (launched.args, launched.env)
+            }
+            None => self::launch(agent, servers, values),
+        };
         launch.spawn.args.splice(0..0, args);
         launch.spawn.env.extend(env);
         return;
@@ -444,6 +543,11 @@ pub const TOKEN_VAR: &str = "NEXUS_MCP_TOKEN";
 /// `request_secret`.
 pub const APP_ADDRESS_VAR: &str = "NEXUS_MCP_APP_ADDR";
 pub const APP_TOKEN_VAR: &str = "NEXUS_MCP_APP_TOKEN";
+/// The app's socket and the run's launch credential, for a plugin's launcher under an agent that starts its servers
+/// itself (Codex, [`through_launcher_or_builtin`]). Their own names: the built-in server's [`APP_TOKEN_VAR`] holds
+/// another credential in the same environment. The launcher reads these first.
+pub const LAUNCH_ADDRESS_VAR: &str = "NEXUS_MCP_LAUNCH_ADDR";
+pub const LAUNCH_TOKEN_VAR: &str = "NEXUS_MCP_LAUNCH_TOKEN";
 pub(crate) const BUILTIN: &str = "nexus";
 
 /// What the built-in server's relayed calls say in `tools`, so the socket hands them to the pull request watch.
@@ -467,6 +571,7 @@ pub fn builtin(servers: &[McpServer], program: &str, gateway: &str, token: &str)
         url: None,
         secrets: vec![URL_VAR.into(), TOKEN_VAR.into()],
         tool_timeout_sec: None,
+        plugin: None,
     };
     let values = BTreeMap::from([(URL_VAR.into(), gateway.into()), (TOKEN_VAR.into(), token.into())]);
     Some((server, Values::from([(BUILTIN.into(), values)])))
@@ -541,6 +646,7 @@ pub fn browser(servers: &[McpServer], program: &str, address: &str, token: &str)
         url: None,
         secrets: vec![BROWSER_ADDRESS_VAR.into(), BROWSER_TOKEN_VAR.into()],
         tool_timeout_sec: Some(BROWSER_TOOL_TIMEOUT_SEC),
+        plugin: None,
     };
     let values = BTreeMap::from([
         (BROWSER_ADDRESS_VAR.into(), address.to_string()),
@@ -631,6 +737,7 @@ mod tests {
             args: vec!["mcp".into()],
             env: BTreeMap::from([("NEXUS_MCP_TOKEN".into(), "launch_secret".into())]),
             inherited: InheritedEnv::NoCredentials,
+            cwd: None,
         };
         let session = SessionMcp {
             servers: vec![serde_json::json!({
@@ -662,6 +769,7 @@ mod tests {
             url: None,
             secrets: secrets.iter().map(|s| s.to_string()).collect(),
             tool_timeout_sec: None,
+            plugin: None,
         }
     }
 

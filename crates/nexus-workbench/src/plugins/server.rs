@@ -30,6 +30,7 @@ pub fn server(manifest: &Manifest, folder: &Path) -> McpServer {
         url,
         secrets: manifest.secrets.clone(),
         tool_timeout_sec: None,
+        plugin: Some(folder.to_string_lossy().into_owned()),
     }
 }
 

@@ -841,6 +841,7 @@ fn the_services_agents_get_the_mcp_servers_from_settings() {
         url: url.map(String::from),
         secrets: secrets.iter().map(|secret| secret.to_string()).collect(),
         tool_timeout_sec: None,
+        plugin: None,
     };
     let servers = [
         server("db", true, Some("db-mcp"), None, &["DB_TOKEN"]),
@@ -1132,6 +1133,7 @@ fn the_apps_own_claude_gets_launcher_entries_and_the_launch_credential_answers_f
         url: None,
         secrets: vec![secret.into()],
         tool_timeout_sec: None,
+        plugin: None,
     };
     let settings = Settings {
         mcp_servers: vec![
