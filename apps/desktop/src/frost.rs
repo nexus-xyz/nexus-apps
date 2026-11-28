@@ -257,14 +257,14 @@ pub fn available() -> bool {
 }
 
 /// macOS's Accessibility › Display › Reduce transparency.
-#[cfg(target_os = "macos")]
+#[cfg(all(target_os = "macos", not(test)))]
 fn os_reduces_transparency() -> bool {
     objc2_app_kit::NSWorkspace::sharedWorkspace().accessibilityDisplayShouldReduceTransparency()
 }
 
 /// Windows' Personalization › Colors › Transparency effects: `EnableTransparency` 0 under
 /// `HKCU\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize`. Missing means on.
-#[cfg(windows)]
+#[cfg(all(windows, not(test)))]
 fn os_reduces_transparency() -> bool {
     const HKEY_CURRENT_USER: isize = 0x8000_0001_u32 as i32 as isize;
     const RRF_RT_REG_DWORD: u32 = 0x10;
@@ -300,7 +300,9 @@ fn os_reduces_transparency() -> bool {
     read == 0 && enabled == 0
 }
 
-#[cfg(not(any(target_os = "macos", windows)))]
+/// Linux has no such setting. Tests never read the machine's: where it is on (the macOS CI runner), opening Settings
+/// read a change and applied it to every window, and the tests' windows are not the app's (`windows.rs`).
+#[cfg(any(test, not(any(target_os = "macos", windows))))]
 fn os_reduces_transparency() -> bool {
     false
 }

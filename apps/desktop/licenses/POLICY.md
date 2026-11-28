@@ -1,7 +1,7 @@
 # License policy for Nexus Desktop's own code
 
 This page says which license Nexus's own desktop code carries, and how a file shows it.
-It is for anyone who adds a crate or a file to the app, and for the legal review of the open-source export.
+It is for anyone who adds a crate or a file to the app, and for the legal review of the published source.
 Status: approved by legal.
 
 ## The license
@@ -9,12 +9,12 @@ Status: approved by legal.
 - Nexus's own crates are MIT: this app, the ten shared crates in `crates/`, and
   `nexus-client`.
 - Each crate says so in its `Cargo.toml`, with `license = "MIT"`.
-- The export carries the license text once, as `LICENSE` at the public repository's root, with a `NOTICE` beside it.
-  Both come from `oss/community/`. MIT needs no `NOTICE` of its own. The file stays because the Apache-2.0 code
+- The repository carries the license text once, as `LICENSE` at its root, with a `NOTICE` beside it.
+  MIT needs no `NOTICE` of its own. The file stays because the Apache-2.0 code
   that the app ports or vendors (GPUI, GPUI Base, zui) must carry its notices.
 - Code that a project offers under "Apache-2.0 OR MIT" is taken under MIT, the same license as ours.
 - Contributions come in under the same license, with a Developer Certificate of Origin sign-off on each commit.
-  `CONTRIBUTING.md` in `oss/community/` says how.
+  `CONTRIBUTING.md` at the repository root says how.
 
 ## File headers
 

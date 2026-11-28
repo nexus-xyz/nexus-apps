@@ -1,39 +1,42 @@
 //! The update file's minisign signature, in the updater's format (`<file>.sig`): the base64 of a minisign signature
 //! file. Its trusted comment carries `version:<x.y.z>` (`--app-version`), so a manifest cannot pair a new version
 //! number with an older file. The cache and Nexus GPUI check downloads here.
+//!
+//! The key is a list: the base64 of one or more minisign key files, separated by whitespace. A release build lists the
+//! active key, then the next key, whose secret half stays offline. A rotation signs with the next key, so builds that
+//! trust it update without a gap.
 use base64::{Engine, engine::general_purpose::STANDARD};
 use minisign_verify::{PublicKey, Signature};
 use semver::Version;
 
 use crate::Failure;
 
-/// Whether `bytes` are the file `pubkey`'s owner signed for `version`. Both `pubkey` and `signature` are base64 of
-/// a minisign key file and a minisign signature file.
+/// Whether `bytes` are the file one of `pubkey`'s owners signed for `version`. `pubkey` lists the base64 of one or
+/// more minisign key files; `signature` is the base64 of a minisign signature file.
 pub fn verify(bytes: &[u8], signature: &str, pubkey: &str, version: &str) -> Result<(), Failure> {
-    let decode = |value: &str| String::from_utf8(STANDARD.decode(value.trim()).ok()?).ok();
-    let key = decode(pubkey)
-        .and_then(|key| PublicKey::decode(&key).ok())
+    let keys = keys(pubkey)
         .ok_or_else(|| Failure::new("missing_key", "This build's update verification key is invalid.", false))?;
     let signature = decode(signature)
         .and_then(|signature| Signature::decode(&signature).ok())
         .ok_or_else(failed)?;
-    key.verify(bytes, &signature, true).map_err(|_| failed())?;
+    if !keys.iter().any(|key| key.verify(bytes, &signature, true).is_ok()) {
+        return Err(failed());
+    }
     // The global signature authenticates the trusted comment. Read the version only after verification.
     version_matches(signature.trusted_comment(), version).ok_or_else(failed)
 }
 
-/// Whether `signature` (a `.sig` in the updater's format) signs `bytes` with `pubkey`, and its trusted comment names
-/// this `version` and this `file`. The file's name keeps another file signed for the same version from passing as it.
-/// The Nexus host (nexus-remote's install.rs) is checked this way.
+/// Whether `signature` (a `.sig` in the updater's format) signs `bytes` with one of `pubkey`'s keys, and its trusted
+/// comment names this `version` and this `file`. The file's name keeps another file signed for the same version from
+/// passing as it. The Nexus host (nexus-remote's install.rs) is checked this way.
 pub fn verify_signed_file(pubkey: &str, signature: &str, version: &str, file: &str, bytes: &[u8]) -> bool {
-    let decode = |value: &str| String::from_utf8(STANDARD.decode(value.trim()).ok()?).ok();
-    let (Some(key), Some(signature)) = (
-        decode(pubkey).and_then(|key| PublicKey::decode(&key).ok()),
+    let (Some(keys), Some(signature)) = (
+        keys(pubkey),
         decode(signature).and_then(|signature| Signature::decode(&signature).ok()),
     ) else {
         return false;
     };
-    if key.verify(bytes, &signature, true).is_err() {
+    if !keys.iter().any(|key| key.verify(bytes, &signature, true).is_ok()) {
         return false;
     }
     // The global signature authenticates the trusted comment. Read it only after verification.
@@ -42,6 +45,20 @@ pub fn verify_signed_file(pubkey: &str, signature: &str, version: &str, file: &s
         && comment
             .split('\t')
             .any(|field| field.strip_prefix("file:") == Some(file))
+}
+
+/// The keys `pubkey` lists, one per line or separated by spaces (as `updater-keys.txt` lists them), or None when it
+/// lists none or any of them is invalid: a build with a broken key must say so, not quietly trust fewer keys.
+fn keys(pubkey: &str) -> Option<Vec<PublicKey>> {
+    let keys = pubkey
+        .split_whitespace()
+        .map(|key| decode(key).and_then(|key| PublicKey::decode(&key).ok()))
+        .collect::<Option<Vec<_>>>()?;
+    (!keys.is_empty()).then_some(keys)
+}
+
+fn decode(value: &str) -> Option<String> {
+    String::from_utf8(STANDARD.decode(value.trim()).ok()?).ok()
 }
 
 /// The failure for an update that does not verify.
@@ -69,6 +86,9 @@ mod tests {
     const BYTES: &[u8] = include_bytes!("../fixtures/update.txt");
     const KEY: &str = include_str!("../fixtures/test.pub");
     const SIGNATURE: &str = include_str!("../fixtures/update.txt.sig");
+    /// A second disposable key, as a release's next key. Its secret half was not kept.
+    const NEXT: &str = include_str!("../fixtures/next.pub");
+    const NEXT_SIGNATURE: &str = include_str!("../fixtures/update.txt.next.sig");
 
     #[test]
     fn accepts_only_the_signed_bytes_and_version() {
@@ -96,5 +116,36 @@ mod tests {
         assert!(!check(KEY, SIGNATURE, "1.0.0", "update.txt", b"tampered"));
         assert!(!check(KEY, "", "1.0.0", "update.txt", BYTES));
         assert!(!check("", SIGNATURE, "1.0.0", "update.txt", BYTES));
+    }
+
+    #[test]
+    fn either_listed_key_verifies() {
+        let both = format!("{KEY} {NEXT}");
+        let next_first = format!("{NEXT}\n{KEY}");
+        for keys in [both.as_str(), next_first.as_str()] {
+            assert_eq!(verify(BYTES, SIGNATURE, keys, "1.0.0"), Ok(()));
+            assert_eq!(verify(BYTES, NEXT_SIGNATURE, keys, "1.0.0"), Ok(()));
+            assert!(verify_signed_file(keys, NEXT_SIGNATURE, "1.0.0", "update.txt", BYTES));
+            let tampered = verify(b"tampered", NEXT_SIGNATURE, keys, "1.0.0").expect_err("tampered");
+            assert_eq!(tampered.code, "verification_failed");
+        }
+        // A key that is not listed is not trusted.
+        let unlisted = verify(BYTES, NEXT_SIGNATURE, KEY, "1.0.0").expect_err("unlisted");
+        assert_eq!(unlisted.code, "verification_failed");
+        assert!(!verify_signed_file(KEY, NEXT_SIGNATURE, "1.0.0", "update.txt", BYTES));
+    }
+
+    #[test]
+    fn one_invalid_key_disables_the_list() {
+        let broken = format!("{KEY} not-a-key");
+        assert_eq!(
+            verify(BYTES, SIGNATURE, &broken, "1.0.0").expect_err("broken").code,
+            "missing_key"
+        );
+        assert_eq!(
+            verify(BYTES, SIGNATURE, " \n ", "1.0.0").expect_err("blank").code,
+            "missing_key"
+        );
+        assert!(!verify_signed_file(&broken, SIGNATURE, "1.0.0", "update.txt", BYTES));
     }
 }

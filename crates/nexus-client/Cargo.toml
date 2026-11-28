@@ -6,6 +6,8 @@ edition.workspace = true
 rust-version.workspace = true
 publish = ["crates-io"]
 license = "MIT"
+repository.workspace = true
+homepage.workspace = true
 # One test binary (`tests/it.rs`), not one per file.
 autotests = false
 

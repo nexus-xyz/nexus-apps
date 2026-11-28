@@ -1,7 +1,7 @@
 [package]
 name = "nexus-cli"
-description = "The `nexus` CLI as one Rust binary (phase E): every command of commands.json, the same config, output and exit codes as the TypeScript CLI (@nexus/cli), and `nexus update` for a native binary."
-# The CLI's semver is the Factory's, eng/VERSION (eng/RELEASES.md); build.rs reads it and adds the git sha.
+description = "The `nexus` CLI as one Rust binary: every command of commands.json, the same config, output and exit codes as the TypeScript CLI (@nexus/cli), and `nexus update` for a native binary."
+# The CLI's semver is the repository's VERSION file; build.rs reads it and adds the git sha.
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

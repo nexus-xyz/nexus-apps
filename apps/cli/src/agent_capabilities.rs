@@ -157,7 +157,7 @@ mod tests {
             .map(|(agent, access)| row(agent, access))
             .collect();
         let fixture = json!({
-            "regenerate": format!("cd eng/factory/rs && {BLESS}=1 cargo test --locked -p nexus-cli --lib agent_capabilities"),
+            "regenerate": format!("{BLESS}=1 cargo test --locked -p nexus-cli --lib agent_capabilities"),
             "agents": agents,
         });
         serde_json::to_string_pretty(&fixture).expect("JSON") + "\n"
@@ -177,7 +177,7 @@ mod tests {
         let stored = std::fs::read_to_string(&path).unwrap_or_else(|error| panic!("{}: {error}", path.display()));
         assert!(
             stored == computed,
-            "{} is stale. Regenerate it from eng/factory/rs: {BLESS}=1 cargo test --locked -p nexus-cli --lib \
+            "{} is stale. Regenerate it from the repository root: {BLESS}=1 cargo test --locked -p nexus-cli --lib \
              agent_capabilities\n--- computed\n{computed}",
             path.display()
         );

@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """The leak gate (see .github/oss-leak-gate/README.md). Standard library only.
 
-  leak_gate.py tree [--summary FILE]   scan every tracked file: gitleaks, semgrep, trufflehog fail; blocklist reports
-  leak_gate.py staged                  gitleaks on the staged changes only (the pre-commit hook)
+  leak_gate.py tree [--summary FILE]               scan every tracked file: gitleaks, semgrep, trufflehog, blocklist
+  leak_gate.py commits BASE HEAD [--summary FILE]  gitleaks and the blocklist on the lines each commit in BASE..HEAD adds
+  leak_gate.py staged                              gitleaks on the staged changes only (the pre-commit hook)
 
 Exit 0 when clean, 1 on a finding that fails, 2 when a tool is missing or fails. Values are never printed.
 """
@@ -11,6 +12,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import shutil
 import subprocess
 import sys
@@ -114,14 +116,39 @@ def tree(summary: str | None) -> int:
         secrets += relative(semgrep(source), source)
         secrets += relative(trufflehog(source), source)
         refs = relative(gitleaks(source, CONFIG / "blocklist.toml", Path(tmp) / "b.json"), source)
-    text = table("Secrets (fail)", secrets) + "\n" + table("Internal references (report only)", refs)
+    return report(secrets, refs, summary)
+
+
+def report(secrets: list[dict], refs: list[dict], summary: str | None) -> int:
+    text = table("Secrets (fail)", secrets) + "\n" + table("Internal references (fail)", refs)
     print(text)
     if summary:
         with open(summary, "a", encoding="utf-8") as out:
             out.write(text + "\n")
     if refs:
-        print(f"::warning::{len(refs)} internal references (report only, see the summary)")
-    return 1 if secrets else 0
+        print(f"::error::{len(refs)} internal references (see the summary)")
+    return 1 if secrets or refs else 0
+
+
+def history(config: Path, log_opts: str, report_path: Path) -> list[dict]:
+    """gitleaks on the lines the commits in log_opts add, minus the gate's own files, which hold its patterns."""
+    run(["gitleaks", "git", str(ROOT), "--log-opts", log_opts, "--config", str(config), "--redact", "--no-banner",
+         "--exit-code", "0", "--report-format", "json", "--report-path", str(report_path)])
+    return [{"tool": "gitleaks", "rule": f["RuleID"], "file": f"{f['File']} @ {f['Commit'][:7]}",
+             "line": f["StartLine"]}
+            for f in json.loads(report_path.read_text() or "[]") if f["File"] not in OWN_FILES]
+
+
+def commits(base: str, head: str, summary: str | None) -> int:
+    """A secret one commit adds and a later one removes is gone from the tree, not from the history."""
+    need("git", "gitleaks")
+    if not all(re.fullmatch(r"[0-9a-f]{40}", sha) for sha in (base, head)):
+        print("leak gate: BASE and HEAD must be full commit shas", file=sys.stderr)
+        return 2
+    with tempfile.TemporaryDirectory() as tmp:
+        secrets = history(CONFIG / "gitleaks.toml", f"{base}..{head}", Path(tmp) / "g.json")
+        refs = history(CONFIG / "blocklist.toml", f"{base}..{head}", Path(tmp) / "b.json")
+    return report(secrets, refs, summary)
 
 
 def staged() -> int:
@@ -137,9 +164,17 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = parser.add_subparsers(dest="mode", required=True)
     sub.add_parser("tree").add_argument("--summary", help="append the markdown tables to this file")
+    log = sub.add_parser("commits")
+    log.add_argument("base")
+    log.add_argument("head")
+    log.add_argument("--summary", help="append the markdown tables to this file")
     sub.add_parser("staged")
     args = parser.parse_args()
-    return tree(args.summary) if args.mode == "tree" else staged()
+    if args.mode == "tree":
+        return tree(args.summary)
+    if args.mode == "commits":
+        return commits(args.base, args.head, args.summary)
+    return staged()
 
 
 if __name__ == "__main__":

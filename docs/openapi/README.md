@@ -11,6 +11,7 @@ Admin, staff and internal endpoints are out of scope.
 - `components/schemas.yaml`: the request and response schemas.
 - `components/common.yaml`: the shared parameters, responses and headers.
 - `DEPRECATION.md`: how long an old version keeps working, and how clients learn about a change.
+- `gateway.json`: the Gateway's whole client-callable document in one JSON file, cleaned the same way. Clients that build on every Gateway operation, such as nexus-apps' `nexus-client`, read it. The deprecation windows cover only the operations in `openapi.yaml`.
 
 Every path starts with `/v1`.
 Every operation has an `operationId`, unique in the contract.
@@ -183,6 +184,8 @@ These `POST` operations do not need the header:
 - Read-only checks: `/v1/agents/check`, `/v1/policies/test`, `/v1/pages/{id}/check`, `/v1/connectors/{name}/{operation}/read` and `/v1/anthropic/v1/messages/count_tokens`.
 - Provider-compatible model routes: `/v1/anthropic/v1/messages`, `/v1/openai/v1/responses` and `/v1/chat/completions`. Provider SDKs do not send the header. The Gateway honors it when it is sent.
 - Heartbeats: `/v1/presence`, `/v1/threads/{threadId}/presence` and `/v1/cloud/machines/{id}/activity`.
+- An OpenTelemetry export: `/v1/agents/sessions/{id}/usage`. The exporter sends only `Authorization`. A repeated record counts once.
+- A page's shared draft: `/v1/pages/{id}/doc`. A repeated Yjs update changes nothing. A key would store an answer per keystroke.
 
 ## If-Match
 

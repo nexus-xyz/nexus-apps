@@ -242,11 +242,12 @@ mod tests {
         assert_eq!(seen.message, "forced for the crash report test");
         assert_eq!(seen.app_version, "9.9.9");
         // The path is relative to the workspace root: `src/crash.rs` here, `apps/desktop/src/crash.rs` in the
-        // open-source workspace.
+        // open-source workspace, with `\` between the parts on Windows.
+        let place = seen.location.as_deref().map(|place| place.replace('\\', "/"));
         assert!(
+            place.is_some_and(|place| place.starts_with("src/crash.rs:") || place.contains("/src/crash.rs:")),
+            "{:?}",
             seen.location
-                .as_deref()
-                .is_some_and(|place| place.starts_with("src/crash.rs:") || place.contains("/src/crash.rs:"))
         );
         assert_eq!(nexus_desktop_core::crash::take(&dir), None, "asked about once");
         let _ = std::fs::remove_dir_all(&dir);

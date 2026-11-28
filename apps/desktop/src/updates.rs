@@ -10,8 +10,8 @@
 //! update waits until the person chooses Restart to update in Settings › App or in the tray's menu (`tray.rs`, from
 //! [`offered`]); `install.rs` installs it, including the macOS app bundle from its signed `.dmg`.
 //!
-//! The release puts the update key (a release secret) in `NEXUS_UPDATER_PUBKEY` at build time
-//! (the release workflow).
+//! The release puts the update keys in `NEXUS_UPDATER_PUBKEY` at build time (the release workflow): the active key,
+//! then the next key, separated by whitespace (`nexus_desktop_updates::verify`).
 //! A build without it, or one run from `target/`, has no updater, and says so.
 
 pub mod install;
@@ -23,7 +23,7 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use nexus_desktop_updates::http::{self, Mode, Prepared};
 use nexus_desktop_updates::{App, Coordinator, Disabled, Failure, Phase, Snapshot, Trigger};
 
-/// The update key: the base64 of a minisign public key file.
+/// The update keys: the base64 of one or more minisign public key files, separated by whitespace.
 const PUBKEY: Option<&str> = option_env!("NEXUS_UPDATER_PUBKEY");
 
 /// The update key this build carries, `None` in a keyless build. It also checks the Nexus host (`machines.rs`).
@@ -457,6 +457,7 @@ pub fn status(snapshot: &Snapshot, announced: bool) -> String {
         .map(|channel| match channel {
             nexus_desktop_updates::Channel::Stable => "stable",
             nexus_desktop_updates::Channel::Internal => "internal",
+            nexus_desktop_updates::Channel::Beta => "beta",
         })
         .unwrap_or("configured");
     match snapshot.phase {
@@ -512,10 +513,8 @@ mod tests {
         assert_eq!(disabled(false, Some("key"), "0.1.2"), Some(Disabled::NoUpdater));
         assert_eq!(disabled(true, None, "0.1.2"), Some(Disabled::MissingKey));
         assert_eq!(disabled(true, Some(" "), "0.1.2"), Some(Disabled::MissingKey));
-        assert_eq!(
-            disabled(true, Some("key"), "0.1.2-beta.1"),
-            Some(Disabled::InvalidConfig)
-        );
+        assert_eq!(disabled(true, Some("key"), "0.1.2-beta.1"), None);
+        assert_eq!(disabled(true, Some("key"), "0.1.2-rc.1"), Some(Disabled::InvalidConfig));
         assert_eq!(disabled(true, Some("key"), "0.1.2"), None);
         assert_eq!(disabled(true, Some("key"), "0.1.3-internal.4"), None);
     }

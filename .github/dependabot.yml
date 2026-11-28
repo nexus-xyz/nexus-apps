@@ -1,0 +1,29 @@
+# Version updates, weekly and grouped, so a few PRs a week at most. Security updates are on in the repo settings and
+# are not limited by this file. Actions stay pinned by full SHA; Dependabot keeps the SHA and the version comment.
+# No npm config: the repo has no package.json.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 2
+    commit-message:
+      prefix: ci
+    groups:
+      actions:
+        patterns: ["*"]
+
+  # The Cargo workspace at the root (apps/desktop, apps/cli, crates/*). vendor/ is excluded from the workspace.
+  - package-ecosystem: cargo
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 3
+    commit-message:
+      prefix: chore(deps)
+    groups:
+      cargo-minor-patch:
+        update-types: [minor, patch]

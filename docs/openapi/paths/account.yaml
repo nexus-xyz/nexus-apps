@@ -13,7 +13,7 @@
     description: >-
       `errors` holds 1 to 20 errors. A value outside its list or pattern refuses the whole request with 400
       `invalid_client_error`. `occurredAt` more than 5 minutes ahead of the Gateway or more than 7 days old is replaced
-      by the Gateway's now. Stored only with a server setting`; off, a valid body answers `recorded: 0` and nothing is
+      by the Gateway's now. Stored only with a server setting; off, a valid body answers `recorded: 0` and nothing is
       stored. Unknown fields are ignored. A person only: a key with no person is refused. Thirty errors a minute per
       person on each Gateway copy; past that, 429 and nothing of the request is stored.
     requestBody:
