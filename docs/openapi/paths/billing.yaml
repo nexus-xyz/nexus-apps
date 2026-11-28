@@ -12,8 +12,8 @@
       names the oldest month Stripe could not collect: when it first failed (`since`), its period, and when model calls
       stop (`blockedFrom`, `since` plus a server setting, 7 days by default). From `blockedFrom` until an owner pays,
       every model call is refused with 402 `payment_past_due`. Never Stripe's customer id or the card number. A customer
-      made in the other mode (test or live) is not shown. 503 `not_configured` until STRIPE_SECRET_KEY and
-      STRIPE_WEBHOOK_SECRET are both set and well formed (the message says which is wrong).
+      made in the other mode (test or live) is not shown. 503 `not_configured` until the server settings are both set
+      and well formed (the message says which is wrong).
     responses:
       "200":
         description: OK
@@ -430,7 +430,7 @@
       in a browser before `expiresAt`. Stripe sends the person back to the organization's billing page in Nexus UI (<web
       app>/<org>/billing?checkout=done` or `=cancelled`). Gateway makes the organization's Stripe customer on the first
       call and reuses it after; each call makes a new link. Takes no body, or `{"embedded": true}`: the same card setup
-      as a form Nexus UI shows inside its billing page. With `STRIPE_PUBLISHABLE_KEY` on Gateway, that answer is
+      as a form Nexus UI shows inside its billing page. With a server setting on Gateway, that answer is
       `EmbeddedCardSetup` (Stripe.js's `clientSecret` and the `publishableKey`, no `url`), and Stripe sends the page to
       `?checkout=done` once the card is saved; without it, the hosted link as without the body. 400 when `embedded` is
       not a boolean. Audited as `billing.customer_created` when the customer is made, and as `billing.customer_deleted`
@@ -638,7 +638,7 @@
       plan (one per member, at least its minimum: left out, Gateway counts them), and `dryRun`. A change that costs more
       a month applies now, and so does monthly to yearly at the same rate a month or more (a yearly price costs its
       plan's monthly price a month): Stripe prorates it and invoices the difference at once, and the month's included
-      usage grows by the difference at once (live mode, or a server setting`). A payment that fails changes nothing (402
+      usage grows by the difference at once (live mode, or a server setting). A payment that fails changes nothing (402
       `payment_failed`). Any other change (a cheaper plan, fewer seats, yearly to monthly, monthly to a yearly plan that
       costs less a month) applies at the period's end through a Stripe subscription schedule, shows as `pendingChange`
       on `GET /v1/billing`, and replaces an earlier pending change; `DELETE` cancels it. `dryRun: true` answers `when`,
@@ -927,14 +927,14 @@
     summary: >-
       The organization's bill for one UTC month (owner only). A month the close stored answers from the stored row, as
       it closed, and `invoice` shows its Stripe invoice. Any other month is priced now, from the ledger and the prices
-      Gateway has: a server setting and a server setting. Both are 0 until a price is set, so the total reads 0. It
-      counts the calls on the organization's own provider keys. Refused calls and calls a Nexus subsidy paid are left
-      out. Money is a decimal string. The bill is the total in whole cents, rounded down, as a string. `carriedInUsd` is
-      the rest of the newest stored month before this one. `carriedOutUsd` is the part below one cent, and it carries
-      into the next month. A month under 50 cents is not invoiced: all of its total carries. `providerCostUsd` is what
-      the providers charged. They bill it, not Nexus. The stored months are the ones of Gateway's Stripe key mode.
-      Without Stripe nothing is stored, so every month is priced now. The route reads no Stripe, so it answers with
-      Stripe off. 400 for a period that is not YYYY-MM or has not started.
+      Gateway has: the server settings. Both are 0 until a price is set, so the total reads 0. It counts the calls on
+      the organization's own provider keys. Refused calls and calls a Nexus subsidy paid are left out. Money is a
+      decimal string. The bill is the total in whole cents, rounded down, as a string. `carriedInUsd` is the rest of the
+      newest stored month before this one. `carriedOutUsd` is the part below one cent, and it carries into the next
+      month. A month under 50 cents is not invoiced: all of its total carries. `providerCostUsd` is what the providers
+      charged. They bill it, not Nexus. The stored months are the ones of Gateway's Stripe key mode. Without Stripe
+      nothing is stored, so every month is priced now. The route reads no Stripe, so it answers with Stripe off. 400 for
+      a period that is not YYYY-MM or has not started.
     parameters:
       - name: period
         in: query
@@ -981,8 +981,8 @@
       The months the close stored for the organization (owner only), in the mode of Gateway's Stripe key, newest first,
       at most 24. Each month shows its total, its whole cents, its state and its Stripe invoice page. A `closed` month
       is under 50 cents: nothing was invoiced and its total carries into the next month. Money is a decimal string. The
-      route reads no Stripe. 503 `not_configured` until STRIPE_SECRET_KEY and STRIPE_WEBHOOK_SECRET are both set and
-      well formed (the message says which is wrong).
+      route reads no Stripe. 503 `not_configured` until the server settings are both set and well formed (the message
+      says which is wrong).
     responses:
       "200":
         description: OK

@@ -1249,14 +1249,13 @@
       answers.
     description: >-
       No key: a signed-out visitor calls it. `enabled` is true when this guest id has rounds and output tokens left and
-      its client address has not used today's rounds. A spent guest organization budget or an empty spend bucket shows
-      only on the next round (429 `guest_chat_paused`). `rounds_limit` is a server setting (5 by default). `model` is
-      the display name of the model every guest round runs on.
+      its client address has not used today's rounds. A spent guest budget shows only on the next round (429
+      `guest_chat_paused`). `model` is the display name of the model every guest round runs on.
 
 
-      Errors: 400 `guest_request_invalid` when `X-Nexus-Guest` is missing or not a UUID; 429 `rate_limited` past 30
-      guest requests a minute from one address; 503 `guest_chat_not_configured` when the Gateway has no guest
-      organization or no Turnstile secret. The endpoint still mounts.
+      Errors: 400 `guest_request_invalid` when `X-Nexus-Guest` is missing or not a UUID; 429 `rate_limited` when one
+      address sends too many guest requests; 503 `guest_chat_not_configured` when the Gateway has no guest organization
+      or no Turnstile secret. The endpoint still mounts.
     security: []
     parameters:
       - name: X-Nexus-Guest
@@ -1293,24 +1292,20 @@
     description: >-
       No key: a signed-out visitor calls it. The body is the whole conversation the browser holds, its last message the
       guest's (`user`): at most 20 messages and 32,000 characters in all, none empty. `turnstile` is a Cloudflare
-      Turnstile token, checked at Cloudflare before anything counts. The model is always the guest model (a server
-      setting, `deepseek/deepseek-v4-flash-0731` by default); a request names none. A round is one accepted request: it
-      counts once the model call starts, against a server setting per guest id (5) and a server setting per client
-      address and UTC day (30). A guest id also gets a server setting output tokens in all (38,000): a round's
-      `max_tokens` is 2,048 or what the guest has left, and the round's settled output tokens count. All guests share
-      one spend bucket of a server setting (10), which refills that much per 24 hours: a round is admitted when the
-      bucket holds the most the call can cost, and the bucket keeps what the call settled at. The stream is
-      sendChatMessage's (`ChatStreamChunk`): a first chunk with the role and `nexus.mode` and `nexus.requested`, a chunk
-      per piece of text, a last chunk with `finish_reason` and `usage`, or an `{error}` event, then `data: [DONE]`. It
-      carries no `nexus.session`, `nexus.question` or `nexus.message`.
+      Turnstile token, checked at Cloudflare before anything counts. The model is always the guest model; a request
+      names none. A round is one accepted request: it counts once the model call starts. A guest id gets a limited
+      number of rounds and output tokens, and a client address a limited number of rounds per UTC day. All guests share
+      a daily spend budget. The stream is sendChatMessage's (`ChatStreamChunk`): a first chunk with the role and
+      `nexus.mode` and `nexus.requested`, a chunk per piece of text, a last chunk with `finish_reason` and `usage`, or
+      an `{error}` event, then `data: [DONE]`. It carries no `nexus.session`, `nexus.question` or `nexus.message`.
 
 
       Errors: 400 `guest_request_invalid` (a missing or bad `X-Nexus-Guest`, or a body outside the bounds above); 400
       `turnstile_failed` (Cloudflare refused the token); 429 `guest_rounds_used` (this guest id used its rounds or its
-      output tokens); 429 `guest_address_limit` (this address used today's rounds); 429 `guest_chat_paused` (the spend
-      bucket cannot hold this round, or the guest organization's budget is spent); 429 `rate_limited` (over 30 guest
-      requests a minute from one address); 502 `turnstile_unavailable` (Cloudflare did not answer in 5 s); 503
-      `guest_chat_not_configured`. A refusal counts no round.
+      output tokens); 429 `guest_address_limit` (this address used today's rounds); 429 `guest_chat_paused` (the guest
+      budget cannot hold this round); 429 `rate_limited` (too many guest requests from one address); 502
+      `turnstile_unavailable` (Cloudflare did not answer in 5 s); 503 `guest_chat_not_configured`. A refusal counts no
+      round.
 
 
       Exempt: a public route. It takes no credential, so the Gateway has no caller to tie a key to.

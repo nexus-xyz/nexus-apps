@@ -35,10 +35,10 @@
     operationId: linkInstallation
     summary: >-
       Link a GitHub App installation to this organization (owners and admins), with the `state` of its install link;
-      starts Wiki runs for its repositories. When Gateway has the App's OAuth client (`GITHUB_APP_CLIENT_ID`,
-      `GITHUB_APP_CLIENT_SECRET`), the setup redirect's `code` is required and the GitHub user it names must administer
-      every repository of the installation (an owner does, and so does the user account itself): 403 `invalid_code` for
-      a code GitHub refuses, 403 `installer_not_authorized` otherwise. `installerChecked` says whether that check ran.
+      starts Wiki runs for its repositories. When Gateway has the App's OAuth client, the setup redirect's `code` is
+      required and the GitHub user it names must administer every repository of the installation (an owner does, and so
+      does the user account itself): 403 `invalid_code` for a code GitHub refuses, 403 `installer_not_authorized`
+      otherwise. `installerChecked` says whether that check ran.
     requestBody:
       required: true
       content:

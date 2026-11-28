@@ -7,7 +7,8 @@
     summary: Your devices for end-to-end encrypted session sync, oldest first, with their public keys and approvals.
     description: >-
       Revoked devices are listed too. Each approved device names its approver and the approver's Ed25519 signature, so a
-      client verifies the approval chain from your first device itself.
+      client verifies the approval chain from your first device itself. `trust` says how this Gateway trusts a device:
+      with `gateway`, a trusted device may have no approver and no chain to verify.
     responses:
       "200":
         description: OK
@@ -42,7 +43,9 @@
       without padding. A passkey or recovery code (`kind`) sends its X25519 key only. A device is trusted without an
       approval only while you never had a trusted device; a recovery key never is. After that, signing in alone never
       adds a trusted device: the way back after losing every device is `recoverDevice`, with a recovery key's proof. You
-      may have at most 10 pending devices.
+      may have at most 10 pending devices. A Gateway whose `listDevices` answers `trust: gateway` trusts each device at
+      once instead, with no approver, and a device key already pending turns trusted when it registers again. A recovery
+      key stays pending there too.
     parameters:
       - $ref: ../components/common.yaml#/parameters/IdempotencyKeyRequired
     requestBody:

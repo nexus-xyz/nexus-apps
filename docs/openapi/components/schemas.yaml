@@ -1876,6 +1876,8 @@ AuditEvent:
         - service_account.revoked
         - sandbox_session.started
         - sandbox_session.ended
+        - agent_session.started
+        - agent_session.ended
         - operator_grant.issued
         - operator_grant.revoked
         - operator.request
@@ -6189,11 +6191,21 @@ DeviceList:
   type: object
   required:
     - devices
+    - trust
   properties:
     devices:
       type: array
       items:
         $ref: "#/Device"
+    trust:
+      type: string
+      enum:
+        - approvals
+        - gateway
+      description: >-
+        How this Gateway trusts a person's later devices. `approvals`: a trusted device signs each one's approval.
+        `gateway`: Gateway trusts each device a signed-in person registers at once, with no approver. An older Gateway
+        leaves it out: read that as `approvals`.
   description: "`listDevices`'s answer, oldest first."
 DeviceThreadKey:
   type: object
@@ -6363,9 +6375,7 @@ EmbeddedCardSetup:
         this session's form.
     publishableKey:
       type: string
-      description: >-
-        Gateway's `STRIPE_PUBLISHABLE_KEY` (`pk_test_…` or `pk_live_…`, the same mode as its secret key), for
-        `loadStripe`.
+      description: Gateway's a server setting (`pk_test_…` or `pk_live_…`, the same mode as its secret key), for `loadStripe`.
     expiresAt:
       type: string
       format: date-time
@@ -7284,6 +7294,11 @@ GatewayFeatures:
     apps:
       type: boolean
       description: "Nexus Apps: `nexus apps` and /v1/apps. An older Gateway leaves it out: off."
+    agentSessionAudit:
+      type: boolean
+      description: >-
+        Coding agent sessions write agent_session.started and agent_session.ended audit events. An older Gateway leaves
+        it out: off.
   description: The products a Gateway can turn off. Clients hide what is off.
 GuestChatMessage:
   type: object
