@@ -2037,11 +2037,18 @@ pub(crate) fn runtime() -> tokio::runtime::Handle {
         .clone()
 }
 
+#[cfg(not(test))]
 fn home() -> PathBuf {
     std::env::var_os("HOME")
         .or_else(|| std::env::var_os("USERPROFILE"))
         .map(PathBuf::from)
         .unwrap_or_default()
+}
+
+/// In a test, a home folder under the test root (`test_agents.rs`): no test writes under the person's.
+#[cfg(test)]
+fn home() -> PathBuf {
+    test_agents::home()
 }
 
 /// New work's and reviews' worktree folders: the person's, else `~/nexus-worktrees` and `~/nexus-reviews` (the Nexus
@@ -3362,6 +3369,7 @@ fn commit_environment(mut env: HashMap<String, String>, eligible: bool) -> HashM
 
 /// The environment agents start with: this app's, with a `PATH` that also has where agents are usually installed
 /// (`~/.local/bin`, npm's global folder; computed once).
+#[cfg(not(test))]
 pub fn agent_env() -> HashMap<String, String> {
     static PATH: OnceLock<String> = OnceLock::new();
     let mut env: HashMap<String, String> = std::env::vars().collect();
@@ -3370,6 +3378,13 @@ pub fn agent_env() -> HashMap<String, String> {
         PATH.get_or_init(|| process::agent_path(std::env::var("PATH").ok().as_deref(), home.as_deref(), &shell()));
     env.insert("PATH".into(), path.clone());
     env
+}
+
+/// In a test, the stand-in agents first on a `PATH` of the system's folders, and a home folder under the test root
+/// (`test_agents.rs`): no test starts the person's own `claude` or `codex`, or writes under their home folder.
+#[cfg(test)]
+pub fn agent_env() -> HashMap<String, String> {
+    test_agents::env()
 }
 
 /// The shell for the agents' `PATH` and the workbench: the person's login shell, and `/bin/sh` in this crate's tests,
@@ -3428,6 +3443,9 @@ fn list_price(input: f64, output: f64, usage: &Usage) -> f64 {
         usage.input_tokens as f64 + usage.cache_read_tokens as f64 * 0.1 + usage.cache_write_tokens as f64 * 1.25;
     (input_tokens * input + usage.output_tokens as f64 * output) / 1_000_000.0
 }
+
+#[cfg(test)]
+pub(crate) mod test_agents;
 
 #[cfg(test)]
 mod tests {
@@ -3504,6 +3522,50 @@ mod tests {
         assert!(held.lock().unwrap().is_none(), "no second-step dispatch after quit");
         drop(runner);
         let _ = std::fs::remove_dir_all(data);
+    }
+
+    /// No test can reach the person's own agents: the runner's lookup (`find` on `agent_env`, then `--version`) finds
+    /// the stand-ins under the test root, and no other folder on the test `PATH` holds an agent to fall back to.
+    #[cfg(unix)]
+    #[test]
+    fn a_test_finds_only_the_stand_in_agents_and_a_home_under_the_test_root() {
+        let root = crate::paths::test_root();
+        for agent in [Agent::Claude, Agent::Codex] {
+            let info = agent_info(agent);
+            let path = PathBuf::from(info.path.unwrap_or_else(|| panic!("{agent:?} is found")));
+            assert!(
+                path.starts_with(&root),
+                "{agent:?} resolves outside the test root {}: {}",
+                root.display(),
+                path.display()
+            );
+            assert_eq!(
+                info.version.as_deref(),
+                Some(test_agents::VERSION),
+                "{agent:?} at {} is not the stand-in",
+                path.display()
+            );
+        }
+        let env = agent_env();
+        for dir in env["PATH"].split(':') {
+            for name in test_agents::STAND_INS.into_iter().chain(["nexus"]) {
+                let program = Path::new(dir).join(name);
+                assert!(
+                    !program.exists() || program.starts_with(&root),
+                    "the test PATH reaches an agent outside the test root: {}",
+                    program.display()
+                );
+            }
+        }
+        for (name, folder) in [("HOME", PathBuf::from(&env["HOME"])), ("home()", home())] {
+            assert!(
+                folder.starts_with(&root),
+                "{name} is outside the test root {}: {}",
+                root.display(),
+                folder.display()
+            );
+        }
+        assert!(Path::new(&env["HISTFILE"]).starts_with(&root), "{}", env["HISTFILE"]);
     }
 
     #[test]

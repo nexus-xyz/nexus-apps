@@ -131,11 +131,19 @@ fn stand_in(root: &Path, gateway: &str, scope: &str) -> LocalService {
         reviews: Some(root.join("rv")),
         idle_exit: Duration::from_secs(600),
         app_program: None,
+        // The test agents' `PATH` and stand-in `codex`, and no login shell: the service never reaches the person's
+        // own agents or shell profile (`test_agents.rs`).
         env: vec![
             ("HOME".into(), root.join("home").to_string_lossy().into_owned()),
+            ("PATH".into(), agent_env()["PATH"].clone()),
+            ("SHELL".into(), "/bin/sh".into()),
             (
                 "NEXUS_CLAUDE_BIN".into(),
                 built("NEXUS_FAKE_CLAUDE_BIN").to_string_lossy().into_owned(),
+            ),
+            (
+                "NEXUS_CODEX_BIN".into(),
+                test_agents::bin().join("codex").to_string_lossy().into_owned(),
             ),
             ("FAKE_CLAUDE_DIR".into(), memory.to_string_lossy().into_owned()),
             // Only capture the service's synthetic app grant. Other inherited secrets stay redacted.
