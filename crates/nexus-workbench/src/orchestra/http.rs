@@ -60,9 +60,10 @@ const CREW_INSTRUCTIONS: &str = "Nexus's tools for starting subsessions, each in
     project's folder>`, and do nothing more unless asked. From a worktree, always pass --project. \"Hand off\" or \
     \"hand over\": use handoff_session only when the person asks to replace or archive this session. Otherwise first \
     commit your work on its branch, then start a session with `nexus sessions start` and name the branch in its \
-    prompt. Leave this session as it is. start_session can't reach another project yet: there, use `nexus sessions \
-    start` with --project even for coordinated work. When you need its result, put `$NEXUS_SESSION_ID` in its prompt \
-    for a report, or run `nexus sessions wait <id>`. When the wording is unclear, use start_session, and say which \
+    prompt. Leave this session as it is. For coordinated work in another open, trusted project, use start_session with \
+    project. Use `nexus sessions start` with --project there only for an independent session, or when cross-project \
+    subsessions are off or refused. When you need the result of a session you started with `nexus sessions start`, \
+    put `$NEXUS_SESSION_ID` in its prompt for a report, or run `nexus sessions wait <id>`. When the wording is unclear, use start_session, and say which \
     tool you chose and why. Stop is a pause; archiving is the cleanup: see stop_session and archive_session. Never \
     archive or hand off this session unless the person asks. A saved memory that says to always do so counts as \
     asking. When the person states a standing preference, such as \"always archive\", save it with shared memory \
@@ -627,8 +628,9 @@ mod tests {
              \"new session\", \"another session\" or \"separate session\".",
             "Start an independent session only when the person says so: \"independent\", \"I own it\"",
             "Then run `nexus sessions start \"<prompt>\" --project",
-            "start_session can't reach another project yet: there, use `nexus sessions start` with --project even \
-             for coordinated work.",
+            "For coordinated work in another open, trusted project, use start_session with project.",
+            "Use `nexus sessions start` with --project there only for an independent session, or when cross-project \
+             subsessions are off or refused.",
             "put `$NEXUS_SESSION_ID` in its prompt for a report, or run `nexus sessions wait <id>`.",
             "When the wording is unclear, use start_session, and say which tool you chose and why.",
             "use handoff_session only when the person asks to replace or archive this session",

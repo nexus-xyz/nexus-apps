@@ -706,11 +706,14 @@ mod tests {
              not decide.",
             "| Work you coordinate or need a result from, in any wording, even \"new session\" | Use `start_session`.",
             "| The person says it is independent or theirs, or hands it over | Run `nexus sessions start`.",
-            "| Another project | Run `nexus sessions start` with `--project`. For its result, ask for a report to \
-             `$NEXUS_SESSION_ID`, or wait |",
+            "| Coordinated work in another open, trusted project | Use `start_session` with `project`. Its result \
+             comes back to you |",
+            "| Another project, for independent work, or when `start_session` refuses it | Run `nexus sessions start` \
+             with `--project`. For its result, ask for a report to `$NEXUS_SESSION_ID`, or wait |",
             "\"independent\", \"I own it\", \"I'll take it from here\", \"don't wait for it\", \"no need to report back\"",
             "When the words are unclear, use `start_session`, and say which tool you chose and why.",
-            "`start_session` can't reach another project yet.",
+            "`start_session` with `project` takes the project's folder, GitHub owner/repo, id or name.",
+            "A subsession in another project can't start subsessions or hand off.",
             "`nexus sessions start \"<prompt>\" --project <owner/repo or the project's folder>`",
             "`--project` takes a project's id, a folder inside it, its GitHub owner/repo or its name.",
             "To hand work over without replacing this session, first commit your work on its branch.",

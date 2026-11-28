@@ -196,6 +196,10 @@ async fn a_project_not_open_trusted_or_allowed_is_refused() {
     // Its own project still starts.
     let own = finished_child(&s, &lead.id, into(&s.project, "Build it")).await;
     assert!(!own.cross_project);
+    // The person's Settings turn it back on.
+    s.workbench.set_subsessions(nexus_workbench::Subsessions::default());
+    let c = finished_child(&s, &lead.id, into(&other.id, "Build it")).await;
+    assert!(c.cross_project);
     done(s).await;
 }
 

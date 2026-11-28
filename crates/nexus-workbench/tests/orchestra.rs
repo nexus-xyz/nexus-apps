@@ -1355,6 +1355,39 @@ async fn a_start_loads_the_price_catalog_before_it_admits_the_child() {
     done(lead).await;
 }
 
+/// A start in another project shows that project's folder on the card. The lead's project's preference decides
+/// whether to ask: the choice is about the lead's work, so the other project's saved preference is not read.
+#[tokio::test]
+async fn a_start_in_another_project_shows_its_folder_and_asks_by_the_leads_project() {
+    use nexus_workbench::session_choice::Preference;
+    let lead = lead("choice-cross-project").await;
+    let repo = lead.s.root.join("elsewhere");
+    std::fs::create_dir_all(&repo).expect("a folder");
+    git(&repo, &["init", "--quiet", "--initial-branch", "main"]);
+    git(&repo, &["commit", "--quiet", "--allow-empty", "-m", "one"]);
+    let other = lead.s.workbench.add_project(&repo).expect("a project");
+    lead.s.workbench.set_claude_trust(&other.id, true).expect("trusted");
+    lead.s
+        .workbench
+        .set_session_start_preference(&other.id, Preference::New)
+        .expect("valid test fixture");
+    ask(&lead);
+    let call = json!({"jsonrpc":"2.0","id":993,"method":"tools/call","params":{"name":"start_session","arguments":{
+        "agent":"claude","title":"Sample child","prompt":"Build the changelog","key":"cross","project":other.id},
+        "_meta":{"progressToken":"choice-cross"}}});
+    let body = call.to_string();
+    let mut stream = TcpStream::connect(("127.0.0.1", lead.at.port))
+        .await
+        .expect("valid test fixture");
+    stream
+        .write_all(&raw("POST", &lead.at.path, &good_head(&lead.at, body.len()), &body))
+        .await
+        .expect("valid test fixture");
+    let choice = pending_choice(&lead).await;
+    assert_eq!(choice.workspace, other.path);
+    done(lead).await;
+}
+
 #[tokio::test]
 async fn a_start_waits_for_the_person_and_here_is_structured_and_idempotent() {
     use nexus_workbench::session_choice::Preference;
