@@ -28,7 +28,7 @@ Ask whether the person wants a result back through you, or owns the new session;
 - When the words are unclear, use `start_session`, and say which tool you chose and why.
 - `start_session` with `project` takes the project's folder, GitHub owner/repo, id or name.
   The project must be open and trusted in Nexus, and cross-project subsessions on in Settings.
-  A subsession in another project can't start subsessions or hand off.
+  A subsession in another project can start subsessions of its own, up to the depth limit, but can't hand off.
 - If `start_session` answers `project_not_open`, `project_untrusted` or `cross_project_off`, tell the person why.
   Say what they can do: open or unarchive the project, trust it, or turn the setting on.
   Then wait. Do not start the work another way.

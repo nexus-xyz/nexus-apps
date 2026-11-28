@@ -647,9 +647,9 @@ async fn app_tool_instructions_and_claude_allowlist_match_discovery() {
     let _ = std::fs::remove_dir_all(s.root);
 }
 
-/// A subsession in another project is a leaf at any depth: its launch gets the terminal tools and no subsession tools.
+/// A subsession in another project gets the subsession tools as any child does, while depth allows.
 #[tokio::test]
-async fn a_cross_project_subsession_gets_no_subsession_tools() {
+async fn a_cross_project_subsession_gets_the_subsession_tools() {
     let s = setup_with("tool-cross-project", Limits::default(), true, |config| Config {
         terminal: true,
         ..config
@@ -671,7 +671,7 @@ async fn a_cross_project_subsession_gets_no_subsession_tools() {
         ..child(SessionAgent::Claude, "Check the release")
     };
     let c = s.workbench.start_child(&lead.id, start).await.expect("started");
-    assert_app_tools(&s, "in another project", false).await;
+    assert_app_tools(&s, "in another project", true).await;
     assert!(thread(&s.workbench, &c.id).cross_project);
     s.workbench.shutdown().await;
     let _ = std::fs::remove_dir_all(s.root);

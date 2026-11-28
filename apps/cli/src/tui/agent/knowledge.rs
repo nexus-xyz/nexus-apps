@@ -717,7 +717,8 @@ mod tests {
             "\"independent\", \"I own it\", \"I'll take it from here\", \"don't wait for it\", \"no need to report back\"",
             "When the words are unclear, use `start_session`, and say which tool you chose and why.",
             "`start_session` with `project` takes the project's folder, GitHub owner/repo, id or name.",
-            "A subsession in another project can't start subsessions or hand off.",
+            "A subsession in another project can start subsessions of its own, up to the depth limit, but can't hand \
+             off.",
             "`nexus sessions start \"<prompt>\" --project <owner/repo or the project's folder>`",
             "`--project` takes a project's id, a folder inside it, its GitHub owner/repo or its name.",
             "To hand work over without replacing this session, first commit your work on its branch.",

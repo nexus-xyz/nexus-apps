@@ -66,8 +66,8 @@ pub(crate) fn list() -> Vec<Value> {
                  the person where to run it, unless they saved a preference. If the answer has choice here, continue \
                  the task in this session: no subsession exists. Otherwise the subsession works on its own. A \
                  {nesting} subsession can start subsessions of its own, up to the depth limit. With project, it runs \
-                 in another project open in Nexus and trusted there; such a subsession can't start subsessions or \
-                 hand off. Use wait_sessions to \
+                 in another project open in Nexus and trusted there. A subsession in another project can't hand off. \
+                 Use wait_sessions to \
                  get its result when it finishes. When you replace a subsession with another session, archive the \
                  old one. A subsession that could not start, such as one whose agent is not signed in, ends with a \
                  failed result that says why. The subsession can't see this conversation: its prompt must say \
@@ -86,7 +86,7 @@ pub(crate) fn list() -> Vec<Value> {
                     "permission_mode": {"type": "string", "enum": ["plan", "default", "acceptEdits", "auto", "bypassPermissions"],
                         "description": "Never above this session's; default: this session's. An agent that does not offer the mode is refused, with the modes it offers. Antigravity's Auto runs agy's own auto when the account offers it; otherwise it runs as Auto-accept edits, with commands run unasked inside the sandbox."},
                     "key": {"type": "string", "description": "1 to 64 characters. A retry with the same key returns the same subsession instead of a second one."},
-                    "project": {"type": "string", "description": "The project to run in: its folder, GitHub owner/repo, id or name. It must be open in Nexus and trusted. Default: this session's project. A subsession in another project can't start subsessions or hand off."}
+                    "project": {"type": "string", "description": "The project to run in: its folder, GitHub owner/repo, id or name. It must be open in Nexus and trusted. Default: this session's project. A subsession in another project can't hand off."}
                 },
                 "required": ["agent", "prompt"],
                 "additionalProperties": false
@@ -732,17 +732,18 @@ mod tests {
             start["inputSchema"]["properties"]["project"],
             json!({"type": "string", "description": "The project to run in: its folder, GitHub owner/repo, id or \
                 name. It must be open in Nexus and trusted. Default: this session's project. A subsession in another \
-                project can't start subsessions or hand off."})
+                project can't hand off."})
         );
         assert_eq!(start["inputSchema"]["required"], json!(["agent", "prompt"]));
         let description = start["description"].as_str().unwrap_or_default();
         assert!(
             description.contains(
-                "With project, it runs in another project open in Nexus and trusted there; such a subsession can't \
-                 start subsessions or hand off."
+                "With project, it runs in another project open in Nexus and trusted there. A subsession in another \
+                 project can't hand off."
             ),
             "{description}"
         );
+        assert!(!description.contains("can't start subsessions"), "{description}");
         let handoff = tools
             .iter()
             .find(|tool| tool["name"] == HANDOFF)

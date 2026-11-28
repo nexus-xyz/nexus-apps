@@ -155,7 +155,7 @@ pub enum OrchCode {
     ProjectUntrusted,
     /// The person turned off "Enable cross-project subsessions".
     CrossProjectOff,
-    /// A subsession in another project than its parent's tried to start a subsession or to hand off.
+    /// A subsession in another project than its parent's tried to hand off.
     CrossProject,
     /// This app or host makes no worktrees.
     WorktreesUnavailable,
@@ -425,18 +425,19 @@ impl Workbench {
     /// A start that fails before the agent runs ends with a failed turn, so a wait on the child ends.
     ///
     /// Refused, in this order: a parent not in this workbench's organization (`org_mismatch`), with orchestration off
-    /// (`off`), in another project than its own parent's (`cross_project`), or in Plan only (`plan_mode`); a bad
-    /// prompt, title or key (`bad_input`); past the depth (`depth_limit`), the parent's active children or every
+    /// (`off`), or in Plan only (`plan_mode`); a bad prompt, title or key (`bad_input`); past the depth (`depth_limit`), the parent's active children or every
     /// active linked session (`children_limit`), the parent's worktrees (`worktrees_limit`); a paused tree (`paused`)
     /// or past the tree's starts (`starts_limit`); another agent than the parent's with cross-agent subsessions off
-    /// (`agent_not_allowed`); a `project` other than its own with cross-project subsessions off (`cross_project_off`),
-    /// one that is not open or is archived (`project_not_open`) or one not trusted (`project_untrusted`); a mode the agent
+    /// (`agent_not_allowed`); a `project` other than the parent's own with cross-project subsessions off
+    /// (`cross_project_off`), one that is not open or is archived (`project_not_open`) or one not trusted
+    /// (`project_untrusted`), at every hop; a mode the agent
     /// does not offer (`bad_input`); no list prices at all (`unpriced_model`); no worktrees here
     /// (`worktrees_unavailable`). A halt on the parent or on any session above it is refused too (`halted`), after its
     /// organization, and checked again just before the row is saved.
     ///
     /// A child in another project ([`cross_project`]) runs in its worktree, with its setup script, and in a mode no
-    /// higher than that project's default mode.
+    /// higher than that project's default mode. It may start subsessions of its own, up to the depth limit, which
+    /// counts from the tree's root across projects.
     ///
     /// The child has the parent's organization and route (the person's own sign-in for an agent Gateway has no route
     /// for, [`child_via`]), the parent's account when it runs the same agent (else that agent's own login), and the
@@ -562,9 +563,6 @@ impl Workbench {
                 OrchCode::Off,
                 "This session can't start other sessions: its orchestration is off.",
             );
-        }
-        if p.cross_project {
-            return refuse(OrchCode::CrossProject, cross_project::NO_START);
         }
         // The parent and every session above it, nearest first: a child runs under all of them.
         let mut chain = vec![parent.clone()];
@@ -1150,9 +1148,6 @@ impl Workbench {
     /// no tools (`arm`), and a restart for them would only end its work.
     pub(crate) fn check_orchestration(&self, thread_id: &str) -> crate::Result<()> {
         let record = self.record(thread_id)?;
-        if record.summary.cross_project {
-            return Err(cross_project::NO_ORCHESTRATION.into());
-        }
         let deepest = self.config().orchestration.depth();
         if record.summary.depth >= deepest {
             return Err(format!(

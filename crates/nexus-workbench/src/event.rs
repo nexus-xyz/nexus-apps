@@ -499,9 +499,9 @@ pub struct ThreadSummary {
     /// 0 for a session the person started, its parent's depth + 1 for a linked one.
     #[serde(default, skip_serializing_if = "is_zero")]
     pub depth: u32,
-    /// A subsession in another project than its parent's (`start_session` with `project`). It is a leaf: its agent
-    /// gets no subsession tools and can't hand off. Set when it is made, like its project. A session that is not one
-    /// writes the same bytes as before.
+    /// A subsession in another project than its parent's (`start_session` with `project`). It can't hand off. Set
+    /// when it is made, like its project, and cleared when a deleted parent frees it. A session that is not one writes
+    /// the same bytes as before.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub cross_project: bool,
     /// Its agent may start, message, wait for and stop linked sessions of its own.
@@ -541,8 +541,8 @@ pub struct ThreadSummary {
     /// 0 from an older host: count `background` then.
     #[serde(default, skip_serializing_if = "is_zero")]
     pub background_total: u32,
-    /// It is at the deepest level linked sessions go, or a subsession in another project (`cross_project`): its agent
-    /// gets no tools, so its orchestration can't be turned on. Never stored: the limit is the app's setting.
+    /// It is at the deepest level linked sessions go: its agent gets no tools, so its orchestration can't be turned
+    /// on. Never stored: the limit is the app's setting.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub at_depth_limit: bool,
     /// The person's plan refused its last turn at a usage limit (`Workbench::continue_at_resets`). Absent: it did not,

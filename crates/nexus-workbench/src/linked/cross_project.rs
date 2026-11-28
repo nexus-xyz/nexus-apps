@@ -1,27 +1,21 @@
 //! Cross-project subsessions: `start_session` with `project` starts a linked subsession in another project open on this
 //! computer. The child keeps its parent (`parent_thread_id`), so results, waits, messages, stops, the halt cascade, the
-//! spend cap and the depth limit work as for any child. It is a leaf: it gets no subsession tools and can't hand off,
-//! so one agent's choice of project never reaches further.
+//! spend cap and the depth limit work as for any child. It may start subsessions of its own; depth keeps counting from
+//! the tree's root. It can't hand off yet.
 //!
 //! The agent picks the project, not the person, and the project's setup script runs in the child's worktree. So the
 //! project must be trusted (`claude_trust`), whatever the agent, and the person can turn the feature off in Settings.
+//! Each hop is checked again: a child in project B that names project C is checked against C. A child in B that
+//! starts one in B is an ordinary child of its parent, with `cross_project` false.
 
 use super::{OrchCode, OrchError, refuse};
 use crate::Workbench;
 use crate::event::{PermissionMode, Project, ThreadSummary};
 use crate::project_lookup::{find_project, open_project};
 
-/// Why a cross-project subsession can't start one of its own.
-pub(crate) const NO_START: &str =
-    "This subsession runs in another project than its parent's, so it can't start subsessions of its own.";
-
 /// Why a cross-project subsession can't hand off.
 pub(crate) const NO_HANDOFF: &str =
     "This subsession runs in another project than its parent's, so it can't hand off its work.";
-
-/// Why turning orchestration on is refused for a cross-project subsession.
-pub(crate) const NO_ORCHESTRATION: &str =
-    "This session runs in another project than its parent's, so its agent can't start sessions of its own.";
 
 /// Why another project is refused while the person turned the feature off.
 const OFF: &str = "The person turned off \"Enable cross-project subsessions\", so this session starts subsessions only \

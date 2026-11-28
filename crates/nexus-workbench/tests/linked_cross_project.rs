@@ -1,7 +1,7 @@
 //! Cross-project subsessions through the public workbench, with the stand-in `claude`: a lead in one project starts a
 //! linked subsession in another project open here (`StartChild::project`). The child keeps its parent, so its result,
-//! the halt cascade and the person's message to the lead work as for any child. It is a leaf, and the target project
-//! must be open, trusted and allowed.
+//! the halt cascade and the person's message to the lead work as for any child. It can't hand off, and the target
+//! project must be open, trusted and allowed. tests/linked_cross_project_hops.rs covers its own subsessions.
 
 mod support;
 
@@ -46,7 +46,7 @@ async fn a_lead_starts_a_subsession_in_another_trusted_project() {
     let c = finished_child(&s, &lead.id, into(&other.path, "Build it")).await;
     assert_eq!(c.project_id, other.id);
     assert_eq!(c.parent_thread_id.as_deref(), Some(lead.id.as_str()));
-    assert!(c.cross_project && c.at_depth_limit);
+    assert!(c.cross_project);
     assert_eq!(
         c.permission_mode,
         PermissionMode::Default,
@@ -180,17 +180,14 @@ async fn a_project_not_open_trusted_or_allowed_is_refused() {
     done(s).await;
 }
 
-/// The child is a leaf: it can't start a subsession, hand off, or turn its orchestration on.
+/// The child can't hand off yet; its orchestration stays on, and the switch can be turned on as for any child.
 #[tokio::test]
-async fn a_cross_project_subsession_is_a_leaf() {
-    let s = setup("cross-leaf", nexus_workbench::Limits::default());
+async fn a_cross_project_subsession_cannot_hand_off() {
+    let s = setup("cross-handoff", nexus_workbench::Limits::default());
     let other = trusted(&s);
     let lead = root(&s, new_root(&s.project, "Plan the release")).await;
     let c = finished_child(&s, &lead.id, into(&other.id, "Build it")).await;
-    assert!(c.orchestration && c.at_depth_limit, "no tools, however deep the limit");
-
-    let (code, message) = refused(&s, &c.id, child(SessionAgent::Claude, "Deeper")).await;
-    assert_eq!(code, OrchCode::CrossProject, "{message}");
+    assert!(c.orchestration && !c.at_depth_limit);
     let handoff = HandOff {
         agent: SessionAgent::Codex,
         prompt: "Take over".into(),
@@ -205,8 +202,7 @@ async fn a_cross_project_subsession_is_a_leaf() {
         orchestration: Some(true),
         ..ThreadPatch::default()
     };
-    let refused = s.workbench.update(&c.id, on).err().unwrap_or_default();
-    assert!(refused.contains("another project"), "{refused}");
+    s.workbench.update(&c.id, on).unwrap_or_else(|e| panic!("{e}"));
     done(s).await;
 }
 

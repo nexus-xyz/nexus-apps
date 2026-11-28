@@ -121,22 +121,22 @@ async fn removing_a_project_stops_only_its_own_organizations_cross_project_child
     done(s).await;
 }
 
-/// Deleting the lead frees a cross-project child as a root, and a root is no cross-project subsession: it may start
-/// subsessions of its own again.
+/// Deleting the lead frees a cross-project child as a root, and a root has no parent to be in another project than:
+/// the store clears `cross_project`, so it is an ordinary session of the person's in its project.
 #[tokio::test]
-async fn a_freed_cross_project_child_is_no_longer_a_leaf() {
+async fn a_freed_cross_project_child_is_an_ordinary_root() {
     let s = setup("cross-freed", Limits::default());
     let other = trusted(&s);
     let lead = root(&s, new_root(&s.project, "Plan the release")).await;
     let c = finished_child(&s, &lead.id, into(&other.id, "Build it")).await;
-    assert!(c.cross_project && c.at_depth_limit);
+    assert!(c.cross_project);
     s.workbench
         .delete_thread(&lead.id)
         .await
         .unwrap_or_else(|e| panic!("{e}"));
     let freed = thread(&s.workbench, &c.id);
     assert_eq!((freed.parent_thread_id.as_deref(), freed.depth), (None, 0));
-    assert!(!freed.cross_project && !freed.at_depth_limit);
+    assert!(!freed.cross_project);
     let grandchild = finished_child(&s, &c.id, child(SessionAgent::Claude, "Build more")).await;
     assert_eq!(grandchild.project_id, other.id);
     done(s).await;

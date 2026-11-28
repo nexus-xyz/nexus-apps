@@ -274,7 +274,7 @@ impl Workbench {
     }
 
     /// Gives the run its tools, between the host's launch and the spawn: when the session's orchestration is on, it is
-    /// above the deepest level and in its parent's project, and the server is bound. A Claude session whose folder names `nexus_app` starts
+    /// above the deepest level, and the server is bound. A Claude session whose folder names `nexus_app` starts
     /// without them, and so does any session when the server can't be bound; its log says why.
     pub(crate) async fn arm(&self, record: &ThreadRecord, live: &Live, spawn: &mut Spawn) {
         let summary = &record.summary;
@@ -282,9 +282,7 @@ impl Workbench {
         if !tools.offered() {
             return;
         }
-        // A subsession in another project than its parent's is a leaf, at any depth (`linked::cross_project`).
-        let crew =
-            summary.orchestration && !summary.cross_project && summary.depth < self.config().orchestration.depth();
+        let crew = summary.orchestration && summary.depth < self.config().orchestration.depth();
         let terminal = self.config().terminal;
         if !crew && !terminal {
             return;
