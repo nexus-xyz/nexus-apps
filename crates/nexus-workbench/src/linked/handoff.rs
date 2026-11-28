@@ -35,7 +35,7 @@ impl Workbench {
     /// Hands session `caller_id`'s work to a new session of `hand_off.agent` and archives `caller_id`.
     ///
     /// Refused: not in this organization (`org_mismatch`); halted, or under a halted session (`halted`); orchestration
-    /// off (`off`); Plan only (`plan_mode`); already archived, an empty or overlong prompt or title (`bad_input`); a
+    /// off (`off`); a subsession in another project than its parent's (`cross_project`); Plan only (`plan_mode`); already archived, an empty or overlong prompt or title (`bad_input`); a
     /// paused tree (`paused`); past the tree's starts (`starts_limit`).
     pub async fn hand_off(&self, caller_id: &str, hand_off: HandOff) -> Result<ThreadSummary, OrchError> {
         if self.missing_spend_prices() {
@@ -107,6 +107,9 @@ impl Workbench {
                 OrchCode::Off,
                 "This session can't hand off its work: its orchestration is off.",
             );
+        }
+        if c.cross_project {
+            return refuse(OrchCode::CrossProject, super::cross_project::NO_HANDOFF);
         }
         if c.archived {
             return refuse(OrchCode::BadInput, "This session is already archived.");

@@ -806,7 +806,8 @@ impl Workbench {
         if !summary.start_choices.is_empty() {
             summary.status = ThreadStatus::Approval;
         }
-        summary.at_depth_limit = summary.depth >= self.config().orchestration.depth();
+        // A subsession in another project gets no tools either, so the app hides its switch the same way.
+        summary.at_depth_limit = summary.depth >= self.config().orchestration.depth() || summary.cross_project;
         (summary.crew_paused, summary.crew_spend_trip) = self.crew_pause(summary);
         summary.crew_tripped = summary.crew_spend_trip.is_some();
         let running = self.running_work(&summary.id);

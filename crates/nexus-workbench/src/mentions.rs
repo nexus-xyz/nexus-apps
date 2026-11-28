@@ -502,6 +502,7 @@ mod tests {
             spawned_by: None,
             group_id: None,
             depth: 0,
+            cross_project: false,
             orchestration: false,
             waits_on: vec![],
             pending_results: 0,

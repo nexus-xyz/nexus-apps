@@ -270,6 +270,7 @@ pub fn child(agent: SessionAgent, prompt: &str) -> StartChild {
         effort: None,
         permission_mode: None,
         key: None,
+        project: None,
     }
 }
 

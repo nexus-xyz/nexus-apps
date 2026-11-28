@@ -436,6 +436,7 @@ fn start_args(args: &Map<String, Value>) -> Result<StartChild, OrchError> {
             "default, acceptEdits, auto, plan and bypassPermissions",
         )?,
         key: optional(args, "key")?,
+        project: None,
     })
 }
 

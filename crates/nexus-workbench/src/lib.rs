@@ -448,6 +448,9 @@ pub struct Config {
     /// "Disable cross-agent subsessions" ([`Subsessions::cross_agent_off`]): `start_session` and `schedule_session`
     /// refuse another agent than the caller's, on every route.
     pub cross_agent_off: bool,
+    /// "Enable cross-project subsessions": `start_session` may start a subsession in another project open here
+    /// ([`linked::cross_project`]). On by default.
+    pub cross_project_on: bool,
     /// The deadlines of the agents' MCP server ([`orchestra`]).
     pub orchestra_timing: orchestra::Timing,
     /// This host offers command PTYs through the session's authenticated app tools.
@@ -487,6 +490,7 @@ impl Default for Config {
             subsessions: Subsessions::default().on,
             subsessions_first_start: Subsessions::default().first_start,
             cross_agent_off: Subsessions::default().cross_agent_off,
+            cross_project_on: true,
             orchestra_timing: orchestra::Timing::default(),
             terminal: false,
             remote_pairing_preview: computer::remote_pairing_preview(),
@@ -2284,7 +2288,10 @@ impl Workbench {
         self.project(project_id)
     }
 
+    /// Removes the project from the list and archives its sessions. A subsession another project's session started
+    /// here stops first ([`linked::cross_project`]).
     pub fn remove_project(&self, project_id: &str) -> Result<()> {
+        self.stop_cross_project_children(project_id);
         self.store().remove_project(project_id)?;
         self.inner.host.emit(Emit::Projects(self.projects()?));
         Ok(())
@@ -2956,6 +2963,7 @@ impl Workbench {
                 spawned_by: new.parent.as_ref().map(|link| link.spawned_by.clone()),
                 group_id: new.parent.and_then(|link| link.group_id),
                 depth,
+                cross_project: false,
                 orchestration: new.orchestration,
                 waits_on: vec![],
                 pending_results: 0,
@@ -3417,6 +3425,7 @@ impl Workbench {
                 spawned_by: None,
                 group_id: None,
                 depth: 0,
+                cross_project: false,
                 orchestration: s.orchestration,
                 waits_on: vec![],
                 pending_results: 0,

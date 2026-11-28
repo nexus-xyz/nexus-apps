@@ -647,6 +647,36 @@ async fn app_tool_instructions_and_claude_allowlist_match_discovery() {
     let _ = std::fs::remove_dir_all(s.root);
 }
 
+/// A subsession in another project is a leaf at any depth: its launch gets the terminal tools and no subsession tools.
+#[tokio::test]
+async fn a_cross_project_subsession_gets_no_subsession_tools() {
+    let s = setup_with("tool-cross-project", Limits::default(), true, |config| Config {
+        terminal: true,
+        ..config
+    });
+    record_launches(&s);
+    let repo = s.root.join("elsewhere");
+    std::fs::create_dir_all(&repo).expect("a folder");
+    git(&repo, &["init", "--quiet", "--initial-branch", "main"]);
+    git(&repo, &["commit", "--quiet", "--allow-empty", "-m", "one"]);
+    let other = s.workbench.add_project(&repo).expect("a project");
+    s.workbench.set_claude_trust(&other.id, true).expect("trusted");
+
+    let lead = root(&s, new_root(&s.project, "Plan the release")).await;
+    assert_app_tools(&s, "the lead", true).await;
+    std::fs::remove_file(record(&s)).expect("clear the lead's launch record");
+    let start = nexus_workbench::StartChild {
+        title: Some("Child".into()),
+        project: Some(other.id.clone()),
+        ..child(SessionAgent::Claude, "Check the release")
+    };
+    let c = s.workbench.start_child(&lead.id, start).await.expect("started");
+    assert_app_tools(&s, "in another project", false).await;
+    assert!(thread(&s.workbench, &c.id).cross_project);
+    s.workbench.shutdown().await;
+    let _ = std::fs::remove_dir_all(s.root);
+}
+
 async fn assert_app_tools(s: &Setup, case: &str, crew: bool) {
     let launch = launched(s, |l| endpoint(l).is_some()).await;
     let at = endpoint(&launch).expect("nexus_app MCP server");
