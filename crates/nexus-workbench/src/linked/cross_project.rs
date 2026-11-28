@@ -11,7 +11,7 @@
 use super::{OrchCode, OrchError, refuse};
 use crate::Workbench;
 use crate::event::{PermissionMode, Project, ThreadSummary};
-use crate::project_lookup::{find_project, open_project};
+use crate::project_lookup::{find_project, in_sight, open_project};
 
 /// Why a cross-project subsession can't hand off.
 pub(crate) const NO_HANDOFF: &str =
@@ -43,7 +43,16 @@ impl Workbench {
     /// named is an ordinary child. Another project needs the feature on (`cross_project_off`), checked first so the
     /// refusal names no other project's folder; it must be open and in sight (`project_not_open`) and trusted
     /// (`project_untrusted`).
-    pub(crate) fn child_project(&self, parent: &ThreadSummary, asked: Option<&str>) -> Result<ChildProject, OrchError> {
+    ///
+    /// `root_project` is the project of the tree's root. A parent outside it got there by a cross-project start, so a
+    /// child in the parent's own project gets the same three checks: the person may have turned the setting off,
+    /// archived the project or stopped trusting it since, and the child's worktree runs that project's setup script.
+    pub(crate) fn child_project(
+        &self,
+        parent: &ThreadSummary,
+        asked: Option<&str>,
+        root_project: &str,
+    ) -> Result<ChildProject, OrchError> {
         let own = self
             .store()
             .project(&parent.project_id)?
@@ -53,13 +62,20 @@ impl Workbench {
             cross: false,
             mode: None,
         };
+        let outside_root = parent.project_id != root_project;
+        let stay = |own: ChildProject| {
+            if outside_root {
+                self.check_hop(&own.project)?;
+            }
+            Ok(own)
+        };
         let Some(asked) = asked.map(str::trim).filter(|asked| !asked.is_empty()) else {
-            return Ok(own);
+            return stay(own);
         };
         if !self.config().cross_project_on {
             // Only the parent's own project is looked at.
             return match find_project(std::slice::from_ref(&own.project), asked) {
-                Ok(_) => Ok(own),
+                Ok(_) => stay(own),
                 Err(_) => refuse(OrchCode::CrossProjectOff, OFF),
             };
         }
@@ -69,17 +85,30 @@ impl Workbench {
             Err(message) => return refuse(OrchCode::ProjectNotOpen, message),
         };
         if project.id == parent.project_id {
-            return Ok(own);
+            return stay(own);
         }
-        if self.store().claude_trust(&project.id)? != Some(true) {
-            return refuse(OrchCode::ProjectUntrusted, untrusted(&project));
-        }
+        self.check_hop(&project)?;
         let mode = self.project_defaults(&project.id)?.mode;
         Ok(ChildProject {
             project,
             cross: true,
             mode,
         })
+    }
+
+    /// The checks every start outside the root's project passes: the feature on (`cross_project_off`), the project
+    /// in sight (`project_not_open`) and trusted (`project_untrusted`).
+    fn check_hop(&self, project: &Project) -> Result<(), OrchError> {
+        if !self.config().cross_project_on {
+            return refuse(OrchCode::CrossProjectOff, OFF);
+        }
+        if let Err(message) = in_sight(project) {
+            return refuse(OrchCode::ProjectNotOpen, message);
+        }
+        if self.store().claude_trust(&project.id)? != Some(true) {
+            return refuse(OrchCode::ProjectUntrusted, untrusted(project));
+        }
+        Ok(())
     }
 
     /// Why child `id` must not start in `project`: the project was removed from Nexus, or the child was archived (a

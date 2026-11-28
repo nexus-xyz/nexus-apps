@@ -5,12 +5,142 @@
 mod support;
 
 use nexus_workbench::event::{SessionAgent, StoredEvent, WbEvent};
-use nexus_workbench::{Halt, Limits, OrchCode};
+use nexus_workbench::{Halt, Limits, OrchCode, StartChild, Subsessions};
 use support::cross::*;
 use support::*;
 
 fn started(events: &[StoredEvent]) -> bool {
     events.iter().any(|e| matches!(e.event, WbEvent::TurnStart { .. }))
+}
+
+/// "Enable cross-project subsessions" on or off, the other settings as they are by default.
+fn cross_project(s: &Setup, on: bool) {
+    s.workbench.set_subsessions(Subsessions {
+        cross_project_on: on,
+        ..Subsessions::default()
+    });
+}
+
+/// Both ways of starting in `project`: with no project named (from a parent there), and with it named.
+fn in_own(project: &str) -> [StartChild; 2] {
+    [
+        child(SessionAgent::Claude, "Build here"),
+        into(project, "Build here too"),
+    ]
+}
+
+/// A child in project B, outside the root's project, starting in B passes B's checks again: once B is untrusted,
+/// archived or the setting is off, it is refused, with B named or not. The root's own project needs none of them.
+#[tokio::test]
+async fn a_start_in_the_parents_project_outside_the_roots_is_checked_again() {
+    let s = setup("cross-own-checked", Limits::default());
+    let b = trusted_repo(&s, "brepo");
+    let lead = root(&s, new_root(&s.project, "Plan the release")).await;
+    let in_b = finished_child(&s, &lead.id, into(&b.id, "Lead in b")).await;
+
+    s.workbench
+        .set_claude_trust(&b.id, false)
+        .unwrap_or_else(|e| panic!("{e}"));
+    for start in in_own(&b.id) {
+        let (code, message) = refused(&s, &in_b.id, start).await;
+        assert_eq!(code, OrchCode::ProjectUntrusted, "{message}");
+    }
+    s.workbench
+        .set_claude_trust(&b.id, true)
+        .unwrap_or_else(|e| panic!("{e}"));
+
+    s.workbench
+        .update_project(&b.id, None, Some(true))
+        .unwrap_or_else(|e| panic!("{e}"));
+    for start in in_own(&b.id) {
+        let (code, message) = refused(&s, &in_b.id, start).await;
+        assert_eq!(code, OrchCode::ProjectNotOpen, "{message}");
+    }
+    s.workbench
+        .update_project(&b.id, None, Some(false))
+        .unwrap_or_else(|e| panic!("{e}"));
+
+    cross_project(&s, false);
+    for start in in_own(&b.id) {
+        let (code, message) = refused(&s, &in_b.id, start).await;
+        assert_eq!(code, OrchCode::CrossProjectOff, "{message}");
+    }
+    // The root's own project is no hop: its children start with the setting off and the project never trusted.
+    let home = finished_child(&s, &lead.id, child(SessionAgent::Claude, "Build at home")).await;
+    assert_eq!(
+        (home.project_id.as_str(), home.cross_project),
+        (s.project.as_str(), false)
+    );
+
+    cross_project(&s, true);
+    let own = finished_child(&s, &in_b.id, child(SessionAgent::Claude, "Build in b")).await;
+    assert_eq!((own.project_id.as_str(), own.cross_project), (b.id.as_str(), false));
+    done(s).await;
+}
+
+/// A child in B that starts in the root's project A is a cross-project start like any other: A must be trusted.
+#[tokio::test]
+async fn a_start_back_in_the_roots_project_is_trust_checked() {
+    let s = setup("cross-back-home", Limits::default());
+    let b = trusted_repo(&s, "brepo");
+    let lead = root(&s, new_root(&s.project, "Plan the release")).await;
+    let in_b = finished_child(&s, &lead.id, into(&b.id, "Lead in b")).await;
+    let (code, message) = refused(&s, &in_b.id, into(&s.project, "Build at home")).await;
+    assert_eq!(code, OrchCode::ProjectUntrusted, "{message}");
+    s.workbench
+        .set_claude_trust(&s.project, true)
+        .unwrap_or_else(|e| panic!("{e}"));
+    let back = finished_child(&s, &in_b.id, into(&s.project, "Build at home")).await;
+    assert_eq!(
+        (back.project_id.as_str(), back.cross_project),
+        (s.project.as_str(), true)
+    );
+    done(s).await;
+}
+
+/// A second hop is refused when the setting is off, and when the third project is archived.
+#[tokio::test]
+async fn a_second_hop_is_refused_off_or_archived() {
+    let s = setup("cross-second-hop", Limits::default());
+    let b = trusted_repo(&s, "brepo");
+    let c = trusted_repo(&s, "crepo");
+    let lead = root(&s, new_root(&s.project, "Plan the release")).await;
+    let in_b = finished_child(&s, &lead.id, into(&b.id, "Lead in b")).await;
+    cross_project(&s, false);
+    let (code, message) = refused(&s, &in_b.id, into(&c.id, "Build in c")).await;
+    assert_eq!(code, OrchCode::CrossProjectOff, "{message}");
+    cross_project(&s, true);
+    s.workbench
+        .update_project(&c.id, None, Some(true))
+        .unwrap_or_else(|e| panic!("{e}"));
+    let (code, message) = refused(&s, &in_b.id, into(&c.id, "Build in c")).await;
+    assert_eq!(code, OrchCode::ProjectNotOpen, "{message}");
+    done(s).await;
+}
+
+/// A cross-project grandchild counts toward the tree's starts, whichever project it runs in.
+#[tokio::test]
+async fn a_cross_project_grandchild_counts_toward_the_trees_starts() {
+    let s = setup(
+        "cross-starts",
+        Limits {
+            max_starts: Some(2),
+            ..Limits::default()
+        },
+    );
+    let b = trusted_repo(&s, "brepo");
+    let c = trusted_repo(&s, "crepo");
+    let lead = root(&s, new_root(&s.project, "Plan the release")).await;
+    let in_b = finished_child(&s, &lead.id, into(&b.id, "Lead in b")).await;
+    finished_child(&s, &in_b.id, into(&c.id, "Build in c")).await;
+    for (parent, start) in [
+        (&lead.id, child(SessionAgent::Claude, "Third")),
+        (&in_b.id, child(SessionAgent::Claude, "Third in b")),
+    ] {
+        let (code, message) = refused(&s, parent, start).await;
+        assert_eq!(code, OrchCode::StartsLimit, "{message}");
+    }
+    done(s).await;
 }
 
 /// A child in project B starts in B (no project, or B named): an ordinary child of its parent. Named project C, it

@@ -430,8 +430,8 @@ impl Workbench {
     /// or past the tree's starts (`starts_limit`); another agent than the parent's with cross-agent subsessions off
     /// (`agent_not_allowed`); a `project` other than the parent's own with cross-project subsessions off
     /// (`cross_project_off`), one that is not open or is archived (`project_not_open`) or one not trusted
-    /// (`project_untrusted`), at every hop; a mode the agent
-    /// does not offer (`bad_input`); no list prices at all (`unpriced_model`); no worktrees here
+    /// (`project_untrusted`), at every hop, and the same three for a child in its parent's own project when that is
+    /// not the root's; a mode the agent does not offer (`bad_input`); no list prices at all (`unpriced_model`); no worktrees here
     /// (`worktrees_unavailable`). A halt on the parent or on any session above it is refused too (`halted`), after its
     /// organization, and checked again just before the row is saved.
     ///
@@ -657,7 +657,11 @@ impl Workbench {
                 cross_agent_refusal(p.agent, "starts only {agent} subsessions"),
             );
         }
-        let place = self.child_project(p, child.project.as_deref())?;
+        // The tree's root is the chain's last session (the parent itself for a root).
+        let root_project = chain
+            .last()
+            .map_or(p.project_id.as_str(), |root| root.summary.project_id.as_str());
+        let place = self.child_project(p, child.project.as_deref(), root_project)?;
         // Another project's default mode is a ceiling too: the agent picked the project, not the person.
         let ceiling = place.mode.map_or(parent_mode, |mode| parent_mode.lower(mode));
         let mode = child.permission_mode.unwrap_or(ceiling).lower(ceiling);
