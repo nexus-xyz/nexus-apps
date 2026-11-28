@@ -14,6 +14,8 @@ mod partials;
 mod permission;
 mod rename;
 mod render;
+mod replies;
+mod replies_view;
 mod retention;
 mod uploads;
 mod workspace;
@@ -88,6 +90,8 @@ pub(super) struct SideChat {
     budget: Option<String>,
     /// A send held for the budget, and whether it was queued: it goes once the budget lifts.
     held: Option<bool>,
+    /// Stacked replies to passages of side answers (`replies.rs`).
+    replies: replies::Replies,
     answers: Vec<Entity<InputState>>,
     request: Option<String>,
     permission_reason: Entity<InputState>,
@@ -147,6 +151,8 @@ impl SideChat {
             }
         });
         let model_input = cx.new(|cx| InputState::new(window, cx).placeholder("Model identifier"));
+        let (replies, mut subscriptions) = replies::Replies::new(window, cx);
+        subscriptions.push(subscription);
         let mut chat = Self {
             retired: false,
             ready: true,
@@ -187,6 +193,7 @@ impl SideChat {
             file_drag: false,
             budget: None,
             held: None,
+            replies,
             answers: vec![],
             request: None,
             permission_reason: cx.new(|cx| InputState::new(window, cx).placeholder("Reason (optional)")),
@@ -203,7 +210,7 @@ impl SideChat {
             partial_poll: None,
             partial_epoch: 0,
             partial_revision: None,
-            _subscriptions: vec![subscription],
+            _subscriptions: subscriptions,
         };
         chat.watch_commands(window, cx);
         chat

@@ -24,6 +24,7 @@ struct Data {
     outbox: std::collections::VecDeque<operations::Outgoing>,
     uploading: Option<crate::attachments::Draft>,
     echo: Vec<echo::Echo>,
+    replies: (Vec<crate::workspace::stacked_replies::Reply>, u64),
     revision: u64,
     rewrite: Option<(i64, String, String)>,
     brought_back: bool,
@@ -76,6 +77,7 @@ impl RetainedChat {
                 outbox: Default::default(),
                 uploading: None,
                 echo: sent.map(echo::Echo::landed).into_iter().collect(),
+                replies: (vec![], 0),
                 revision: 0,
                 rewrite: None,
                 brought_back: false,
@@ -170,6 +172,7 @@ impl SideChat {
             outbox: std::mem::take(&mut self.outbox),
             uploading: self.uploading.take(),
             echo: std::mem::take(&mut self.echo),
+            replies: self.replies.keep(),
             revision: self.draft_revision,
             rewrite: self
                 .rewrite
@@ -224,6 +227,7 @@ impl SideChat {
         // The chips follow an upload still running; a finished one's answer clears it (`apply_commands`).
         chat.uploading = data.uploading;
         chat.echo = data.echo;
+        chat.replies.restore(data.replies);
         chat.brought_back = data.brought_back;
         chat.problem = data.problem;
         chat.note = data.note;

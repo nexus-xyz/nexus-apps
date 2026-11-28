@@ -273,7 +273,8 @@ impl SideChat {
             weak.update(cx, |this, cx| this.paste(item, cx)).unwrap_or(false)
         };
         let busy = self.summary.status.busy();
-        let has_text = !(self.input.read(cx).value().trim().is_empty() && self.draft.is_empty());
+        let has_text =
+            !(self.input.read(cx).value().trim().is_empty() && self.draft.is_empty() && self.replies.stack.is_empty());
         // A send in flight does not hold the next message: it waits in line (`commands.rs`).
         // A used-up budget fades Send, as the session's, and its tooltip says why; Enter still holds the message.
         let enabled = self.can_compose()
@@ -330,6 +331,8 @@ impl SideChat {
         let shell = self
             .composer_keys(composer_shell(false, p), cx)
             .debug_selector(|| "side-chat-composer".into())
+            // Stacked replies at the composer's top, as the session's (`replies_view.rs`).
+            .children(self.render_reply_chips(p, cx))
             // The attachments open and close in height, as the session composer's.
             .child(motion::reveal(
                 "side-draft-row",

@@ -172,6 +172,35 @@ fn a_queued_message_dropped_on_another_moves_there(cx: &mut TestAppContext) {
     assert_eq!(moved.args["before"], 4, "dragged down, it lands after its target");
 }
 
+/// A reply to a passage stacks over the composer, and the next send quotes each passage over its reply, then the
+/// composer's text, as a session's stacked replies.
+#[gpui_kit::test]
+fn stacked_replies_go_with_the_next_send(cx: &mut TestAppContext) {
+    let rpc = Rpc::default();
+    let (chat, cx) = chat(cx, &rpc);
+    chat.update_in(cx, |chat, window, cx| {
+        chat.replies.selected = Some("the passage".into());
+        chat.reply_to_selection(window, cx);
+        assert_eq!(chat.replies.composing.as_deref(), Some("the passage"));
+        chat.replies
+            .input
+            .update(cx, |input, cx| input.set_value("my reply", window, cx));
+        chat.add_reply(window, cx);
+        assert!(chat.replies.composing.is_none());
+        assert_eq!(chat.replies.stack.len(), 1);
+    });
+    let expected = chat.read_with(cx, |chat, _| {
+        crate::workspace::stacked_replies::message(&chat.replies.stack, "and this")
+    });
+    assert!(expected.starts_with("> the passage"), "{expected}");
+    type_and_send(&chat, cx, "and this", false);
+    let send = rpc.take("wb_send_files");
+    assert_eq!(send.args["text"], expected.as_str());
+    chat.read_with(cx, |chat, _| {
+        assert!(chat.replies.stack.is_empty(), "the stack went with it")
+    });
+}
+
 #[gpui_kit::test]
 fn a_refused_message_comes_back_ahead_of_what_was_typed_since(cx: &mut TestAppContext) {
     let rpc = Rpc::default();

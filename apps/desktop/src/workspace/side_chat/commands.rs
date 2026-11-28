@@ -123,7 +123,8 @@ impl SideChat {
         if !self.can_compose() || self.request.is_some() || self.secret_id.is_some() {
             return;
         }
-        let text = self.input.read(cx).value().to_string();
+        // Stacked replies go first, each passage quoted over its reply, then the composer's text (`replies.rs`).
+        let text = self.with_replies(self.input.read(cx).value().to_string());
         if text.trim().is_empty() && self.draft.is_empty() {
             return;
         }
@@ -132,6 +133,7 @@ impl SideChat {
             return;
         }
         self.held = None;
+        self.replies.sent();
         let draft = std::mem::take(&mut self.draft);
         self.input.update(cx, |input, cx| input.set_value("", window, cx));
         self.brought_back = false;

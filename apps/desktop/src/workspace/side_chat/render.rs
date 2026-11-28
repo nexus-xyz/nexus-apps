@@ -62,12 +62,19 @@ impl Render for SideChat {
             .bg(p.sidebar)
             .text_color(p.foreground)
             .text_size(px(13.))
+            // A passage selected in a side answer offers Reply; a press outside the reply box closes it (`replies.rs`).
+            .capture_any_mouse_down(cx.listener(|this, event, window, cx| this.cite_pointer_down(event, window, cx)))
+            .capture_any_mouse_up(cx.listener(|this, event, window, cx| this.cite_pointer_up(event, window, cx)))
             .capture_key_down(cx.listener(|this, event: &KeyDownEvent, window, cx| {
                 if this.paste_as_text(&event.keystroke, window, cx) {
                     cx.stop_propagation();
                 }
             }))
             .on_key_down(cx.listener(|this, event: &KeyDownEvent, window, cx| {
+                if event.keystroke.key.as_str() == "escape" && this.dismiss_cite(cx) {
+                    cx.stop_propagation();
+                    return;
+                }
                 if event.keystroke.key.as_str() == "escape" && this.renaming.is_some() {
                     this.end_rename(window, cx);
                     cx.stop_propagation();
@@ -93,6 +100,8 @@ impl Render for SideChat {
                 }
             }))
             .child(head)
+            .children(self.render_cite(p, cx))
+            .children(self.render_reply_box(p, cx))
             .child(
                 div()
                     .relative()
