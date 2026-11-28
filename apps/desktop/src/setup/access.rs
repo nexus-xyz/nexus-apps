@@ -62,7 +62,7 @@ impl Access {
     }
 }
 
-/// Permissions only owners hold (`OWNER` in `rs/crates/nexus-base/src/permissions.rs`). Every other one a line asks
+/// Permissions only owners hold (Gateway's `OWNER` set). Every other one a line asks
 /// for is an owner's and an admin's (`MANAGERS`).
 const OWNER_ONLY: &[&str] = &[
     "org.transfer",

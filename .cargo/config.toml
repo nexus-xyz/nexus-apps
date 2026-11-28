@@ -2,5 +2,5 @@
 # `target/` so it stays out of git and is removed with `cargo clean`. build.rs points the binary at it at run time.
 [env]
 CEF_PATH = { value = "target/cef", relative = true }
-# The logos Legal has not cleared are not in this repository: build.rs draws a generic stand-in for each.
+# The logos pending clearance are not in this repository: build.rs draws a generic stand-in for each.
 NEXUS_HELD_STAND_INS = "1"

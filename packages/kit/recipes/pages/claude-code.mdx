@@ -3,7 +3,7 @@ title: "Claude Code through Nexus Gateway"
 description: "Set up Claude Code so every model call goes through Nexus Gateway on your organization's key, metered and recorded."
 ---
 
-{/* Generated from eng/factory/kit/recipes/claude-code.json (nexus-recipe/1). Do not edit: change the recipe, then run `npx vitest run kit/src/recipes.test.ts -u` in eng/factory. */}
+{/* Generated from ../claude-code.json (nexus-recipe/1). Do not edit: change the recipe. */}
 
 <Callout title="Status: unclaimed">
   A recorded run, claude-code-2026-10-27-1 on 2026-10-27, Claude Code 2.1.312 and nexus 0.14.0+69e1c09, reached a first call in 1m 50s, but no claims register backs this page yet, so it makes no claim about the tool.
@@ -68,4 +68,4 @@ For each run with `--api`, Nexus points Claude Code at your Gateway's `/v1/anthr
 | claude-code-2026-10-26-1 | 2026-10-26 | 2.1.310 | 0.12.0+7d18f42 | 2m 03s | `provider_key` | pass |
 | claude-code-2026-10-27-1 | 2026-10-27 | 2.1.312 | 0.14.0+69e1c09 | 1m 50s | `provider_key` | pass |
 
-Each run is a record in `eng/factory/kit/recipes/runs/`, with its steps' times, the call and what got in the way.
+Each run is a record Nexus keeps, with its steps' times, the call and what got in the way.

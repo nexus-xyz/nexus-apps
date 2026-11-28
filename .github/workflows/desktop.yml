@@ -1,5 +1,5 @@
 # The desktop app (apps/desktop): clippy and tests on Linux, macOS and Windows. Unsigned, no secrets.
-# The logos Legal has not cleared are not in this repository: build.rs builds a generic stand-in for each, and the
+# The logos pending clearance are not in this repository: build.rs builds a generic stand-in for each, and the
 # tests that check a real logo's drawing skip.
 name: desktop
 
@@ -59,8 +59,8 @@ jobs:
       - uses: taiki-e/install-action@f7e5d7c961414b23f5b25b2da9294395d08513ad # v2.87.26
         with:
           tool: cargo-nextest@0.9.146
-      # Reports warnings without failing: the app still has dead-code warnings, as in the monorepo, where only the
-      # shared crates are held to -D warnings. Tighten to -D warnings once they are gone.
+      # Reports warnings without failing: the app still has dead-code warnings, and only the shared crates are held to
+      # -D warnings. Tighten to -D warnings once they are gone.
       - name: cargo clippy
         run: cargo clippy --locked -p nexus-desktop-gpui --all-targets
       - name: cargo nextest
