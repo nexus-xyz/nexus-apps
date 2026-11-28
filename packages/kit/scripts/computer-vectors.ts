@@ -1,9 +1,9 @@
 /**
- * Public test keys only. From eng/factory: npx vite-node kit/scripts/computer-vectors.ts [--name <computer name>] [--out <file>]
+ * Public test keys only. From packages/: npx vite-node kit/scripts/computer-vectors.ts [--name <computer name>] [--out <file>]
  *
  * Without options it writes the kit's vector (kit/src/fixtures/computer-v1.json). nexus-workbench keeps its own copy,
  * with another computer name: npx vite-node kit/scripts/computer-vectors.ts --name "Ada’s laptop 台" \
- *   --out services/frontend/core/desktop-gpui/crates/nexus-workbench/tests/fixtures/computer-v1.json
+ *   --out ../crates/nexus-workbench/tests/fixtures/computer-v1.json
  * The keys come from fixed seeds; the sealed request and reply take fresh randomness, so each run writes new bytes.
  */
 import { mkdirSync, writeFileSync } from "node:fs";

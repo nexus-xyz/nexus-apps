@@ -4,7 +4,7 @@ import { dataUrl, type ImageData } from "./chat-images";
 /**
  * Data files in chat: CSV, TSV, JSON, TXT, Markdown or XLSX, attached to a question in Nexus UI. The app
  * attaches none of its own. A question lists its files by name and size, as Nexus UI's `data-files.tsx` does, and
- * Retry sends them again with the question. The parts with no React Native in them, so `eng/factory`'s vitest runs them.
+ * Retry sends them again with the question. The parts with no React Native in them, so the repository's vitest runs them.
  */
 
 export const isDataFile = (attachment: ChatAttachmentRef) => attachment.type === "file";

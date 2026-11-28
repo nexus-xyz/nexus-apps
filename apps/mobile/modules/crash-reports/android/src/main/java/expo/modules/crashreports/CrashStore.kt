@@ -14,7 +14,7 @@ import java.util.Locale
 import java.util.TimeZone
 
 /**
- * The crashes the app has not sent yet, as `NativeCrash` (`eng/factory/kit/src/diagnostics.ts`). Two sources:
+ * The crashes the app has not sent yet, as `NativeCrash` (`packages/kit/src/diagnostics.ts`). Two sources:
  *
  * - Java crashes: an uncaught-exception handler writes the exception's class and message to a file, then lets the
  *   previous handler end the app. A fatal JavaScript error is skipped: React Native throws it as `JavascriptException`,
@@ -27,7 +27,7 @@ import java.util.TimeZone
  * crash's frames are in a tombstone, which needs a protobuf parser.
  */
 internal object CrashStore {
-  /** The newest crashes kept: the API's batch (`MAX_PENDING` in `eng/factory/kit/src/diagnostics.ts`). */
+  /** The newest crashes kept: the API's batch (`MAX_PENDING` in `packages/kit/src/diagnostics.ts`). */
   private const val LIMIT = 20
   private const val FILE = "nexus-crash-reports.json"
   private const val PREFS = "nexus-crash-reports"

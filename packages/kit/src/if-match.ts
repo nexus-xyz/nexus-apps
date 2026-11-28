@@ -11,7 +11,7 @@
  */
 
 /**
- * The edits that need `If-Match`: `IF_MATCH_REQUIRED` in `nexus-gateway/src/metrics/preconditions.rs` and the
+ * The edits that need `If-Match`: `IF_MATCH_REQUIRED` in the Gateway's preconditions and the
  * contract's `x-if-match: required` (nexus-api-service). Each path's `GET` serves the `ETag`.
  */
 // A copied list, as the Rust client's: derive it from the published contract once it ships `x-if-match`.

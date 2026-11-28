@@ -5,12 +5,12 @@ import { pathToFileURL } from "node:url";
 import { expect, it, vi } from "vitest";
 import { goToCellScript, readSheetSelection, sheetCellScript } from "./sheet-cell";
 
-// The pages host renders the sheet; it lives in nexus-pages-service. Set NEXUS_PAGES_SERVICE to a checkout
-// of it to run this test against its page; unset, it is skipped.
+// The pages host renders the sheet; it lives in nexus-pages-service. Set NEXUS_PAGES_SERVICE to the pages host's
+// directory in a checkout of it (the one holding `src/sheet.ts`) to run this test against its page; unset, it is skipped.
 const PAGES_SERVICE = process.env.NEXUS_PAGES_SERVICE;
 
 it.skipIf(!PAGES_SERVICE)("selects a range in the active rendered tab and leaves it selected after an out-of-range jump", async () => {
-  const { renderSheetPage } = await import(pathToFileURL(join(PAGES_SERVICE!, "eng/factory/services/frontend/core/pages-host/src/sheet.ts")).href);
+  const { renderSheetPage } = await import(pathToFileURL(join(PAGES_SERVICE!, "src/sheet.ts")).href);
   const html = new DOMParser().parseFromString(renderSheetPage(serializeSheet({ tabs: [
     { id: "early", name: "First", cells: { B2: { value: "Wrong tab" } } },
     { id: "later", name: "Second", cells: { B2: { value: "Right tab" } } },

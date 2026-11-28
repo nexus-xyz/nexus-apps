@@ -16,7 +16,9 @@
 // is that. The splash image is the mark alone, as wide as the image. White and Black are Brand v4's `--nx-white` and
 // `--nx-black`.
 //
-//   cd eng/factory/services/frontend/core/mobile && node scripts/app-icon.mjs
+//   cd apps/mobile && node scripts/app-icon.mjs
+//
+// It reads the mark from the desktop app's assets (`source` below); this repository does not carry that file yet.
 import { readFileSync, writeFileSync } from "node:fs";
 import { crc32, deflateSync } from "node:zlib";
 

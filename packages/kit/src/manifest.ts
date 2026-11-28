@@ -3,7 +3,7 @@
  * per pod) that serves `GET /manifest` with this shape. Nexus Core, Nexus UI and the `nexus` CLI are driven by it:
  * adding a capability means registering its URL with Core, not changing Core, the CLI or the UI.
  *
- * The Rust twin is `nexus-types::api::modules` (eng/factory/rs); change both together.
+ * The Rust twin is `nexus-types::api::modules` (Nexus's Rust services); change both together.
  */
 
 /** The verbs every product shares (03 §5). A module declares the subset it implements today. `status` (GET, and POST

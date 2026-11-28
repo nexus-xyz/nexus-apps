@@ -3,7 +3,7 @@ import type { DiagnosticPlatform, DiagnosticReport } from "./api";
 /**
  * The apps' error and crash reports, built here with no content: no prompt, answer, code or
  * token. A report keeps the error's name, the first line of its message and its top frames, each redacted as the
- * Gateway redacts a log line (`eng/factory/rs/crates/nexus-base/src/redact.rs`, whose rules `redact` repeats), and the
+ * Gateway redacts a log line (`nexus-base`'s `redact.rs`, whose rules `redact` repeats), and the
  * app's and OS's versions. The phone app (`mobile/src/reporting.tsx`), the desktop app and Nexus UI
  * (`ui/src/components/nexus-ui/reporting.tsx`) keep them and send them to `POST /v1/diagnostics/reports`, which writes
  * each one to the Gateway's log, and so to the observability store. Exported from `@nexus/kit` as `diagnostics`.

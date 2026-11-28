@@ -35,7 +35,7 @@ public class CrashReportsAppDelegateSubscriber: ExpoAppDelegateSubscriber {
 final class CrashStore: NSObject, MXMetricManagerSubscriber {
   static let shared = CrashStore()
 
-  /// The newest crashes kept: the API's batch (`MAX_PENDING` in `eng/factory/kit/src/diagnostics.ts`).
+  /// The newest crashes kept: the API's batch (`MAX_PENDING` in `packages/kit/src/diagnostics.ts`).
   private static let limit = 20
   /// The frames kept from the top of the crashed thread: the API's bound.
   private static let frames = 64

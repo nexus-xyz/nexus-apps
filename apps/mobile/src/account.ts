@@ -2,7 +2,7 @@ import { EMAIL_PENDING, invitationsClosed, invitationsCount, invitationsNotice, 
 
 /**
  * Global and Account settings on the phone (brand v5's P96, P68): the words a key's row, the referral page and the
- * accounts list say. No React Native here, so `eng/factory`'s vitest runs it.
+ * accounts list say. No React Native here, so the repository's vitest (`vitest.config.ts` at the root) runs it.
  */
 
 const DAY = 86_400_000;

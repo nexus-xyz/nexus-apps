@@ -4,7 +4,7 @@
  * desktop (S2.3) call it through their own server or core, and read the same types and events from here.
  *
  * The agent API is not Gateway: it is the person's own agent, the one `@nexus` is in Slack
- * (`eng/factory/services/frontend/agents/slack/src/api/`). The source of each wire type is its `render.ts`. It takes
+ * (its Slack agent service's `src/api/`, outside this repository). The source of each wire type is its `render.ts`. It takes
  * the person's own Nexus credential as `Authorization: Bearer <token>`.
  */
 import { BRIEF_PATH, briefRead, type AgentBriefRead } from "./agent-brief";

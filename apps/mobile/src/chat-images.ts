@@ -3,7 +3,7 @@ import { CHAT_IMAGE_LIMITS, type ChatAttachmentRef, type ChatImageInput, type Ch
 /**
  * Images in chat, as Nexus UI's `images.tsx` prepares them: PNG, JPEG, GIF or WebP; at most `SEND_SIDE` on a side;
  * within Gateway's limits (`CHAT_IMAGE_LIMITS`), with the web's wording when one is left out. The parts with no React
- * Native in them, so `eng/factory`'s vitest runs them; `images.tsx` picks, draws and opens the images.
+ * Native in them, so the repository's vitest runs them; `images.tsx` picks, draws and opens the images.
  */
 
 /** An image in the composer, ready to send: its bytes and what the tray and the viewer show. */

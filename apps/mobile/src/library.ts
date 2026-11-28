@@ -2,7 +2,7 @@ import type { PageComment, PageCreatedVia, PageFormat } from "@nexus/kit";
 
 /**
  * Artifacts on the phone (brand v5's P20, P75): what kind each is, the library's type pills, a doc's provenance line,
- * and a page's comments as threads. No React Native here, so `eng/factory`'s vitest runs it.
+ * and a page's comments as threads. No React Native here, so the repository's vitest runs it.
  */
 
 /** A Markdown page reads as a Doc; an HTML or React page runs as a Site; a whiteboard is a Board; a shared chat is a Chat. */

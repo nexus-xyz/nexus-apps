@@ -1,6 +1,6 @@
 /**
  * What the composer works out from its text (brand v5's P65 and P98): how many lines it holds, the editor's count, a
- * long paste turned into a file, and the `/` being typed. No React Native here, so `eng/factory`'s vitest runs it.
+ * long paste turned into a file, and the `/` being typed. No React Native here, so the repository's vitest runs it.
  */
 
 /** The composer's line height (P65·H: 16/22 in the box). */

@@ -61,7 +61,7 @@ const LIST_ITEM = /^(\s*)([-*+]|\d+[.)])\s+(\S.*)?$/;
 const indentOf = (spaces: string) => spaces.replace(/\t/g, "    ").length;
 
 /**
- * Dependent: the desktop's streaming view (`splitBlocks` in `services/frontend/core/desktop/src/workbench/streaming-prose.tsx`)
+ * Dependent: the desktop's streaming view (`splitBlocks` in its `streaming-prose.tsx`)
  * cuts an answer at blank lines outside code fences and `$$` / `\[` formulas, copying the openers below. A block that
  * can span a blank line (loose lists, `~~~` fences, indented code) needs the same rule there.
  */

@@ -5,7 +5,7 @@ import { AGENT_MAX_CHARS, CHAT_IMAGE_LIMITS } from "@nexus/kit";
  * and Save keeps them on the phone in the App Group's inbox: no upload and no model call. The app reads the inbox when
  * it opens (`modules/share-inbox`), asks where the import goes, and hands it to that composer as an unsent draft.
  *
- * The parts with no React Native in them, so `eng/factory`'s vitest runs them. The extension writes `import.json` in
+ * The parts with no React Native in them, so the repository's vitest runs them. The extension writes `import.json` in
  * Swift; everything here treats it as untrusted input.
  */
 

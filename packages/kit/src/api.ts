@@ -1,4 +1,4 @@
-/** Wire types of the public Nexus API (`/v1`). `services/frontend/core/interfaces/openapi.json` describes the same. */
+/** Wire types of the public Nexus API (`/v1`). The API's OpenAPI document describes the same. */
 import type { ArtifactSharingSettings, ChatSessionState } from "./artifacts";
 import type { ModuleManifest } from "./manifest";
 import type { DataFileType, PageFormat, PagePeer } from "./pages";
@@ -2752,7 +2752,7 @@ export type OAuthFinishRequest = { state: string; code: string; realmId?: string
 
 /**
  * `github` connector: `POST /v1/connectors/github/repo`. This and the module types below (`RunSummary`, `Page`,
- * `RunReport`) have Rust twins in `nexus-types::api::{connectors, modules}` (eng/factory/rs); change both together.
+ * `RunReport`) have Rust twins in `nexus-types::api::{connectors, modules}` (Nexus's Rust services); change both together.
  */
 export interface RepoInfo {
   owner: string;
