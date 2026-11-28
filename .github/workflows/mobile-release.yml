@@ -15,7 +15,8 @@
 #              APPLE_API_KEY_P8 (an App Store Connect key that can submit); NEXUS_MOBILE_EAS_PROJECT_ID,
 #              NEXUS_MOBILE_EAS_OWNER, NEXUS_MOBILE_IOS_BUNDLE_ID, NEXUS_MOBILE_APPLE_TEAM_ID,
 #              NEXUS_MOBILE_ANDROID_PACKAGE and NEXUS_MOBILE_ASC_APP_ID (the store accounts: not secrets, kept as
-#              secrets so this public repository's logs never show them).
+#              secrets so this public repository's logs never show them); BRAND_ASSETS_KEY (a read-only deploy key of
+#              the private nexus-xyz/nexus-brand, which holds Nexus's icons).
 #   variables  GCP_WORKLOAD_IDENTITY_PROVIDER and GCP_SERVICE_ACCOUNT (the Play uploader, through Workload Identity
 #              Federation: no key file), GOOGLE_PLAY_UPLOAD_CERT_SHA256, MOBILE_VERSION_CODE_BASE (added to the run
 #              number for Android's versionCode, which must stay above every code Play has seen),
@@ -86,18 +87,6 @@ jobs:
               exit 1
             fi
           fi
-          # A store build carries Nexus's icons. The export leaves them out (they are Nexus's marks), and without them
-          # app.config.ts falls back to Expo's default icon, which must never reach a store.
-          if [ "$mode" = release ]; then
-            missing="$(jq -r '.expo | [.icon, .ios.icon.light, .ios.icon.dark, .ios.icon.tinted, .android.icon,
-              .android.adaptiveIcon.foregroundImage, .android.adaptiveIcon.backgroundImage,
-              .android.adaptiveIcon.monochromeImage] | map(select(. != null)) | .[]' "$MOBILE/app.json" \
-              | sort -u | while read -r f; do [ -f "$MOBILE/$f" ] || printf '%s ' "$f"; done)"
-            if [ -n "$missing" ]; then
-              echo "::error::The store build's icons are not in the tree: $missing. Nothing was built."
-              exit 1
-            fi
-          fi
           # A store build comes only from a commit on main.
           if [ "$mode" = release ] && ! git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
             echo "::error::$GITHUB_REF_NAME points at ${GITHUB_SHA::10}, which is not on main. Nothing was built."
@@ -160,6 +149,41 @@ jobs:
           done
           if [ "${#missing[@]}" -ne 0 ]; then
             echo "::error title=The mobile-release environment is not set up::Not set: ${missing[*]}. Nothing was built."
+            exit 1
+          fi
+      # A store build carries Nexus's icons. The tree holds neutral stand-ins (assets/make_stand_ins.py; the icons are
+      # Nexus's marks, TRADEMARKS.md), and a release copies the real ones from the private nexus-xyz/nexus-brand, read
+      # with a read-only deploy key. A release stops when the key is not set, or when an image app.json names is still
+      # the stand-in this commit holds. A rehearsal, and a fork, builds with the stand-ins.
+      - name: Check the brand key
+        if: env.MODE == 'release'
+        env:
+          SET_BRAND_ASSETS_KEY: ${{ secrets.BRAND_ASSETS_KEY != '' }}
+        run: |
+          if [ "$SET_BRAND_ASSETS_KEY" != true ]; then
+            echo "::error title=The mobile-release environment is not set up::Not set: BRAND_ASSETS_KEY. Nothing was built."
+            exit 1
+          fi
+      - name: Check out Nexus's icons
+        if: env.MODE == 'release'
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          repository: nexus-xyz/nexus-brand
+          ssh-key: ${{ secrets.BRAND_ASSETS_KEY }}
+          persist-credentials: false
+          path: .nexus-brand
+      - name: Use Nexus's icons
+        if: env.MODE == 'release'
+        run: |
+          cp .nexus-brand/mobile/*.png "$MOBILE/assets/"
+          rm -rf .nexus-brand
+          stand_ins=()
+          for f in $(jq -r '[.expo | .. | strings | select(endswith(".png"))] | unique | .[]' "$MOBILE/app.json"); do
+            f="$MOBILE/${f#./}"
+            [ "$(git hash-object "$f")" != "$(git rev-parse "HEAD:$f")" ] || stand_ins+=("$f")
+          done
+          if [ "${#stand_ins[@]}" -ne 0 ]; then
+            echo "::error::Still the neutral stand-in, not Nexus's icon: ${stand_ins[*]}. Nothing was built."
             exit 1
           fi
       - name: The build's version, versionCode and settings
@@ -392,6 +416,41 @@ jobs:
           done
           if [ "${#missing[@]}" -ne 0 ]; then
             echo "::error title=The mobile-release environment is not set up::Not set: ${missing[*]}. Nothing was built."
+            exit 1
+          fi
+      # A store build carries Nexus's icons. The tree holds neutral stand-ins (assets/make_stand_ins.py; the icons are
+      # Nexus's marks, TRADEMARKS.md), and a release copies the real ones from the private nexus-xyz/nexus-brand, read
+      # with a read-only deploy key. A release stops when the key is not set, or when an image app.json names is still
+      # the stand-in this commit holds. A rehearsal, and a fork, builds with the stand-ins.
+      - name: Check the brand key
+        if: env.MODE == 'release'
+        env:
+          SET_BRAND_ASSETS_KEY: ${{ secrets.BRAND_ASSETS_KEY != '' }}
+        run: |
+          if [ "$SET_BRAND_ASSETS_KEY" != true ]; then
+            echo "::error title=The mobile-release environment is not set up::Not set: BRAND_ASSETS_KEY. Nothing was built."
+            exit 1
+          fi
+      - name: Check out Nexus's icons
+        if: env.MODE == 'release'
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          repository: nexus-xyz/nexus-brand
+          ssh-key: ${{ secrets.BRAND_ASSETS_KEY }}
+          persist-credentials: false
+          path: .nexus-brand
+      - name: Use Nexus's icons
+        if: env.MODE == 'release'
+        run: |
+          cp .nexus-brand/mobile/*.png "$MOBILE/assets/"
+          rm -rf .nexus-brand
+          stand_ins=()
+          for f in $(jq -r '[.expo | .. | strings | select(endswith(".png"))] | unique | .[]' "$MOBILE/app.json"); do
+            f="$MOBILE/${f#./}"
+            [ "$(git hash-object "$f")" != "$(git rev-parse "HEAD:$f")" ] || stand_ins+=("$f")
+          done
+          if [ "${#stand_ins[@]}" -ne 0 ]; then
+            echo "::error::Still the neutral stand-in, not Nexus's icon: ${stand_ins[*]}. Nothing was built."
             exit 1
           fi
       # The build profile EAS reads. Its `env` reaches the build on EAS: the store accounts and the build's settings.

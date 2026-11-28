@@ -7,6 +7,10 @@ The license covers the code only. It does not give you any rights to our names o
 Nexus Laboratories, Inc. owns the Nexus logo, related marks, and the name "Nexus" as used for our
 products.
 
+Our app icons are not in this repository. The app icon images here are neutral stand-ins (a white ring on grey, in
+`apps/desktop/assets/held/` and `apps/mobile/assets/`), which you may use and change under the MIT license. Official
+release builds replace them with our icons from a private source.
+
 ## What you can do
 
 - Say that your project is based on, compatible with, or works with Nexus or one of its apps, as long as it is true.

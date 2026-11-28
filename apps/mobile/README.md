@@ -213,8 +213,11 @@ The store accounts are not in `app.json` (open-source export, B12): `app.config.
 from the environment, and falls back to the `production` profile's `env` in an `eas.json` beside it, when there is one. Unset, a setting is
 left out, so a fork builds under its own accounts. Nexus's release workflow sets Nexus's from repository variables.
 
-The app icon and the splash come from the Nexus mark, which is not in this repository (TRADEMARKS.md): without the
-image files, `app.config.ts` leaves the icon and splash image settings out, and a build shows Expo's defaults.
+The icon and splash images in `assets/` are neutral stand-ins, a white ring on grey (`python3 -I assets/make_stand_ins.py`
+draws them). Nexus's own icon and splash come from the Nexus mark, which is not in this repository (TRADEMARKS.md): a
+store release copies them from the private `nexus-xyz/nexus-brand` repository and stops when any image is still a
+stand-in (`.github/workflows/mobile-release.yml`). A rehearsal, and a fork, builds with the stand-ins. Without an image
+file, `app.config.ts` leaves its setting out, and a build shows Expo's default.
 
 Color is brand v4's, with Nexus UI's light and dark values.
 `src/theme.ts` names the source of each value. Text is in the metals and clears 4.5:1 in both themes. The primary button
