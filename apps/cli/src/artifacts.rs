@@ -163,6 +163,14 @@ pub fn ui_link(config: &Config, path: &str) -> String {
     format!("{base}?next={}{hash}", enc(page))
 }
 
+/// The fast viewer's link (`viewer_url` in Gateway's `Links`): `<origin>/a/<key>`, the origin being Nexus UI's URL
+/// without its `/app`. A page's id opens there for anyone who may read the page, in no one organization.
+pub fn viewer_link(config: &Config, key: &str) -> String {
+    let base = config.ui_url.clone().unwrap_or_else(|| ui_url(&config.url, &|_| None));
+    let base = base.trim_end_matches('/');
+    format!("{}/a/{}", base.strip_suffix("/app").unwrap_or(base), enc(key))
+}
+
 /// Keep the session `nexus chat` continues.
 pub fn remember(cmd: &Cmd, session: Option<&str>) {
     let mut current = load_config(&cmd.ctx.config_path, &cmd.ctx.env_fn());

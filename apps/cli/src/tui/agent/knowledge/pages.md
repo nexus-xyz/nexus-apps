@@ -17,13 +17,13 @@ nexus pages versions <page-id>
 nexus pages restore <page-id> 1
 ```
 
-- `publish` prints the page's id (`pag_…`) and a line `View it: <link>`. Give the person that link.
+- `publish` prints the page's id (`pag_…`) and `View it: <link>`. Give the person that link. It opens for its owner and its shares' readers.
 - The format comes from the file name. `.md` and `.markdown` are Markdown. `.jsx` and `.tsx` are React. Any other name is HTML. `--format` names it.
 - The title is `--title`, else the file's `<title>` or first `#` heading, else the file name.
 - For a change that the person asks for, update the same page. Do not publish a second page.
-- `--base N` on `update` refuses the write when someone wrote a newer version than N.
+- `update --base N` refuses the write if someone wrote a version after N.
 - Versions never change. A version holds at most 16 MiB, and a page keeps at most 500 versions.
-- Do not paste a long page into the conversation when a page is clearer.
+- Do not paste a long page into the conversation.
 - In a Code session of Nexus for desktop, read `desktop` before you publish.
 
 ## See how it renders

@@ -22829,6 +22829,53 @@
         "x-nexus-permission": "artifacts.share"
       }
     },
+    "/v1/pages/{id}/link": {
+      "get": {
+        "tags": [
+          "Nexus Gateway › Pages"
+        ],
+        "operationId": "getPageLink",
+        "summary": "Where the fast viewer's /a/<page id> takes the caller. The page's owner gets the page's organization, to open /app/<org>/pages/<id>. Anyone else gets the share of the page they may read with the most access, to open /a/<artifactId>. By person: the caller needs no organization. 404 page_not_found when the caller owns no such page and reads no share of it; 403 pages_off.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_-]+$"
+            },
+            "description": "The page's id (`pag_…`)"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PageLink"
+                }
+              }
+            }
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "default": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "x-nexus-permission": "artifacts.read"
+      }
+    },
     "/v1/pages/{id}/comments": {
       "get": {
         "tags": [
@@ -50701,6 +50748,26 @@
           }
         },
         "description": "A signed frame URL for one version of a page, on the sandbox origin."
+      },
+      "PageLink": {
+        "type": "object",
+        "required": [
+          "pageId"
+        ],
+        "properties": {
+          "pageId": {
+            "type": "string"
+          },
+          "org": {
+            "type": "string",
+            "description": "For the page's owner: the page's organization as Nexus UI's paths name it (its slug, else its id)"
+          },
+          "artifactId": {
+            "type": "string",
+            "description": "For anyone else: the share to open at /a/<artifactId>"
+          }
+        },
+        "description": "Where /a/<page id> takes the caller. Exactly one of org and artifactId is set."
       },
       "PageComment": {
         "type": "object",

@@ -1,5 +1,6 @@
 //! Which Nexus pages a session published, for a shell that is not a webview (Nexus GPUI). A page comes from the
-//! agent's answer, as the viewer link `nexus pages publish` prints on its `View it:` line (`<Nexus UI>/app/<org>/pages/<page-id>`, or `/app?next=/pages/<page-id>` before an
+//! agent's answer, as the viewer link `nexus pages publish` prints on its `View it:` line (`<Nexus UI's origin>/a/<page-id>`;
+//! older CLIs print `<Nexus UI>/app/<org>/pages/<page-id>`, or `/app?next=/pages/<page-id>` before an
 //! organization is saved), or from a call of the built-in Nexus MCP server's `createPage` or `writePageVersion`,
 //! whose answer names the page. Pure, so the rules are tested on their own.
 
@@ -34,6 +35,8 @@ pub fn page_link(href: &str) -> Option<String> {
     let segments: Vec<&str> = path.strip_prefix('/')?.split('/').collect();
     let own = match segments.as_slice() {
         ["app", org, "pages", id] | ["app", org, "pages", id, ""] if !org.is_empty() && !id.is_empty() => Some(*id),
+        // The fast viewer's link by the page's own id, which the CLI prints.
+        ["a", id] | ["a", id, ""] if !id.is_empty() => Some(*id),
         _ => None,
     };
     let id = match own {
@@ -292,6 +295,11 @@ mod tests {
             page_link("https://gw.example.com/app?next=%2Fpages%2Fpag_2").as_deref(),
             Some("pag_2")
         );
+        // The fast viewer by the page's id; a share's `/a/art_…` is not a page's own link.
+        assert_eq!(page_link("https://nexus.inc/a/pag_3").as_deref(), Some("pag_3"));
+        assert_eq!(page_link("http://localhost:3000/a/pag_3/").as_deref(), Some("pag_3"));
+        assert_eq!(page_link("https://nexus.inc/a/art_3"), None);
+        assert_eq!(page_link("https://nexus.inc/a/pag_3/frame"), None);
     }
 
     #[test]

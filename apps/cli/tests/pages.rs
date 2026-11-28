@@ -262,9 +262,9 @@ fn publishes_a_file_with_its_own_title_and_format() {
     );
     assert!(r.seen[0].key.is_some());
     assert!(r.out.contains("✓ Published pag_new, version 1"), "{}", r.out);
-    // The viewer link, so an agent that published can print it.
+    // The viewer link, so an agent that published can print it: the fast viewer's, in no one organization.
     assert!(
-        r.out.contains("View it: ") && r.out.contains("/acme/pages/pag_new"),
+        r.out.contains("View it: ") && r.out.contains("/a/pag_new") && !r.out.contains("/acme/pages/"),
         "{}",
         r.out
     );
@@ -352,7 +352,7 @@ fn writes_a_version_on_a_base_and_surfaces_a_stale_base() {
     assert_eq!(r.code, 0, "{}", r.err);
     assert_eq!(r.seen[0].body, json!({ "content": SOURCE, "baseVersion": 2 }));
     assert!(r.out.contains("✓ Wrote pag_1, version 3"), "{}", r.out);
-    assert!(r.out.contains("/acme/pages/pag_1"), "{}", r.out);
+    assert!(r.out.contains("/a/pag_1"), "{}", r.out);
     let r = run_in(dir, &["pages", "update", "pag_1", "report.html", "--base", "1"]);
     assert_ne!(r.code, 0);
     assert!(r.err.contains("is at version 2, not 1"), "{}", r.err);
