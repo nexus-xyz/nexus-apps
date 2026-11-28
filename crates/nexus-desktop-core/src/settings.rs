@@ -159,8 +159,9 @@ pub struct Settings {
     /// The default first-start choice for projects without a saved preference.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub subsessions_first_start: Option<Preference>,
-    /// "Disable cross-agent subsessions": a subsession runs only its parent's agent, on every route. Off by default,
-    /// and written only when on.
+    /// The inverse of "Enable cross-agent subsessions" ([`Settings::cross_agent_subsessions_on`]): true, a subsession
+    /// runs only its parent's agent, on every route. False by default, and written only when true, so a saved choice
+    /// keeps its meaning.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub disable_cross_agent_subsessions: bool,
     /// "Enable cross-project subsessions": a subsession may run in another project open on this computer. Default true
@@ -675,6 +676,16 @@ impl Settings {
         self.subsessions.unwrap_or(true)
     }
 
+    /// "Enable cross-agent subsessions": on unless the person turned it off.
+    pub fn cross_agent_subsessions_on(&self) -> bool {
+        !self.disable_cross_agent_subsessions
+    }
+
+    /// The "Enable cross-agent subsessions" switch writes the stored setting, its inverse.
+    pub fn set_cross_agent_subsessions(&mut self, on: bool) {
+        self.disable_cross_agent_subsessions = !on;
+    }
+
     /// Cross-project subsessions: on unless the person turned them off.
     pub fn cross_project_subsessions_on(&self) -> bool {
         self.cross_project_subsessions.unwrap_or(true)
@@ -691,7 +702,7 @@ impl Settings {
             on: self.subsessions_on(),
             first_start: self.subsessions_first_start.unwrap_or_default(),
             limits: self.linked_limits(),
-            cross_agent_off: self.disable_cross_agent_subsessions,
+            cross_agent_off: !self.cross_agent_subsessions_on(),
             cross_project_on: self.cross_project_subsessions_on(),
         }
     }
@@ -1072,10 +1083,12 @@ mod tests {
         );
     }
 
-    /// "Disable cross-agent subsessions" is off in a file written before it, and reaches the engine when on.
+    /// "Enable cross-agent subsessions" is on in a file written before it, and turned off it reaches the engine. The
+    /// switch writes the stored setting's inverse, so a saved choice keeps its meaning.
     #[test]
     fn cross_agent_subsessions_are_allowed_unless_disabled() {
         let older: Settings = serde_json::from_str(r#"{"subsessions":true}"#).expect("a file without the switch reads");
+        assert!(Settings::default().cross_agent_subsessions_on() && older.cross_agent_subsessions_on());
         assert!(!older.subsessions().cross_agent_off);
         assert_eq!(
             serde_json::to_value(&older).expect("the settings serialize"),
@@ -1084,12 +1097,21 @@ mod tests {
         );
         let disabled: Settings =
             serde_json::from_str(r#"{"disableCrossAgentSubsessions":true}"#).expect("the setting reads");
+        assert!(!disabled.cross_agent_subsessions_on(), "the switch reads off");
         assert!(disabled.subsessions().cross_agent_off);
         assert!(disabled.subsessions().on, "the switch does not turn subsessions off");
         assert_eq!(
             serde_json::to_value(&disabled).expect("the settings serialize"),
             serde_json::json!({ "disableCrossAgentSubsessions": true })
         );
+        let mut toggled = Settings::default();
+        toggled.set_cross_agent_subsessions(false);
+        assert_eq!(
+            toggled, disabled,
+            "turning the switch off stores the old \"disable\" choice"
+        );
+        toggled.set_cross_agent_subsessions(true);
+        assert_eq!(toggled, Settings::default(), "turning it on writes nothing");
     }
 
     /// A reader that takes no lock, running beside many saves, never reads the file empty or half written: each read is

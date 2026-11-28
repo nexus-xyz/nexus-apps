@@ -1,7 +1,7 @@
 //! Subsessions of another agent through the public workbench, with the stand-ins: an agent Gateway has no route for
 //! runs on the person's own sign-in, a signed-out agent's failure reaches the parent as its result, the person's
-//! "Disable cross-agent subsessions" switch refuses another agent on both routes, and a mode the agent does not offer
-//! is refused rather than run looser. Each test replays one scenario.
+//! "Enable cross-agent subsessions" switch, turned off, refuses another agent on both routes, and a mode the agent
+//! does not offer is refused rather than run looser. Each test replays one scenario.
 
 mod support;
 
@@ -86,7 +86,7 @@ async fn a_signed_out_agents_failure_reaches_the_parent_as_its_result() {
     let _ = std::fs::remove_dir_all(&s.root);
 }
 
-/// With "Disable cross-agent subsessions" on, a lead starts only its own agent's subsessions, on Gateway and on the
+/// With "Enable cross-agent subsessions" off, a lead starts only its own agent's subsessions, on Gateway and on the
 /// person's plan; the refusal names the setting. Off again, another agent starts.
 #[tokio::test]
 async fn disabling_cross_agent_subsessions_refuses_another_agent_on_every_route() {
@@ -113,8 +113,11 @@ async fn disabling_cross_agent_subsessions_refuses_another_agent_on_every_route(
                 .unwrap_or_else(|| panic!("{via:?}: started {other:?}"));
             assert_eq!(refused.code, OrchCode::AgentNotAllowed, "{via:?} {other:?}");
             assert!(
-                refused.message.contains("\"Disable cross-agent subsessions\"")
-                    && refused.message.contains("only Claude Code subsessions"),
+                refused
+                    .message
+                    .contains("turned off \"Enable cross-agent subsessions\"")
+                    && refused.message.contains("only Claude Code subsessions")
+                    && refused.message.contains("Settings › Code › Subsessions"),
                 "{}",
                 refused.message
             );

@@ -107,8 +107,8 @@ pub struct Subsessions {
     pub on: bool,
     pub first_start: crate::session_choice::Preference,
     pub limits: Limits,
-    /// "Disable cross-agent subsessions": a subsession runs only its parent's agent, on every route
-    /// ([`Config::cross_agent_off`](crate::Config::cross_agent_off)). Off by default.
+    /// "Enable cross-agent subsessions" turned off: a subsession runs only its parent's agent, on every route
+    /// ([`Config::cross_agent_off`](crate::Config::cross_agent_off)). False by default.
     pub cross_agent_off: bool,
     /// "Enable cross-project subsessions": `start_session` may start a subsession in another project open here
     /// ([`Config::cross_project_on`](crate::Config::cross_project_on), [`cross_project`]). On by default.
@@ -147,7 +147,7 @@ pub enum OrchCode {
     OrgMismatch,
     /// The host has no list prices at all, so the tree's spend can't be counted.
     UnpricedModel,
-    /// The person turned on "Disable cross-agent subsessions": a subsession runs only its parent's agent.
+    /// The person turned off "Enable cross-agent subsessions": a subsession runs only its parent's agent.
     AgentNotAllowed,
     /// The project a start names is not open in Nexus, or is archived.
     ProjectNotOpen,
@@ -314,12 +314,15 @@ pub(crate) fn mode_refusal(agent: SessionAgent, mode: PermissionMode, ceiling: P
     })
 }
 
-/// Why another agent than `caller`'s is refused when the person turned on "Disable cross-agent subsessions": the
+/// Why another agent than `caller`'s is refused when the person turned off "Enable cross-agent subsessions": the
 /// caller starts or schedules only its own agent's: `what` is "starts only {agent} subsessions" or "schedules only
 /// {agent} sessions" with the agent filled in.
 pub(crate) fn cross_agent_refusal(caller: SessionAgent, what: &str) -> String {
     let what = what.replace("{agent}", harness(caller).label());
-    format!("The person turned on \"Disable cross-agent subsessions\" in Settings: this session {what}.")
+    format!(
+        "The person turned off \"Enable cross-agent subsessions\", so this session {what}. The person can turn it on \
+         in Settings › Code › Subsessions."
+    )
 }
 
 /// The agents Gateway has no route for, as people name them: a subsession of one runs on the person's own sign-in

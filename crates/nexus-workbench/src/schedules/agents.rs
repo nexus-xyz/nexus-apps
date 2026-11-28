@@ -38,7 +38,7 @@ impl Workbench {
 
     /// Adds a schedule on the caller's project, as the caller's agent asked. A schedule for another agent takes that
     /// agent's default model, the nearest effort it has under the caller's ([`effort_across`]), and its own sign-in
-    /// when Gateway has no route for it ([`child_via`]). With "Disable cross-agent subsessions" on, another agent is
+    /// when Gateway has no route for it ([`child_via`]). With "Enable cross-agent subsessions" off, another agent is
     /// refused.
     pub fn schedule_for(&self, caller: &str, request: AgentSchedule) -> Result<ScheduleView, OrchError> {
         let summary = self.caller_summary(caller)?;

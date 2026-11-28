@@ -376,10 +376,10 @@ impl Render for SubsessionsPage {
             .when(subsessions && self.device.is_some(), |page| {
                 page.child(self.on_off(
                     "subsessions-cross-agent",
-                    "Disable cross-agent subsessions",
-                    "Only allow subsessions that use the same agent.",
-                    self.settings.disable_cross_agent_subsessions,
-                    |settings, on| settings.disable_cross_agent_subsessions = on,
+                    "Enable cross-agent subsessions",
+                    "Let a subsession run another agent than its parent's.",
+                    self.settings.cross_agent_subsessions_on(),
+                    Settings::set_cross_agent_subsessions,
                     cx,
                 ))
                 .child(self.on_off(
