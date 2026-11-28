@@ -1240,6 +1240,12 @@ pub(crate) fn folds(plan: &PlanUsage) -> bool {
     plan.signed_in || plan.error.is_some()
 }
 
+/// Whether a row on the page folds. A copy (see [`duplicates`]) never does: its meters repeat the row above, even when
+/// a limit is nearly out or Remove copy waits for its second press.
+pub(crate) fn row_folds(plan: &PlanUsage, copies: &std::collections::HashSet<String>) -> bool {
+    folds(plan) && !copies.contains(&fold_key(plan))
+}
+
 /// A row's key in [`Plans::folds`]: the agent, and the account or the agent's own login.
 pub(crate) fn fold_key(plan: &PlanUsage) -> String {
     login_key(plan.agent, plan.account.as_deref())
@@ -1249,6 +1255,26 @@ pub(crate) fn fold_key(plan: &PlanUsage) -> String {
 /// element ids on it, so a row keeps both when the rows above it go.
 pub(crate) fn login_key(agent: SessionAgent, account: Option<&str>) -> String {
     format!("{}:{}", agent.as_str(), account.unwrap_or("own"))
+}
+
+/// The extra accounts signed in to a login an earlier row already holds: the same agent and email, added again by
+/// mistake. Their rows offer to remove the copy. Keyed by [`fold_key`]; the first row with a login is never one.
+pub(crate) fn duplicates(plans: &[PlanUsage]) -> std::collections::HashSet<String> {
+    let same = |a: &PlanUsage, b: &PlanUsage| {
+        a.agent == b.agent
+            && a.signed_in
+            && b.signed_in
+            && a.email
+                .as_deref()
+                .zip(b.email.as_deref())
+                .is_some_and(|(a, b)| a.eq_ignore_ascii_case(b))
+    };
+    plans
+        .iter()
+        .enumerate()
+        .filter(|(index, plan)| plan.account.is_some() && plans[..*index].iter().any(|earlier| same(earlier, plan)))
+        .map(|(_, plan)| fold_key(plan))
+        .collect()
 }
 
 /// A row starts open when it needs the person: not signed in, a failed read, or a limit nearly out.
@@ -1264,8 +1290,9 @@ pub(crate) fn tightest(plan: &PlanUsage) -> Option<&Limit> {
 #[cfg(test)]
 mod tests {
     use super::{
-        ACTIVE_NOTE, Limit, PlanUsage, Progress, SessionAgent, folds, groups, limit_label, login_command, plan_name,
-        plan_payer, plans, resets_in, starts_open, tightest, used_pct, window_label,
+        ACTIVE_NOTE, Limit, PlanUsage, Progress, SessionAgent, duplicates, fold_key, folds, groups, limit_label,
+        login_command, plan_name, plan_payer, plans, resets_in, row_folds, starts_open, tightest, used_pct,
+        window_label,
     };
 
     /// Each agent on its own plan names that plan: Antigravity's is Google AI, not Claude's.
@@ -1274,6 +1301,55 @@ mod tests {
         assert_eq!(plan_payer(SessionAgent::Claude), "Your Claude plan");
         assert_eq!(plan_payer(SessionAgent::Codex), "Your ChatGPT plan");
         assert_eq!(plan_payer(SessionAgent::Antigravity), "Your Google AI plan");
+    }
+
+    #[test]
+    fn an_account_added_twice_is_a_copy() {
+        let signed_in = |account: Option<&str>, email: &str| {
+            let init = serde_json::json!({"account": {"email": email, "subscriptionType": "Claude Team"}});
+            plans::read_claude(account.map(String::from), &init, None)
+        };
+        let own = signed_in(None, "sam@acme.dev");
+        let again = signed_in(Some("a_2"), "Sam@Acme.dev");
+        let second = signed_in(Some("a_3"), "sam.02@acme.dev");
+        let third = signed_in(Some("a_4"), "sam.02@acme.dev");
+        let signed_out = plans::read_claude(Some("a_5".into()), &serde_json::json!({}), None);
+        let list = vec![
+            own.clone(),
+            again.clone(),
+            second.clone(),
+            third.clone(),
+            signed_out.clone(),
+        ];
+        assert!(own.signed_in && again.signed_in, "the fixture signs in");
+        let copies = duplicates(&list);
+        assert_eq!(copies.len(), 2, "{copies:?}");
+        assert!(
+            copies.contains(&fold_key(&again)),
+            "the same email in another case is the same login"
+        );
+        assert!(copies.contains(&fold_key(&third)), "a copy of an extra account");
+        assert!(
+            !copies.contains(&fold_key(&own)) && !copies.contains(&fold_key(&second)),
+            "the first stays"
+        );
+        assert!(!copies.contains(&fold_key(&signed_out)));
+        assert!(row_folds(&own, &copies) && row_folds(&second, &copies));
+        assert!(!row_folds(&again, &copies), "a copy shows no meters");
+    }
+
+    /// A copy nearly out of its limit would start open; it still shows no meters.
+    #[test]
+    fn a_copy_near_its_limit_stays_folded() {
+        let mut list = sample();
+        list.truncate(1);
+        let mut again = list[0].clone();
+        again.account = Some("a_2".into());
+        list.push(again);
+        assert!(starts_open(&list[1]), "the fixture is nearly out");
+        let copies = duplicates(&list);
+        assert!(row_folds(&list[0], &copies));
+        assert!(!row_folds(&list[1], &copies));
     }
 
     fn sample() -> Vec<PlanUsage> {
