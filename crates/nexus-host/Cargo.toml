@@ -35,7 +35,7 @@ chrono = { version = "=0.4.45", default-features = false, features = ["clock", "
 # Pinned to the desktop app's versions.
 serde = { version = "=1.0.229", features = ["derive"] }
 serde_json = { version = "=1.0.154", features = ["preserve_order"] }
-tokio = { version = "=1.53.3", features = ["io-std", "io-util", "macros", "net", "rt-multi-thread", "signal", "sync", "time"] }
+tokio = { version = "=1.54.1", features = ["io-std", "io-util", "macros", "net", "rt-multi-thread", "signal", "sync", "time"] }
 futures = "=0.3.34"
 # The WebSocket, over the Unix socket (or the loopback port), and a cloud machine's line out to Gateway (its TLS is
 # nexus-remote's src/relay.rs).
@@ -44,15 +44,15 @@ tokio-tungstenite = { version = "=0.30.0", default-features = false, features = 
 nix = { version = "=0.31.3", default-features = false, features = ["fs", "hostname", "signal", "user"] }
 # Session sync (src/session_sync.rs): the device key file is base64url, and its text is wiped after use.
 base64 = "=0.22.1"
-zeroize = "=1.9.1"
+zeroize = "=1.9.2"
 # Codex's own config.toml, read to hand a native session's fence to the person's MCP servers (src/agent_files.rs).
-toml = { version = "=1.1.8", default-features = false, features = ["std", "parse", "serde"] }
+toml = { version = "=1.2.0", default-features = false, features = ["std", "parse", "serde"] }
 
 [dev-dependencies]
 # tests/remote.rs: a file attached in pieces is checked by its SHA-256.
 sha2 = "=0.11.1"
 # Paused time: src/server.rs's write stall tests run their 30 seconds at once.
-tokio = { version = "=1.53.3", features = ["test-util"] }
+tokio = { version = "=1.54.1", features = ["test-util"] }
 
 [lints.rust]
 unsafe_code = "forbid"

@@ -58,17 +58,17 @@ nexus-providers = { path = "../nexus-providers" }
 # Pinned to the desktop app's versions.
 serde = { version = "=1.0.229", features = ["derive"] }
 serde_json = { version = "=1.0.154", features = ["preserve_order"] }
-toml = { version = "=1.1.8", default-features = false, features = ["std", "parse", "serde"] }
-tokio = { version = "=1.53.3", features = ["io-util", "macros", "net", "process", "rt-multi-thread", "sync", "time"] }
+toml = { version = "=1.2.0", default-features = false, features = ["std", "parse", "serde"] }
+tokio = { version = "=1.54.1", features = ["io-util", "macros", "net", "process", "rt-multi-thread", "sync", "time"] }
 futures = "=0.3.34"
 rusqlite = { version = ">=0.40.2, <0.42", features = ["bundled"] }
-uuid = { version = "=1.28.0", features = ["v4", "v5", "v7"] }
+uuid = { version = "=1.29.3", features = ["v4", "v5", "v7"] }
 # The loopback MCP server the agents call for linked sessions (src/orchestra/): HTTP/1 only, the versions the app's
 # lockfile already has.
-hyper = { version = "=1.12.0", features = ["server", "http1"] }
+hyper = { version = "=1.13.0", features = ["server", "http1"] }
 hyper-util = { version = "=0.1.21", features = ["tokio", "server"] }
 http-body-util = "=0.1.5"
-bytes = "=1.12.1"
+bytes = "=1.12.2"
 portable-pty = "=0.9.0"
 # The native nexus CLI's download, checked against the SHA-256 the Gateway publishes (src/nexus_runtime.rs). The
 # version nexus-remote already pins.
@@ -80,7 +80,7 @@ chrono = { version = "=0.4.45", default-features = false, features = ["clock", "
 [dev-dependencies]
 # RustCrypto AES-GCM exercises encrypted replay in tests. Production crypto stays in the shared client core.
 aes-gcm = "=0.11.1"
-tokio = { version = "=1.53.3", features = ["test-util"] }
+tokio = { version = "=1.54.1", features = ["test-util"] }
 
 [target.'cfg(unix)'.dependencies]
 # Signals to the agent's whole process group (its MCP servers and shells die with it), and a pseudo-terminal's

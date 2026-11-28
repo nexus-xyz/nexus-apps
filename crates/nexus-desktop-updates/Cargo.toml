@@ -21,7 +21,7 @@ semver = "=1.0.28"
 # The same pins as Nexus GPUI.
 reqwest = { version = "=0.13.5", default-features = false, features = ["rustls-no-provider"], optional = true }
 rustls = { version = "=0.23.46", default-features = false, features = ["ring", "std", "tls12", "logging"], optional = true }
-tokio = { version = "=1.53.3", features = ["time"], optional = true }
+tokio = { version = "=1.54.1", features = ["time"], optional = true }
 
 [dev-dependencies]
-tokio = { version = "=1.53.3", features = ["macros", "rt", "sync", "net", "io-util"] }
+tokio = { version = "=1.54.1", features = ["macros", "rt", "sync", "net", "io-util"] }

@@ -21,10 +21,10 @@ serde_json = { version = "=1.0.154", features = ["preserve_order"] }
 # Chromium's AES-128-CBC values under its PBKDF2-SHA1 key, at the app's versions (`aes` and `cbc` through
 # `secret-service`, `ring` through `rustls`). The copy's folder has a random name.
 rusqlite = { version = "=0.41.1", features = ["bundled"] }
-aes = "=0.9.3"
+aes = "=0.9.4"
 cbc = { version = "=0.2.1", features = ["block-padding", "alloc"] }
 ring = "=0.17.14"
-uuid = { version = "=1.28.0", features = ["v4"] }
+uuid = { version = "=1.29.3", features = ["v4"] }
 # A website profile's id (src/profile.rs): the app's pin.
 sha2 = "=0.11.1"
 
@@ -37,7 +37,7 @@ secret-service = { version = "=5.2.0", features = ["rt-async-io-crypto-rust"] }
 keyring = "=4.2.0"
 
 [dev-dependencies]
-tokio = { version = "=1.53.3", features = ["macros", "rt"] }
+tokio = { version = "=1.54.1", features = ["macros", "rt"] }
 
 [lints.rust]
 unsafe_code = "forbid"

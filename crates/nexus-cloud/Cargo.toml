@@ -35,7 +35,7 @@ sha2 = "=0.11.1"
 # Pinned to the desktop app's (and nexus-client's) versions.
 serde = { version = "=1.0.229", features = ["derive"] }
 serde_json = { version = "=1.0.154", features = ["preserve_order"] }
-tokio = { version = "=1.53.3", features = ["fs", "io-util", "macros", "net", "process", "rt-multi-thread", "sync", "time"] }
+tokio = { version = "=1.54.1", features = ["fs", "io-util", "macros", "net", "process", "rt-multi-thread", "sync", "time"] }
 futures = "=0.3.34"
 # boat's HTTPS API. The app's own pin: `rustls-no-provider`, never `rustls` (which would pull aws-lc-rs), with ring
 # installed as rustls' provider before the first client is built, as nexus-client's `install_tls` does.
@@ -45,12 +45,12 @@ rustls = { version = "=0.23.46", default-features = false, features = ["ring", "
 # their content can never end a line early. The app's pin.
 base64 = "=0.22.1"
 # The `Idempotency-Key` on create, so a retried create never starts (and bills) a second machine.
-uuid = { version = "=1.28.0", features = ["v4"] }
+uuid = { version = "=1.29.3", features = ["v4"] }
 # The fake boat server (feature `fake`): HTTP/1 only, the versions nexus-workbench's loopback server already locks.
-hyper = { version = "=1.12.0", features = ["server", "http1"], optional = true }
+hyper = { version = "=1.13.0", features = ["server", "http1"], optional = true }
 hyper-util = { version = "=0.1.21", features = ["tokio", "server"], optional = true }
 http-body-util = { version = "=0.1.5", optional = true }
-bytes = { version = "=1.12.1", optional = true }
+bytes = { version = "=1.12.2", optional = true }
 
 [features]
 default = []
@@ -60,7 +60,7 @@ fake = ["dep:hyper", "dep:hyper-util", "dep:http-body-util", "dep:bytes"]
 [dev-dependencies]
 # The tests run against the fake boat server.
 nexus-cloud = { path = ".", features = ["fake"] }
-tokio = { version = "=1.53.3", features = ["macros", "rt-multi-thread"] }
+tokio = { version = "=1.54.1", features = ["macros", "rt-multi-thread"] }
 
 [lints.rust]
 unsafe_code = "forbid"

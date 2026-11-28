@@ -58,12 +58,12 @@ serde_json = { version = "=1.0.154", features = ["preserve_order"] }
 # The web host process's protocol (`src/web/protocol.rs`), typed on both sides.
 serde = { version = "1", features = ["derive"] }
 # `process`, `io-util` and `macros`: Nexus runs the agent's sign-in and reads it (`pages/subscriptions/login.rs`).
-tokio = { version = "=1.53.3", features = ["rt-multi-thread", "sync", "time", "process", "io-util", "macros"] }
+tokio = { version = "=1.54.1", features = ["rt-multi-thread", "sync", "time", "process", "io-util", "macros"] }
 futures = "=0.3.34"
 # The Code store's files, watched (`src/wakeups.rs`). Renamed: `src/notify.rs` is the notification rules.
 file_watch = { package = "notify", version = "8", default-features = false, features = ["macos_fsevent"] }
 # The body of an agent API call (`src/agent.rs`), as `nexus-client` takes it.
-bytes = "=1.12.1"
+bytes = "=1.12.2"
 # Schedules' times in this computer's time zone (`src/pages/schedules.rs`), as nexus-workbench reads them.
 chrono = { version = "=0.4.45", default-features = false, features = ["clock", "std"] }
 # This computer's IANA time zone, for the Assistant's quiet hours (`src/pages/assistant_views/proactivity.rs`). Already in
@@ -86,7 +86,7 @@ tokio-tungstenite = { version = "0.28", default-features = false, features = ["c
 # Artifacts and Nexus Pages (and later the canvas) render in CEF, Chromium's embedding framework, off screen: Chromium
 # paints each frame into a buffer that GPUI draws as an image, so a page scrolls, clips and sits under our own menus
 # like any other element, on every platform, Wayland included (`src/web/`). Prototype: no Chromium sandbox yet.
-cef = { version = "=156.3.0", default-features = false }
+cef = { version = "=156.7.0", default-features = false }
 # The viewer's Download saves in the Downloads folder (`attachments::downloads_dir`). The version the lockfile already has.
 dirs = "=6.0.0"
 # A page's frame as a GPUI image: GPUI's own versions. The codecs prepare attached images as the Nexus app's composer
@@ -99,15 +99,15 @@ hayro = "=0.9.0"
 # nexus-workbench takes them. nexus-workbench's pins.
 base64 = "=0.22.1"
 sha2 = "=0.11.1"
-uuid = { version = "=1.28.0", features = ["v4"] }
+uuid = { version = "=1.29.3", features = ["v4"] }
 smallvec = "1"
 # CPU frames: the web host and the app map each page's frame file (`src/web/cpu.rs`). The version the lockfile already has.
 memmap2 = "=0.9.12"
 # GPUI's HTTP client (`src/http.rs`), for remote images: the same pin as nexus-client's, whose TLS setup it uses.
 reqwest = { version = "=0.13.5", default-features = false, features = ["rustls-no-provider"] }
-anyhow = "=1.0.104"
+anyhow = "=1.0.105"
 # A crash report's text, redacted before it leaves the computer (`src/redact.rs`): the Gateway's pin.
-regex = "=1.13.1"
+regex = "=1.13.2"
 # Skills promotion name warnings use the web's NFKC rule; same pin as nexus-client's workspace.
 unicode-normalization = "=0.1.26"
 # Voice mode reads an answer's Markdown as sentences to say (`src/voice/spoken.rs`): the parser GPUI Kit's Markdown

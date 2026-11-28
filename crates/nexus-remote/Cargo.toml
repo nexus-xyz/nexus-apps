@@ -17,7 +17,7 @@ nexus-workbench = { path = "../nexus-workbench" }
 # Pinned to the desktop app's versions.
 serde = { version = "=1.0.229", features = ["derive"] }
 serde_json = { version = "=1.0.154", features = ["preserve_order"] }
-tokio = { version = "=1.53.3", features = ["fs", "io-util", "macros", "net", "process", "rt-multi-thread", "sync", "time"] }
+tokio = { version = "=1.54.1", features = ["fs", "io-util", "macros", "net", "process", "rt-multi-thread", "sync", "time"] }
 futures = "=0.3.34"
 # The host's WebSocket, over the SSH child's standard input and output, or through Gateway (src/relay.rs).
 tokio-tungstenite = { version = "=0.30.0", default-features = false, features = ["handshake"] }
@@ -36,7 +36,7 @@ nexus-desktop-updates = { path = "../nexus-desktop-updates" }
 nix = { version = "=0.31.3", default-features = false, features = ["signal"] }
 
 [dev-dependencies]
-tokio = { version = "=1.53.3", features = ["macros", "rt-multi-thread", "test-util"] }
+tokio = { version = "=1.54.1", features = ["macros", "rt-multi-thread", "test-util"] }
 
 [lints.rust]
 unsafe_code = "forbid"
