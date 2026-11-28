@@ -25,9 +25,9 @@ pub const RETRY_MAX_MS: u64 = 60 * 60_000;
 pub const STUCK_AFTER: u32 = 3;
 /// The public download page. It offers only the stable channel.
 pub const DOWNLOAD_PAGE: &str = "https://nexus.inc/download";
-/// The internal channel's installer (README.md, "Distribution"). It needs a gcloud sign-in with a Nexus account. It is
-/// configuration: Nexus's release builds set `NEXUS_DESKTOP_INTERNAL_INSTALL` (factory-release.yml). A build without it
-/// (a local or open-source build) offers the download page on the internal channel too.
+/// The internal channel's installer (README.md, "Distribution"), for Nexus staff. It is configuration: Nexus's release
+/// builds set `NEXUS_DESKTOP_INTERNAL_INSTALL`. A build without it (a local or open-source build) offers the download
+/// page on the internal channel too.
 pub const INTERNAL_INSTALL: Option<&str> = match option_env!("NEXUS_DESKTOP_INTERNAL_INSTALL") {
     Some(command) if !command.is_empty() => Some(command),
     _ => None,

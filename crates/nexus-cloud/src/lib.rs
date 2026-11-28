@@ -146,7 +146,7 @@ pub type Result<T> = std::result::Result<T, Error>;
 pub enum Size {
     Small,
     Default,
-    /// What the app creates: builds and dev servers of a monorepo want the room.
+    /// What the app creates: builds and dev servers of a large repository want the room.
     #[default]
     Large,
     #[serde(rename = "xlarge")]

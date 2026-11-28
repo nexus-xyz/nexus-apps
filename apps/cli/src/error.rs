@@ -260,7 +260,7 @@ pub fn to_cli_error(error: &Error, url: &str) -> CliError {
         }
         Error::Transport(Transport::Unreachable(_)) if is_local(url) => CliError::hint(
             format!("Cannot reach Nexus Gateway at {url}."),
-            "Is it running? Start it with `npm run dev:core` in eng/factory, or point the CLI elsewhere with `nexus auth login --url <core>`.",
+            "Is it running? Start your local Gateway, or point the CLI elsewhere with `nexus auth login --url <core>`.",
         ),
         Error::Transport(Transport::Unreachable(_)) => CliError::hint(
             format!("Cannot reach Nexus Gateway at {url}."),
@@ -274,7 +274,7 @@ pub fn to_cli_error(error: &Error, url: &str) -> CliError {
     }
 }
 
-/// A Gateway on this machine: only then do hints name the monorepo's dev commands.
+/// A Gateway on this machine: only then do hints tell the person to start it.
 pub fn is_local(url: &str) -> bool {
     reqwest::Url::parse(url)
         .ok()
@@ -465,7 +465,7 @@ mod tests {
             module
                 .hint
                 .as_deref()
-                .is_some_and(|hint| hint.contains("nexus modules") && !hint.contains("eng/factory"))
+                .is_some_and(|hint| hint.contains("nexus modules") && !hint.contains("local Gateway"))
         );
         let local = to_cli_error(
             &core(502, "Nexus Review did not answer: fetch failed", "module_unavailable"),
@@ -630,8 +630,8 @@ mod tests {
             ))
         };
         let hint = |url| to_cli_error(&down(), url).hint.unwrap_or_default();
-        assert!(hint("http://localhost:3100").contains("npm run dev:core"));
-        assert!(!hint("https://gateway.example.test").contains("eng/factory"));
+        assert!(hint("http://localhost:3100").contains("Start your local Gateway"));
+        assert!(!hint("https://gateway.example.test").contains("local Gateway"));
         let tls = Error::Transport(Transport::Unreachable(
             "error sending request: client error (Connect): invalid peer certificate: UnknownIssuer".into(),
         ));

@@ -1,1 +1,1 @@
-# This crate reads no clippy rules in the monorepo. This empty file keeps it so here (oss/export.py).
+# This crate reads no clippy rules. This empty file keeps it that way.

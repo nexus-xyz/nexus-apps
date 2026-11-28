@@ -18,7 +18,7 @@ A topic is true only while someone keeps it true. Change it in the same pull req
 2. Write only what works today on `main`. Name what is off by default, and who may use it.
 3. Show the real command. A test checks each `nexus` command and each `--flag` against the CLI's catalog.
 4. Say what the agent itself must do or must not do, when that differs from what a person does.
-5. From `eng/factory/rs`, run `cargo test --locked -p nexus-cli tui::agent`.
+5. From the repository root, run `cargo test --locked -p nexus-cli tui::agent`.
 
 ## Add a topic
 
@@ -38,7 +38,7 @@ A topic is true only while someone keeps it true. Change it in the same pull req
   `{{policy_agents}}` (the agents a policy applies to).
 - Do not write a price, a date or a number that changes. Name the command that shows it.
 - Never write a secret, and never tell the agent to run a command that takes one. `auth.md` has the rule.
-- Follow [the positioning](../../../../../../../../../strategy/factory/POSITIONING.md): say only what has shipped.
+- Say only what has shipped.
 
 ## What the tests hold
 

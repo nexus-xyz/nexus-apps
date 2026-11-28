@@ -1,8 +1,14 @@
 # Internal-reference blocklist. gitleaks 8.30.1. These are not secrets: they are names and links that point at
-# private systems and mean nothing to a reader of this repository. The gate reports them and never fails on them.
+# private systems and mean nothing to a reader of this repository. A finding fails the gate.
 # Read README.md in this folder before adding a rule or an exception.
 
 title = "Nexus: internal references"
+
+[[rules]]
+id = "private-repo-path"
+description = "A path or workflow in Nexus's private repositories. Readers of this repository cannot open it."
+regex = '''eng/factory|oss/(?:export|INVENTORY|go-no-go|split-rehearsal)|factory-release'''
+keywords = ["eng/factory", "oss/", "factory-release"]
 
 [[rules]]
 id = "internal-ticket-id"
