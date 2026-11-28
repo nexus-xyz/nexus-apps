@@ -1852,4 +1852,43 @@ mod tests {
         let text: String = term.renderable_content().display_iter.map(|cell| cell.cell.c).collect();
         assert!(text.contains(&format!("at:{}", dir.display())), "{text}");
     }
+
+    /// A test's shell has the test home and keeps its history there, never in the person's `~/.bash_history`.
+    #[cfg(unix)]
+    #[test]
+    fn a_test_shell_keeps_its_home_and_history_under_the_test_root() {
+        let (input, _) = channel();
+        let term = Arc::new(Mutex::new(Term::new(
+            Config::default(),
+            &TermSize::new(200, 24),
+            Listener(input),
+        )));
+        let (shell, ended) = spawn(
+            &std::env::temp_dir(),
+            Some("/bin/sh"),
+            200,
+            24,
+            term.clone(),
+            OutputWake::default(),
+        )
+        .unwrap_or_else(|error| panic!("{error}"));
+        let _ = shell
+            .input
+            .send(b"echo \"home:$HOME\"; echo \"history:$HISTFILE\"; exit\n".to_vec());
+        for _ in 0..100 {
+            if ended.load(Ordering::Relaxed) {
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(50));
+        }
+        let term = term.lock().unwrap_or_else(|error| panic!("{error}"));
+        let text: String = term.renderable_content().display_iter.map(|cell| cell.cell.c).collect();
+        let home = crate::code_run::test_agents::home();
+        assert!(home.starts_with(crate::paths::test_root()), "{}", home.display());
+        assert!(text.contains(&format!("home:{}", home.display())), "{text}");
+        assert!(
+            text.contains(&format!("history:{}", home.join(".sh_history").display())),
+            "{text}"
+        );
+    }
 }
