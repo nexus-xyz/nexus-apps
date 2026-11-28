@@ -563,6 +563,22 @@ impl Workspace {
         cx.notify();
     }
 
+    /// Allow always… opens the open request's rules, or closes them. They come after its long command, under the
+    /// tray's fold, so the tray scrolls until they show.
+    fn toggle_rules(&mut self, cx: &mut Context<Self>) {
+        self.toggle_dock_menu(Menu::Always, cx);
+        let View::Code(view) = &self.view else { return };
+        let queue = &view.dock.permissions;
+        if view.dock.menu == Some(Menu::Always)
+            && let Some(ix) = queue
+                .pending(&view.blocks)
+                .iter()
+                .position(|block| tool_request(block) == queue.open.as_deref())
+        {
+            queue.scroll.scroll_to_item(ix + 1);
+        }
+    }
+
     /// Where the open session runs, for the card's location line.
     fn approval_place(&self, thread: &str) -> RunsOn {
         let machines = crate::machines::get();
@@ -672,7 +688,7 @@ impl Workspace {
         let mut footer = None;
         let rows: Vec<_> = pending
             .into_iter()
-            .map(|block| {
+            .flat_map(|block| {
                 let Block::Approval {
                     request_id,
                     tool,
@@ -702,6 +718,7 @@ impl Workspace {
                     .map(str::to_owned)
                     .unwrap_or_else(|| self.agents_folder_label());
                 let mut row = v_flex().w_full().gap(px(6.)).child(header);
+                let mut remembered = None;
                 if !open {
                     row = row.child(request_folder(request_id, cwd, palette));
                 } else {
@@ -739,10 +756,12 @@ impl Workspace {
                                             false,
                                             palette,
                                         )
+                                        .debug_selector({
+                                            let selector = format!("permission-always-{request_id}");
+                                            move || selector
+                                        })
                                         .when(!busy, |button| {
-                                            button.on_click(
-                                                cx.listener(|this, _, _, cx| this.toggle_dock_menu(Menu::Always, cx)),
-                                            )
+                                            button.on_click(cx.listener(|this, _, _, cx| this.toggle_rules(cx)))
                                         }),
                                     )
                                 })
@@ -833,13 +852,14 @@ impl Workspace {
                         .into_any_element(),
                     );
                     if view.dock.menu == Some(Menu::Always) {
+                        let mut list = v_flex().w_full().gap(px(6.));
                         for rule in rules {
                             let id = request_id.clone();
                             let title = match rule.code {
                                 Some(code) => format!("{} {code}", rule.title),
                                 None => rule.title,
                             };
-                            row = row.child(remember_rule(
+                            list = list.child(remember_rule(
                                 title,
                                 rule.scope,
                                 answer_button(
@@ -850,6 +870,10 @@ impl Workspace {
                                     palette,
                                 )
                                 .rounded_full()
+                                .debug_selector({
+                                    let selector = format!("permission-rule-{request_id}-{}", rule.index);
+                                    move || selector
+                                })
                                 .when(!busy, |button| {
                                     button.on_click(cx.listener(move |this, _, _, cx| {
                                         this.answer_tool_request(
@@ -863,9 +887,11 @@ impl Workspace {
                                 palette,
                             ));
                         }
+                        remembered = Some(list.into_any_element());
                     }
                 }
-                row
+                // The rules are the body's next child, so opening them scrolls them into view (`toggle_rules`).
+                std::iter::once(row.into_any_element()).chain(remembered)
             })
             .collect();
         let body = v_flex()

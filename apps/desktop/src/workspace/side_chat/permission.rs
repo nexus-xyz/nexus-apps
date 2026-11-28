@@ -73,7 +73,9 @@ impl SideChat {
             )
             .child(queue::exact_request(request_id, queue::payload(tool, input), p))
             .child(code_dock::reason_field(&self.permission_reason, p));
+        let mut remembered = None;
         if self.remember_open {
+            let mut list = v_flex().w_full().gap(px(6.));
             for rule in &rules {
                 let request = request_id.clone();
                 let index = rule.index;
@@ -81,7 +83,7 @@ impl SideChat {
                     Some(code) => format!("{} {code}", rule.title),
                     None => rule.title.clone(),
                 };
-                row = row.child(queue::remember_rule(
+                list = list.child(queue::remember_rule(
                     title,
                     rule.scope,
                     code_dock::answer_button(
@@ -92,6 +94,7 @@ impl SideChat {
                         p,
                     )
                     .rounded_full()
+                    .debug_selector(move || format!("side-rule-{index}"))
                     .when(enabled, |button| {
                         button.on_click(cx.listener(move |this, _, window, cx| {
                             this.decide_permission(request.clone(), Decision::AllowSession, Some(index), window, cx)
@@ -100,6 +103,7 @@ impl SideChat {
                     p,
                 ));
             }
+            remembered = Some(list);
         }
         let (allow, deny) = (request_id.clone(), request_id.clone());
         let actions = queue::request_actions()
@@ -119,6 +123,10 @@ impl SideChat {
                         .when(enabled, |button| {
                             button.on_click(cx.listener(|this, _, _, cx| {
                                 this.remember_open = !this.remember_open;
+                                // The rules come after the long command, under the fold: scroll until they show.
+                                if this.remember_open {
+                                    this.permission_scroll.scroll_to_item(1);
+                                }
                                 cx.notify();
                             }))
                         }),
@@ -135,11 +143,14 @@ impl SideChat {
             );
         let body = v_flex()
             .id("side-permission-body")
+            .track_scroll(&self.permission_scroll)
             .w_full()
             .min_h(px(0.))
             .max_h(px(PERMISSION_LIMIT - 112.))
             .overflow_y_scroll()
-            .child(row);
+            .gap(px(6.))
+            .child(row)
+            .children(remembered);
         div()
             .w_full()
             .debug_selector(|| "side-permission-card".into())
