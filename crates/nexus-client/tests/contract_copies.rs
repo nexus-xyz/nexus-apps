@@ -1,8 +1,7 @@
-//! `contract/openapi.json` is a copy of `openapi/gateway.json` from nexus-xyz/nexus-api-service: the Gateway's
-//! document, cleaned of server-only details by that repo's generator (`tools/openapi-gen/redact.cjs`). Copy it from
-//! there, never from the Gateway: `cp <nexus-api-service>/openapi/gateway.json crates/nexus-client/contract/openapi.json`.
-//! `contract/mcp-tools.json` is this crate's own list. The copy cannot be compared with its source here, so this test
-//! checks that it is the cleaned one.
+//! `contract/openapi.json` is a byte-for-byte copy of `docs/openapi/gateway.json`: the Gateway's document, cleaned of
+//! server-only details before it is published here. The publish sync writes both files in the same pull request. To
+//! refresh by hand: `cp docs/openapi/gateway.json crates/nexus-client/contract/openapi.json`. The crate keeps its own
+//! copy because it embeds it and is published alone. `contract/mcp-tools.json` is this crate's own list.
 
 use std::path::Path;
 
@@ -33,7 +32,7 @@ fn the_contract_copy_is_the_cleaned_one() {
         .collect();
     assert!(
         names.is_empty(),
-        "contract/openapi.json names server settings ({names:?}): copy nexus-api-service's openapi/gateway.json"
+        "contract/openapi.json names server settings ({names:?}): copy docs/openapi/gateway.json"
     );
     for internal in [
         "nexus-org-logos",
@@ -45,9 +44,23 @@ fn the_contract_copy_is_the_cleaned_one() {
     ] {
         assert!(
             !text.contains(internal),
-            "contract/openapi.json has {internal}: copy nexus-api-service's openapi/gateway.json"
+            "contract/openapi.json has {internal}: copy docs/openapi/gateway.json"
         );
     }
+}
+
+#[test]
+fn the_contract_copy_equals_the_published_document() {
+    let manifest = Path::new(env!("CARGO_MANIFEST_DIR"));
+    // In the repository only: the published crate has no `docs/` next to it.
+    let Ok(source) = std::fs::read(manifest.join("../../docs/openapi/gateway.json")) else {
+        return;
+    };
+    let copy = std::fs::read(manifest.join("contract/openapi.json")).expect("the copy is read");
+    assert!(
+        copy == source,
+        "contract/openapi.json differs from docs/openapi/gateway.json: cp docs/openapi/gateway.json crates/nexus-client/contract/openapi.json"
+    );
 }
 
 #[test]
