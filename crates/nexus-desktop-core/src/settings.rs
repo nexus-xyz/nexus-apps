@@ -680,6 +680,11 @@ impl Settings {
         self.cross_project_subsessions.unwrap_or(true)
     }
 
+    /// The person's choice for "Enable cross-project subsessions", as the Subsessions page saves it.
+    pub fn set_cross_project_subsessions(&mut self, on: bool) {
+        self.cross_project_subsessions = Some(on);
+    }
+
     /// The switch and the limits, as the engine applies them (`Workbench::set_subsessions`).
     pub fn subsessions(&self) -> Subsessions {
         Subsessions {

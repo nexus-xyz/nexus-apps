@@ -387,7 +387,7 @@ impl Render for SubsessionsPage {
                     "Enable cross-project subsessions",
                     "Let a subsession run in another open, trusted project.",
                     self.settings.cross_project_subsessions_on(),
-                    |settings, on| settings.cross_project_subsessions = Some(on),
+                    Settings::set_cross_project_subsessions,
                     cx,
                 ))
                 .child(self.first_start(palette, cx))

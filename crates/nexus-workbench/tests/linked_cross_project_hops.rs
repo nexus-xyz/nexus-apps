@@ -98,6 +98,22 @@ async fn a_start_back_in_the_roots_project_is_trust_checked() {
     done(s).await;
 }
 
+/// The person's Settings reach the engine through `set_subsessions`, as the app hands them on: turned off, a first
+/// cross-project start is refused; turned on again, it starts.
+#[tokio::test]
+async fn set_subsessions_turns_cross_project_starts_off_and_on() {
+    let s = setup("cross-set-subsessions", Limits::default());
+    let b = trusted_repo(&s, "brepo");
+    let lead = root(&s, new_root(&s.project, "Plan the release")).await;
+    cross_project(&s, false);
+    let (code, message) = refused(&s, &lead.id, into(&b.id, "Build in b")).await;
+    assert_eq!(code, OrchCode::CrossProjectOff, "{message}");
+    cross_project(&s, true);
+    let in_b = finished_child(&s, &lead.id, into(&b.id, "Build in b")).await;
+    assert!(in_b.cross_project);
+    done(s).await;
+}
+
 /// A second hop is refused when the setting is off, and when the third project is archived.
 #[tokio::test]
 async fn a_second_hop_is_refused_off_or_archived() {
