@@ -1,0 +1,1535 @@
+# Path items. The root openapi.yaml references each one.
+/v1/threads:
+  get:
+    tags:
+      - Threads
+    operationId: listSyncedThreads
+    summary: >-
+      Your synced threads in this organization, newest first, with their readable summaries; for an auditor, one
+      member's or every member's; for a teammate, the team-visible ones.
+    description: >-
+      A deleted thread is not listed. Page with `before`, as `nextBefore` gives it. With `person` naming another member,
+      or `scope=org`, the caller needs `synced_sessions.audit`, reads only this organization's threads, and each page is
+      recorded in the audit log as `synced_session.audit_read` before it is served. This read applies under every
+      content policy: the summary is usage metadata, and the sealed events open only with a copy for the organization's
+      recovery key. With order=activity, use the scoped nextCursor tuple instead of before; nextBefore is null. The
+      indexed query orders by server updated_at, not the client event timestamp. Titles and project paths remain
+      encrypted. With `scope=team`, any member lists the organization's team-visible threads (not private), or one
+      member's with `person`, unaudited; the list is empty while `multiplayerSessions` is off.
+    parameters:
+      - name: scope
+        in: query
+        required: false
+        schema:
+          type: string
+          enum:
+            - org
+            - team
+            - following
+        description: >-
+          `org`: every member's threads (`synced_sessions.audit`). `team`: the team-visible threads, to any member while
+          `multiplayerSessions` is on; with `person`, one member's. `following`: the team-visible threads you follow
+          (creation order only)
+      - name: person
+        in: query
+        required: false
+        schema:
+          type: string
+        description: >-
+          One member's threads (`users.id`): yours without a permission, another's with `synced_sessions.audit`, or with
+          `scope=team` another's team-visible ones
+      - name: before
+        in: query
+        required: false
+        schema:
+          type: string
+        description: The `nextBefore` of the previous page
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 200
+        description: At most this many threads, 1 to 200; 50 when absent
+      - name: order
+        in: query
+        required: false
+        schema:
+          type: string
+          enum:
+            - creation
+            - activity
+        description: Creation order by default. Activity order uses server updated_at DESC and thread_id DESC.
+      - name: cursor
+        in: query
+        required: false
+        schema:
+          type: string
+        description: >-
+          Opaque precise nextCursor; only with order=activity and the same verified read scope. Cannot combine with
+          before.
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - $ref: ../components/schemas.yaml#/SyncedThreadList
+                - $ref: ../components/schemas.yaml#/SyncedThreadActivityList
+      "400":
+        description: A malformed `before`, `limit` or `scope`, or both `scope=org` and `person`
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "403":
+        description: >-
+          Not a person (`person_required`), or another member's threads without `synced_sessions.audit`
+          (`role_required`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: chat.use
+/v1/threads/{threadId}:
+  delete:
+    tags:
+      - Threads
+    operationId: deleteSyncedThread
+    summary: "Delete one of your synced threads: its events and every locked copy of its content key."
+    description: >-
+      Without the keys, a copy of an event left in a backup cannot be opened. It works on a thread that has key copies
+      and no event yet, and again on a deleted one. The thread's id then takes no event and no key again. Removing a
+      member from an organization deletes their synced threads there the same way.
+    parameters:
+      - name: threadId
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[A-Za-z0-9_-]{1,128}$
+        description: The thread's sync id, as its runner names it (a UUIDv7)
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKey
+    responses:
+      "200":
+        description: Deleted
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/SyncedThreadDeleted
+      "403":
+        description: "Not a person: an agent link, a module or a service account (`person_required`)"
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "404":
+        description: No such thread, or not yours in this organization (`thread_not_found`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: chat.use
+    x-idempotency: optional
+  get:
+    tags:
+      - Threads
+    operationId: getSyncedThread
+    summary: "One of your synced threads: its readable summary and the last event number stored."
+    description: >-
+      A runner reads `lastSeq` to resume an upload after the last event Gateway confirmed. An owner or admin with
+      `synced_sessions.audit` reads any thread of this organization, not deleted; each read is recorded in the audit log
+      as `synced_session.audit_read` before it is served. A member reads a team-visible thread of this organization
+      while `multiplayerSessions` is on, unaudited.
+    parameters:
+      - name: threadId
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[A-Za-z0-9_-]{1,128}$
+        description: The thread's sync id, as its runner names it (a UUIDv7)
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/SyncedThread
+      "403":
+        description: "Not a person: an agent link, a module or a service account (`person_required`)"
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "404":
+        description: No such thread, or not yours in this organization (`thread_not_found`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "410":
+        description: The thread was deleted (`thread_deleted`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: chat.use
+/v1/threads/{threadId}/commands:
+  post:
+    operationId: sendCodeCommand
+    tags:
+      - Threads
+    summary: Queue an encrypted command for your own Code session
+    description: >-
+      Only the session owner may use this operation. Organization auditors cannot control another person's sessions.
+      Sender and runner must be trusted signing devices of that person. Commands are sealed on the phone; Gateway never
+      reads action content. Leases and commands expire within 60 seconds, with 30 more seconds allowed for clock skew;
+      seal by `serverTime` from `getCodeControl`. A command with `waits` needs no live lease and may expire up to 24
+      hours ahead: Gateway queues it while the computer sleeps, unless Phone control is off or another computer holds
+      the session. The runner decides by action how long it may wait: a message up to 24 hours, Stop and approval
+      answers only the normal window. Commands reach a runner in the order Gateway queued them. A claimed command reads
+      as expired 2 minutes after its expiry, and a late result still finishes it. A repeated identical command id
+      returns its original delivery state; a changed body is a 409. A cancelled command id returns `cancelled` and is
+      never queued again. Claims are atomic and never replay an action. Local computer opt-in is required.
+    x-nexus-permission: sessions.control
+    parameters:
+      - name: threadId
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[A-Za-z0-9_-]{1,128}$
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKeyRequired
+    responses:
+      "200":
+        description: Current control or delivery state.
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/CodeCommand
+      "400":
+        description: Malformed fields, ciphertext or expiry.
+      "403":
+        description: Invalid signature or a caller that is not a person.
+      "404":
+        description: The session, command or device does not belong to the caller.
+      "409":
+        description: >-
+          A device is untrusted, control is disabled or offline, the organization forbids synced content, or a command
+          state conflicts.
+      "410":
+        description: The session was deleted.
+      "428":
+        $ref: ../components/common.yaml#/responses/PreconditionRequired
+      "429":
+        description: The bounded command mailbox is full.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas.yaml#/CodeCommandEnvelope
+    x-idempotency: required
+  get:
+    operationId: listCodeCommands
+    tags:
+      - Threads
+    summary: Read up to 20 queued commands for your trusted runner
+    description: >-
+      Only the session owner may use this operation. Organization auditors cannot control another person's sessions.
+      Sender and runner must be trusted signing devices of that person. Commands are sealed on the phone; Gateway never
+      reads action content. Leases and commands expire within 60 seconds, with 30 more seconds allowed for clock skew;
+      seal by `serverTime` from `getCodeControl`. A claimed command reads as expired 2 minutes after its expiry, and a
+      late result still finishes it. A repeated identical command id returns its original delivery state; a changed body
+      is a 409. Claims are atomic and never replay an action. Local computer opt-in is required.
+    x-nexus-permission: sessions.control
+    parameters:
+      - name: threadId
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[A-Za-z0-9_-]{1,128}$
+      - name: runnerDeviceId
+        in: query
+        required: true
+        schema:
+          type: string
+    responses:
+      "200":
+        description: Current control or delivery state.
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/CodeCommands
+      "400":
+        description: Malformed fields, ciphertext or expiry.
+      "403":
+        description: Invalid signature or a caller that is not a person.
+      "404":
+        description: The session, command or device does not belong to the caller.
+      "409":
+        description: >-
+          A device is untrusted, control is disabled or offline, the organization forbids synced content, or a command
+          state conflicts.
+      "410":
+        description: The session was deleted.
+      "429":
+        description: The bounded command mailbox is full.
+/v1/threads/{threadId}/commands/{commandId}:
+  get:
+    operationId: getCodeCommand
+    tags:
+      - Threads
+    summary: Read the delivery state of your own Code command
+    description: >-
+      Only the session owner may use this operation. Organization auditors cannot control another person's sessions.
+      Sender and runner must be trusted signing devices of that person. Commands are sealed on the phone; Gateway never
+      reads action content. Leases and commands expire within 60 seconds, with 30 more seconds allowed for clock skew;
+      seal by `serverTime` from `getCodeControl`. A claimed command reads as expired 2 minutes after its expiry, and a
+      late result still finishes it. A repeated identical command id returns its original delivery state; a changed body
+      is a 409. Claims are atomic and never replay an action. Local computer opt-in is required.
+    x-nexus-permission: sessions.control
+    parameters:
+      - name: threadId
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[A-Za-z0-9_-]{1,128}$
+      - name: commandId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-f-]{36}$
+    responses:
+      "200":
+        description: Current control or delivery state.
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/CodeCommand
+      "400":
+        description: Malformed fields, ciphertext or expiry.
+      "403":
+        description: Invalid signature or a caller that is not a person.
+      "404":
+        description: The session, command or device does not belong to the caller.
+      "409":
+        description: >-
+          A device is untrusted, control is disabled or offline, the organization forbids synced content, or a command
+          state conflicts.
+      "410":
+        description: The session was deleted.
+      "429":
+        description: The bounded command mailbox is full.
+/v1/threads/{threadId}/commands/{commandId}/cancel:
+  post:
+    operationId: cancelCodeCommand
+    tags:
+      - Threads
+    summary: Cancel your own Code command before a computer receives it
+    description: >-
+      Takes back a command that no computer has claimed. Only the session owner may use this operation, from the trusted
+      device that sent the command. That device signs `nexus-code-command-cancel-v1`, the thread id, the command id and
+      its own device id, each on its own line. Gateway marks a queued command `cancelled` and keeps it until the command
+      is pruned, a day after it expires. A later read, a repeated cancel and a resend of the same command all answer
+      `cancelled`, and no computer receives it. A claimed command cannot be cancelled: the computer may already be
+      running it (409 `code_command_not_queued`).
+    x-nexus-permission: sessions.control
+    parameters:
+      - name: threadId
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[A-Za-z0-9_-]{1,128}$
+      - name: commandId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-f-]{36}$
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKeyRequired
+    responses:
+      "200":
+        description: The cancelled command, also when it was already cancelled.
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/CodeCommand
+      "400":
+        description: A malformed body.
+      "403":
+        description: >-
+          An invalid signature, a caller that is not a person, or a device that did not send the command
+          (`code_command_not_sender`).
+      "404":
+        description: >-
+          The session or command does not belong to the caller, or Gateway has no such command
+          (`code_command_not_found`).
+      "409":
+        description: A computer already claimed the command (`code_command_not_queued`), or the device is untrusted.
+      "410":
+        description: The session was deleted.
+      "428":
+        $ref: ../components/common.yaml#/responses/PreconditionRequired
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas.yaml#/CancelCodeCommand
+    x-idempotency: required
+/v1/threads/{threadId}/commands/{commandId}/claim:
+  post:
+    operationId: claimCodeCommand
+    tags:
+      - Threads
+    summary: Claim a Code command once before executing it
+    description: >-
+      Only the session owner may use this operation. Organization auditors cannot control another person's sessions.
+      Sender and runner must be trusted signing devices of that person. Commands are sealed on the phone; Gateway never
+      reads action content. Leases and commands expire within 60 seconds, with 30 more seconds allowed for clock skew;
+      seal by `serverTime` from `getCodeControl`. A claimed command reads as expired 2 minutes after its expiry, and a
+      late result still finishes it. A repeated identical command id returns its original delivery state; a changed body
+      is a 409. Claims are atomic and never replay an action. Local computer opt-in is required.
+    x-nexus-permission: sessions.control
+    parameters:
+      - name: threadId
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[A-Za-z0-9_-]{1,128}$
+      - name: commandId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-f-]{36}$
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKeyRequired
+    responses:
+      "200":
+        description: Current control or delivery state.
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/CodeCommandClaimed
+      "400":
+        description: Malformed fields, ciphertext or expiry.
+      "403":
+        description: Invalid signature or a caller that is not a person.
+      "404":
+        description: The session, command or device does not belong to the caller.
+      "409":
+        description: >-
+          A device is untrusted, control is disabled or offline, the organization forbids synced content, or a command
+          state conflicts.
+      "410":
+        description: The session was deleted.
+      "428":
+        $ref: ../components/common.yaml#/responses/PreconditionRequired
+      "429":
+        description: The bounded command mailbox is full.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas.yaml#/ClaimCodeCommand
+    x-idempotency: required
+/v1/threads/{threadId}/commands/{commandId}/result:
+  post:
+    operationId: finishCodeCommand
+    tags:
+      - Threads
+    summary: Report a claimed Code command completed or rejected
+    description: >-
+      Only the session owner may use this operation. Organization auditors cannot control another person's sessions.
+      Sender and runner must be trusted signing devices of that person. Commands are sealed on the phone; Gateway never
+      reads action content. Leases and commands expire within 60 seconds, with 30 more seconds allowed for clock skew;
+      seal by `serverTime` from `getCodeControl`. A claimed command reads as expired 2 minutes after its expiry, and a
+      late result still finishes it. A repeated identical command id returns its original delivery state; a changed body
+      is a 409. Claims are atomic and never replay an action. Local computer opt-in is required.
+    x-nexus-permission: sessions.control
+    parameters:
+      - name: threadId
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[A-Za-z0-9_-]{1,128}$
+      - name: commandId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-f-]{36}$
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKeyRequired
+    responses:
+      "200":
+        description: Current control or delivery state.
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/CodeCommand
+      "400":
+        description: Malformed fields, ciphertext or expiry.
+      "403":
+        description: Invalid signature or a caller that is not a person.
+      "404":
+        description: The session, command or device does not belong to the caller.
+      "409":
+        description: >-
+          A device is untrusted, control is disabled or offline, the organization forbids synced content, or a command
+          state conflicts.
+      "410":
+        description: The session was deleted.
+      "428":
+        $ref: ../components/common.yaml#/responses/PreconditionRequired
+      "429":
+        description: The bounded command mailbox is full.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas.yaml#/FinishCodeCommand
+    x-idempotency: required
+/v1/threads/{threadId}/control:
+  get:
+    operationId: getCodeControl
+    tags:
+      - Threads
+    summary: Read whether your Code session accepts phone control
+    description: >-
+      Only the session owner may use this operation. Organization auditors cannot control another person's sessions.
+      Sender and runner must be trusted signing devices of that person. Commands are sealed on the phone; Gateway never
+      reads action content. Leases and commands expire within 60 seconds, with 30 more seconds allowed for clock skew;
+      seal by `serverTime` from `getCodeControl`. A claimed command reads as expired 2 minutes after its expiry, and a
+      late result still finishes it. A repeated identical command id returns its original delivery state; a changed body
+      is a 409. Claims are atomic and never replay an action. Local computer opt-in is required.
+    x-nexus-permission: sessions.control
+    parameters:
+      - name: threadId
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[A-Za-z0-9_-]{1,128}$
+    responses:
+      "200":
+        description: Current control or delivery state.
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/CodeControl
+      "400":
+        description: Malformed fields, ciphertext or expiry.
+      "403":
+        description: Invalid signature or a caller that is not a person.
+      "404":
+        description: The session, command or device does not belong to the caller.
+      "409":
+        description: >-
+          A device is untrusted, control is disabled or offline, the organization forbids synced content, or a command
+          state conflicts.
+      "410":
+        description: The session was deleted.
+      "429":
+        description: The bounded command mailbox is full.
+  put:
+    operationId: setCodeControl
+    tags:
+      - Threads
+    summary: Renew a signed, locally enabled Code runner lease
+    description: >-
+      Only the session owner may use this operation. Organization auditors cannot control another person's sessions.
+      Sender and runner must be trusted signing devices of that person. Commands are sealed on the phone; Gateway never
+      reads action content. Leases and commands expire within 60 seconds, with 30 more seconds allowed for clock skew;
+      seal by `serverTime` from `getCodeControl`. A claimed command reads as expired 2 minutes after its expiry, and a
+      late result still finishes it. A repeated identical command id returns its original delivery state; a changed body
+      is a 409. Claims are atomic and never replay an action. Local computer opt-in is required.
+    x-nexus-permission: sessions.control
+    parameters:
+      - name: threadId
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[A-Za-z0-9_-]{1,128}$
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKey
+    responses:
+      "200":
+        description: Current control or delivery state.
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/CodeControl
+      "400":
+        description: Malformed fields, ciphertext or expiry.
+      "403":
+        description: Invalid signature or a caller that is not a person.
+      "404":
+        description: The session, command or device does not belong to the caller.
+      "409":
+        description: >-
+          A device is untrusted, control is disabled or offline, the organization forbids synced content, or a command
+          state conflicts.
+      "410":
+        description: The session was deleted.
+      "429":
+        description: The bounded command mailbox is full.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas.yaml#/CodeControlLease
+    x-idempotency: optional
+/v1/threads/{threadId}/events:
+  get:
+    tags:
+      - Threads
+    operationId: listSyncedEvents
+    summary: A page of one of your threads' sealed events, after an event number or just before one.
+    description: >-
+      Without `after` or `before`, the page starts at the first event. With `before`, it ends just before that event, to
+      open a long thread from its end. Either way the events are in number order, and a page holds at most 4 MiB of
+      sealed bodies after its first event. An owner or admin with `synced_sessions.audit` reads any thread of this
+      organization, not deleted; each read is recorded in the audit log as `synced_session.audit_read` before it is
+      served. A member reads a team-visible thread's events while `multiplayerSessions` is on, unaudited. Nexus UI's
+      credential gets 403 `web_session_viewer_off` while the organization's `webSessionViewer` is off.
+    parameters:
+      - name: threadId
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[A-Za-z0-9_-]{1,128}$
+        description: The thread's sync id, as its runner names it (a UUIDv7)
+      - name: after
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: -1
+        description: Events numbered after this one; -1 for every event
+      - name: before
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 0
+        description: Events numbered before this one
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 500
+        description: At most this many events, 1 to 500; 100 when absent
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/SyncedEventPage
+      "400":
+        description: Both `after` and `before`, or a malformed number
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "403":
+        description: >-
+          Not a person: an agent link, a module or a service account (`person_required`); or Nexus UI while the
+          organization's `webSessionViewer` is off (`web_session_viewer_off`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "404":
+        description: No such thread, or not yours in this organization (`thread_not_found`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "410":
+        description: The thread was deleted (`thread_deleted`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: chat.use
+  post:
+    tags:
+      - Threads
+    operationId: appendSyncedEvents
+    summary: >-
+      Upload a thread's next sealed events. A retried upload changes nothing, and the answer names the last event
+      stored.
+    description: >-
+      Events are numbered from 0, with no gap. The request's events are consecutive, and the first is at most one past
+      the last stored. An event already stored must be sent unchanged; the rest are added. All or nothing. The first
+      upload makes the thread yours, in this organization. A new sealed event names the thread's latest content key
+      version, which must already have locked copies (`PUT /v1/threads/{threadId}/keys`): after a rotation, re-seal
+      unconfirmed events with the new key. Your synced threads in one organization hold at most 1 GiB. Usage numbers are
+      stored, not billed. While the organization's effective `sessionContent` is `never`, a new event with a sealed body
+      is refused with 409 `content_policy_never`; usage-only events pass, and events already stored, sent again
+      unchanged, still confirm.
+    parameters:
+      - name: threadId
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[A-Za-z0-9_-]{1,128}$
+        description: The thread's sync id, as its runner names it (a UUIDv7)
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKeyRequired
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas.yaml#/AppendSyncedEventsRequest
+    responses:
+      "200":
+        description: Stored
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/SyncedEventsAppended
+      "400":
+        description: No events or more than 64, events not consecutive, or a malformed event
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "403":
+        description: "Not a person: an agent link, a module or a service account (`person_required`)"
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "404":
+        description: Another person's thread, or yours in another organization (`thread_not_found`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "409":
+        description: >-
+          The first event is past the next number (`seq_gap`), an event already stored differs (`event_conflict`), the
+          thread has no locked keys yet (`thread_keys_missing`), a key version has no copies (`key_version_not_stored`),
+          or a new event is not sealed with the thread's latest key version (`key_version_behind`): re-seal it with the
+          new key; or a new event carries a sealed body while the organization's content policy is `never`
+          (`content_policy_never`): send usage only
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "410":
+        description: The thread was deleted (`thread_deleted`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "413":
+        description: "Your synced threads in this organization would pass 1 GiB (`session_store_full`): delete some"
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "428":
+        $ref: ../components/common.yaml#/responses/PreconditionRequired
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: chat.use
+    x-idempotency: required
+/v1/threads/{threadId}/follow:
+  delete:
+    tags:
+      - Threads
+    operationId: unfollowSyncedThread
+    summary: Stop following a teammate's session.
+    description: The same check as following. A repeat changes nothing.
+    parameters:
+      - name: threadId
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[A-Za-z0-9_-]{1,128}$
+        description: The thread's sync id, as its runner names it (a UUIDv7)
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKey
+    responses:
+      "200":
+        description: The thread, with its followers
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/SyncedThread
+      "403":
+        description: "Not a person: an agent link, a module or a service account (`person_required`)"
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "404":
+        description: >-
+          No such thread, or not a teammate's you may read: private, deleted, another organization's, or
+          `multiplayerSessions` off (`thread_not_found`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "409":
+        description: "The thread is your own: nobody follows their own (`own_thread`)"
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: chat.use
+    x-idempotency: optional
+  put:
+    tags:
+      - Threads
+    operationId: followSyncedThread
+    summary: "Follow a teammate's session: it shows under Following, and its followers name you."
+    description: >-
+      You follow a team-visible thread you may read: a member of its organization, not removed, while
+      `multiplayerSessions` is on. Gateway stores your id, never content, and lists the thread with
+      `listSyncedThreads?scope=following` while it stays team-visible. A repeat changes nothing. Following is not
+      audited.
+    parameters:
+      - name: threadId
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[A-Za-z0-9_-]{1,128}$
+        description: The thread's sync id, as its runner names it (a UUIDv7)
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKey
+    responses:
+      "200":
+        description: The thread, with its followers
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/SyncedThread
+      "403":
+        description: "Not a person: an agent link, a module or a service account (`person_required`)"
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "404":
+        description: >-
+          No such thread, or not a teammate's you may read: private, deleted, another organization's, or
+          `multiplayerSessions` off (`thread_not_found`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "409":
+        description: "The thread is your own: nobody follows their own (`own_thread`)"
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: chat.use
+    x-idempotency: optional
+/v1/threads/{threadId}/keys:
+  get:
+    tags:
+      - Threads
+    operationId: getThreadKey
+    summary: >-
+      The locked copy of a thread's content key for one of your trusted devices, at the newest version it holds unless
+      you name one.
+    parameters:
+      - name: threadId
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[A-Za-z0-9_-]{1,128}$
+        description: The thread's id, as its client names it
+      - name: device
+        in: query
+        required: true
+        schema:
+          type: string
+        description: Your trusted device's id (`dev_…`)
+      - name: version
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 1
+        description: The key version; the newest one the device holds when absent
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/ThreadKey
+      "400":
+        description: No `device`
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "403":
+        description: >-
+          Not a person: an agent link, a module or a service account (`person_required`); or Nexus UI while the
+          organization's `webSessionViewer` is off (`web_session_viewer_off`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "404":
+        description: Not your device, or no copy for it (`device_not_found`, `thread_key_not_found`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "409":
+        description: The device is pending or revoked (`device_not_trusted`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: chat.use
+  put:
+    tags:
+      - Threads
+    operationId: putThreadKeys
+    summary: >-
+      Store a thread's locked copies at one key version for your trusted devices, each signed by one of them. A copy
+      already stored is kept, and the answer says which.
+    description: >-
+      Each copy is the thread's content key, HPKE-sealed by your client to the device's `encryptionKey`; Gateway cannot
+      open it. Each copy carries the Ed25519 signature of your trusted device `senderDeviceId`, so a session without a
+      device key stores nothing. `keyVersion` is a version one of your devices still holds, or one more than the latest
+      to rotate the content key, for instance after you revoke a device: the new version has copies only for the devices
+      you name, which must be trusted. The latest version only goes up, and a revocation never lowers it. Every device
+      must be yours and trusted, and every signature must verify, or nothing is stored. A thread belongs to the first
+      person who stored a copy for it, also after every copy is deleted. Repeating a request changes nothing.
+    parameters:
+      - name: threadId
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[A-Za-z0-9_-]{1,128}$
+        description: The thread's id, as its client names it
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKey
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas.yaml#/PutThreadKeysRequest
+    responses:
+      "200":
+        description: Stored
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/ThreadKeysStored
+      "400":
+        description: >-
+          No keys, more than 100, a device named twice, a malformed copy or signature, or a key version that skips one
+          (`key_version_gap`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "403":
+        description: >-
+          Not a person (`person_required`), a signature that does not verify with the sender's signing key
+          (`invalid_signature`), or a sender that is a recovery key (`recovery_key_cannot_sign`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "404":
+        description: Not your device or sender, or another person's thread (`device_not_found`, `thread_not_found`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "409":
+        description: >-
+          A device or the sender is pending or revoked (`device_not_trusted`), or no device holds the key version any
+          more (`key_version_not_held`): rotate to the next one
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "410":
+        description: The thread was deleted in the session store (`thread_deleted`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: chat.use
+    x-idempotency: optional
+/v1/threads/{threadId}/org-key:
+  put:
+    tags:
+      - Threads
+    operationId: putOrgThreadKey
+    summary: >-
+      Store your thread's content key locked for the organization's current recovery key, signed by one of your trusted
+      devices. A copy already stored is kept, and the answer says so.
+    description: >-
+      Under the `user_and_org` content policy, your client seals the thread's content key at `keyVersion` to the
+      organization's recovery key (HPKE) once you have confirmed the key's fingerprint, and one of your trusted devices
+      signs `nexus-org-thread-key:v1:{threadId}:{keyVersion}:{orgKeyId}:{lockedKey}` with Ed25519. Gateway cannot open
+      the copy. The copy keeps the thread's person and organization from your credential. `orgKeyId` must be the
+      organization's current key: a copy for a replaced key is refused, and the copies already stored for it stay.
+      `keyVersion` must be a version your devices hold a copy of. A thread with no upload yet joins this organization,
+      as its first upload would. Owners and admins with `synced_sessions.audit` read the copy (`GET
+      /v1/threads/{threadId}/org-keys`); other members never do. Deleting the thread, or your removal from the
+      organization, deletes it.
+    parameters:
+      - name: threadId
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[A-Za-z0-9_-]{1,128}$
+        description: The thread's id, as its client names it
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKey
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas.yaml#/PutOrgThreadKeyRequest
+    responses:
+      "200":
+        description: Stored, or already stored
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/OrgThreadKeyStored
+      "400":
+        description: A malformed thread id, key version, copy or signature
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "403":
+        description: >-
+          Not a person (`person_required`), or the signature does not verify with the sender's signing key
+          (`invalid_signature`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "404":
+        description: Not your thread in this organization, or not your device (`thread_not_found`, `device_not_found`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "409":
+        description: >-
+          The sender is pending or revoked (`device_not_trusted`); none of your devices holds `keyVersion`
+          (`key_version_not_held`); the organization has no recovery key (`org_recovery_key_required`); or `orgKeyId` is
+          not its current key (`org_key_replaced`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "410":
+        description: You deleted the thread (`thread_deleted`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: chat.use
+    x-idempotency: optional
+/v1/threads/{threadId}/presence:
+  post:
+    tags:
+      - Threads
+    operationId: postSyncedThreadPresence
+    summary: "Tell a thread's watchers where you are on it: the event number on screen, or that you left."
+    description: >-
+      Gateway relays it as a `presence` event (`SyncedThreadPresence`) on the thread's stream, to its owner's runner and
+      every watcher, you included, and never stores it. Gateway names you; the body names only your window (`client`)
+      and the event number on screen. Post it when you open the thread, every few seconds while it shows, and with
+      `leave` when you close it. A watcher not heard from for a few posts is gone. You may post on a thread you may
+      stream: your own, or a team-visible one while the organization's `multiplayerSessions` is on. Your posts share the
+      pages' presence limit, 1,800 a minute per person on each Gateway copy.
+
+
+      Exempt: a heartbeat. A repeat only renews the same state.
+    parameters:
+      - name: threadId
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[A-Za-z0-9_-]{1,128}$
+        description: The thread's sync id, as its runner names it (a UUIDv7)
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKey
+    responses:
+      "204":
+        description: Relayed
+      "400":
+        description: >-
+          The body is not `{"client", "seq", "leave"}`: `client` is 1 to 64 letters, digits, `-` or `_`, and `seq` 0 or
+          more
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "403":
+        description: "Not a person: an agent link, a module or a service account (`person_required`)"
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "404":
+        description: No such thread, or not one you may stream (`thread_not_found`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: chat.use
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required:
+              - client
+            additionalProperties: false
+            properties:
+              client:
+                type: string
+                pattern: ^[A-Za-z0-9_-]{1,64}$
+                description: "Your window or device: a random id, the same while it shows the thread"
+              seq:
+                type:
+                  - integer
+                  - "null"
+                minimum: 0
+                description: The event number on screen; unset before any shows
+              leave:
+                type: boolean
+                default: false
+                description: true when you stop watching
+    x-idempotency: optional
+/v1/threads/{threadId}/private:
+  put:
+    tags:
+      - Threads
+    operationId: setSyncedThreadPrivate
+    summary: Keep one of your synced threads from your teammates, or share it with them again.
+    description: >-
+      A private thread is its person's own; a team-visible one is read by any member while the organization's
+      `multiplayerSessions` is on. To create privacy metadata before the first event, first store your owned thread
+      keys. An unknown id returns the same 404 as another person's thread. During a run, only the thread's person
+      changes its privacy. Each change is recorded in the audit log as `synced_session.made_private` or
+      `synced_session.made_team_visible`, by thread id. Rotating the thread's content key away from the team key is the
+      runner's.
+    parameters:
+      - name: threadId
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[A-Za-z0-9_-]{1,128}$
+        description: The thread's sync id, as its runner names it (a UUIDv7)
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKey
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/SyncedThread
+      "400":
+        description: "The body is not `{\"private\": true|false}`"
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "403":
+        description: "Not a person: an agent link, a module or a service account (`person_required`)"
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "404":
+        description: No such thread, or not yours in this organization (`thread_not_found`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "410":
+        description: The thread was deleted (`thread_deleted`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: chat.use
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required:
+              - private
+            additionalProperties: false
+            properties:
+              private:
+                type: boolean
+                description: true keeps the thread from your teammates; false shares it again
+    x-idempotency: optional
+/v1/threads/{threadId}/stream:
+  get:
+    tags:
+      - Threads
+    operationId: streamSyncedThread
+    summary: "One of your threads, live: its new event numbers and its deletion, as server-sent events."
+    description: >-
+      Each event is `event: <type>` and one line of JSON `data`. `thread` (`SyncedThreadAdvanced`) says the thread now
+      holds every event up to `lastSeq`: read the ones after your last with `listSyncedEvents`. `presence`
+      (`SyncedThreadPresence`) is one watcher's place on the thread, yours included: post yours with
+      `postSyncedThreadPresence`. `deleted` (`SyncedThreadGone`) is the last event. With `commands=true`, the thread's
+      person, with `sessions.control`, also gets `commands` (`CodeCommandsLive`) first, then `command`
+      (`CodeCommandChanged`) when one of the thread's Code commands is queued, claimed, completed or rejected: read its
+      receipt with `getCodeCommand`. A teammate gets neither. No event carries a body. Open the stream with `after`, the
+      last event number you hold: when the thread holds more, `thread` comes at once, so a reconnect misses nothing. A
+      `: keep-alive` comment goes out every 15 s, and your token and the thread are checked again then: the stream ends
+      when either is lost, when you fall behind, or when the Gateway copy is draining. Reconnect with `after`. The
+      thread's person opens it, and so does any member on a team-visible thread while the organization's
+      `multiplayerSessions` is on; an auditor alone does not. A thread made private, or a teammate removed, ends a
+      teammate's stream at the next keep-alive.
+    parameters:
+      - name: threadId
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[A-Za-z0-9_-]{1,128}$
+        description: The thread's sync id, as its runner names it (a UUIDv7)
+      - name: after
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: -1
+        description: The last event number you hold; -1 (the default) when you hold none
+      - name: commands
+        in: query
+        required: false
+        schema:
+          type: boolean
+        description: >-
+          Also send phone control's `commands` and `command` events, when you are the thread's person with
+          `sessions.control`. False by default.
+    responses:
+      "200":
+        description: The event stream
+        content:
+          text/event-stream:
+            schema:
+              $ref: ../components/schemas.yaml#/SyncedThreadAdvanced
+      "400":
+        description: A malformed `after` or `commands`, or an `after` below -1
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "403":
+        description: "Not a person: an agent link, a module or a service account (`person_required`)"
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "404":
+        description: No such thread, or not yours or your team's in this organization (`thread_not_found`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "410":
+        description: The thread was deleted (`thread_deleted`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "429":
+        description: More than 16 live thread streams of yours on this Gateway copy (`thread_events_per_person`), or the rate limit
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "503":
+        description: >-
+          Too many live thread streams on this Gateway copy (`thread_events_full`), or 64 on this thread
+          (`thread_watchers_full`): read the events after your last instead
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: chat.use
+/v1/threads/{threadId}/team-key:
+  put:
+    tags:
+      - Threads
+    operationId: putTeamThreadKey
+    summary: >-
+      Store your team-visible thread's content key locked to the team key's current epoch, signed by one of your trusted
+      devices. A copy already stored is kept, and the answer says so.
+    description: >-
+      Your runner seals the thread's content key at `keyVersion` to the team key's current epoch (HPKE), and one of your
+      trusted devices signs `nexus-team-thread-key:v1:{threadId}:{keyVersion}:{teamKeyId}:{lockedKey}` with Ed25519. One
+      copy a key version, whatever the team's size. Gateway cannot open it. A private thread has no team copy. A thread
+      with no upload yet joins this organization, as its first upload would. Deleting the thread, or your removal from
+      the organization, deletes the copy.
+    parameters:
+      - name: threadId
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[A-Za-z0-9_-]{1,128}$
+        description: The thread's id, as its client names it
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKey
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas.yaml#/PutTeamThreadKeyRequest
+    responses:
+      "200":
+        description: Stored, or already stored
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/TeamThreadKeyStored
+      "400":
+        description: A malformed thread id, key version, copy or signature
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "403":
+        description: >-
+          Not a person (`person_required`), or the signature does not verify with the sender's signing key
+          (`invalid_signature`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "404":
+        description: Not your thread in this organization, or not your device (`thread_not_found`, `device_not_found`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "409":
+        description: >-
+          The sender is pending or revoked (`device_not_trusted`); none of your devices holds `keyVersion`
+          (`key_version_not_held`); the thread is private (`thread_private`); or `teamKeyId` is not the current epoch
+          (`team_key_retired`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "410":
+        description: You deleted the thread (`thread_deleted`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: chat.use
+    x-idempotency: optional
+/v1/threads/{threadId}/team-keys:
+  get:
+    tags:
+      - Threads
+    operationId: listTeamThreadKeys
+    summary: A thread's content key copies locked to the team key's epochs, for its person and for teammates who read it.
+    description: >-
+      Who reads the thread's live stream reads these: its person, and a member of its organization while the thread is
+      team-visible and `multiplayerSessions` is on. Open the team key's epoch with your holder's copy (`GET
+      /v1/orgs/team-key?holder=`), then the thread key. Check each signature against the thread's person's trusted
+      device before you use the copy.
+    parameters:
+      - name: threadId
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[A-Za-z0-9_-]{1,128}$
+        description: The thread's id, as its client names it
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/TeamThreadKeyList
+      "400":
+        description: A malformed thread id
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "403":
+        description: >-
+          Not a person (`person_required`); or Nexus UI while the organization's `webSessionViewer` is off
+          (`web_session_viewer_off`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "404":
+        description: No such thread you read in this organization (`thread_not_found`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: chat.use

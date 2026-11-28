@@ -257,7 +257,9 @@ fn a_beta_build_keeps_its_channel_without_an_employee_check() {
     assert_eq!(unverified_channel("0.12.0-beta.3", offline), Ok(Channel::Beta));
     let broken = Coordinator::new("0.12.0-beta.3".into(), Some(Disabled::MissingKey), 0);
     let manual = broken.snapshot.manual.expect("beta fallback");
-    assert_eq!(manual.download_url, Some(DOWNLOAD_PAGE));
+    // A beta stays on the beta: the stable download page would move its tester off it without saying so.
+    assert_eq!(manual.download_url, Some(BETA_DOWNLOAD_PAGE));
+    assert_eq!(manual.install_command, None);
 }
 
 #[tokio::test]

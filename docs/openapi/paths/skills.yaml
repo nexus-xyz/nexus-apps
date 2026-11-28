@@ -1,0 +1,701 @@
+# Path items. The root openapi.yaml references each one.
+/v1/skill-library:
+  get:
+    tags:
+      - Skills
+    operationId: listSkillLibrary
+    summary: >-
+      The library skills you may load, at the version a session loads: the highest approved version that nobody
+      withdrew. An organization's library reaches every member, and a team's reaches that team's members and the members
+      of the teams under it. Membership is read at each call, so a person who left a team stops seeing its library at
+      once. The organization's skills come first, then the teams' skills, all by name (not grouped by team). Each skill
+      says whether its name collides with another's (`duplicateName`), so a client that holds your own list too can
+      apply the name rules without the SHA-256 of your skills. It holds no skill text: read a version with
+      `getSkillVersion` or `exportSkill` and the library skill's `id`. A personal organization has no library, and an
+      organization with nothing approved answers an empty list.
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/SkillLibraryList
+      "403":
+        description: >-
+          The matrix refuses a module key (`module_key`), a service account or an agent link (`role_required`) and an
+          operator (`operator_scope`). The domain answers any other caller that is no person with `person_required`; the
+          matrix stops each kind first
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: chat.use
+/v1/skill-loads:
+  post:
+    tags:
+      - Skills
+    operationId: recordSkillLoads
+    summary: >-
+      Record that a coding agent's session was delivered some of your skills, for a launcher (`nexus claude`, `nexus
+      codex`). Each skill must be yours, or a library skill you may load (`listSkillLibrary`), and each version must
+      exist and, for a library skill, be approved and not withdrawn (404 `skill_not_found`, `skill_version_not_found`);
+      the record takes the version's name and SHA-256 from what Gateway stores, not from the request, and for a library
+      skill also its scope (`team` or `org`) and the approved promotion that allowed it. The session must be one you
+      opened, of the agent the surface names (404 `session_not_found`). All the records are written, or none (400
+      `invalid_load` for a request that is not well formed). It says what was delivered, never that the skill ran.
+    parameters:
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKeyRequired
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas.yaml#/RecordSkillLoadsRequest
+    responses:
+      "201":
+        description: Recorded
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/SkillLoadList
+      "428":
+        $ref: ../components/common.yaml#/responses/PreconditionRequired
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: chat.use
+    x-idempotency: required
+/v1/skill-promotions:
+  get:
+    tags:
+      - Skills
+    operationId: listSkillPromotions
+    summary: >-
+      The skill promotion requests you reach, newest request first: your own, those to the teams you lead and the teams
+      under them, and for owners and admins every one. It holds no skill text.
+    parameters:
+      - name: state
+        in: query
+        required: false
+        description: Only promotions in this state
+        schema:
+          type: string
+          enum:
+            - held
+            - approved
+            - refused
+            - withdrawn
+      - name: scope
+        in: query
+        required: false
+        description: Only promotions to the organization or to a team
+        schema:
+          type: string
+          enum:
+            - org
+            - team
+      - name: team
+        in: query
+        required: false
+        description: "A team slug or id: only promotions to that team"
+        schema:
+          type: string
+      - name: mine
+        in: query
+        required: false
+        description: "`true` for the requests you made, whatever else you reach"
+        schema:
+          type: boolean
+          default: false
+      - name: limit
+        in: query
+        required: false
+        description: Promotions per page, 1 to 200 (default 50). An empty value is no limit
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 200
+      - name: cursor
+        in: query
+        required: false
+        description: >-
+          `nextCursor` from the previous page. A cursor this API did not return answers 400 `invalid_cursor`. An empty
+          value is no cursor
+        schema:
+          type: string
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/SkillPromotionList
+      "400":
+        description: >-
+          `invalid_promotion`: a filter, `limit` or `mine` is not valid, or the query holds a name this list does not
+          read (it reads `state`, `scope`, `team`, `mine`, `limit` and `cursor`); `invalid_cursor`: `cursor` is not one
+          this API returned
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "403":
+        description: >-
+          The matrix refuses a module key (`module_key`), a service account or an agent link (`role_required`) and an
+          operator (`operator_scope`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "404":
+        description: "`unknown_team`: no such team in this organization"
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: skills.promote
+/v1/skill-promotions/{id}:
+  get:
+    tags:
+      - Skills
+    operationId: getSkillPromotion
+    summary: >-
+      One promotion request and its snapshot (`content`, the SKILL.md as the version held it), for its requester and the
+      approvers who reach it. `previous` is the last approved version of the same library skill, with its content, for a
+      diff; it is null when there is none or you do not load that library. Someone who only loads the library reads that
+      version and its text; who asked for it and who approved it (`previous.promotion`) go to the approvers of it only.
+      Anyone else, in any state, gets 404 `promotion_not_found`.
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[A-Za-z0-9_-]+$
+        description: The promotion's id (`spr_…`)
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/SkillPromotionDetail
+      "403":
+        description: >-
+          The matrix refuses a module key (`module_key`), a service account or an agent link (`role_required`) and an
+          operator (`operator_scope`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "404":
+        description: "`promotion_not_found`: no such promotion in your reach"
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: skills.promote
+/v1/skill-promotions/{id}/decision:
+  post:
+    tags:
+      - Skills
+    operationId: decideSkillPromotion
+    summary: >-
+      Approve or refuse a held promotion. An owner or admin decides for the organization; a lead of the team or of a
+      team above it, an owner or an admin decides for a team. Never the requester, and only from a Nexus UI session or a
+      CLI sign-in, not an API key. An approval adds the version to the library of its scope and tells the requester; a
+      refusal needs a `reason`. Audited as skill.promotion_approved or skill.promotion_refused. A repeat with the same
+      `Idempotency-Key` within 24 hours gets the first answer; a repeat without one gets 409 `promotion_decided`.
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[A-Za-z0-9_-]+$
+        description: The promotion's id (`spr_…`)
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKeyRequired
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas.yaml#/DecideSkillPromotion
+    responses:
+      "200":
+        description: Decided
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/SkillPromotion
+      "400":
+        description: "`invalid_promotion`: a field is missing, unknown or out of bounds, or a refusal has no `reason`"
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "403":
+        description: >-
+          `role_required`: only an owner, an admin or a team lead decides; `person_session_required`: an API key cannot
+          decide, run `nexus auth login`; `self_approval`: nobody approves their own request; the matrix refuses a
+          module key (`module_key`), a service account or an agent link (`role_required`) and an operator
+          (`operator_scope`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "404":
+        description: "`promotion_not_found`: no such promotion in your reach"
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "409":
+        description: >-
+          `promotion_decided`: the promotion is no longer held (`details` names its state); `requester_left`: the
+          requester is no longer a member; `team_deleted`: the target team no longer exists; `name_taken`: an approval
+          would give people two library skills of one name (`details` names the scope and team); `library_limit`: the
+          library holds its most skills, or the skill its most versions
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "428":
+        $ref: ../components/common.yaml#/responses/PreconditionRequired
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: skills.approve_team
+    x-idempotency: required
+/v1/skill-promotions/{id}/withdraw:
+  post:
+    tags:
+      - Skills
+    operationId: withdrawSkillPromotion
+    summary: >-
+      Withdraw a promotion. The requester withdraws their own held request; an approver who reaches it withdraws a held
+      one, or an approved version (from a Nexus UI session or a CLI sign-in). The version leaves its library; text a
+      model already read stays read. With `allVersions`, every approved version of that library skill is withdrawn in
+      one transaction, each with its own event. The answer names the promotion and, in `withdrawnIds`, every promotion
+      withdrawn. Audited as skill.promotion_withdrawn. The requester is told, unless they withdrew it themselves.
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[A-Za-z0-9_-]+$
+        description: The promotion's id (`spr_…`)
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKeyRequired
+    requestBody:
+      required: false
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas.yaml#/WithdrawSkillPromotion
+    responses:
+      "200":
+        description: Withdrawn
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/SkillPromotionWithdrawn
+      "400":
+        description: "`invalid_promotion`: a field is unknown or out of bounds, or `allVersions` names a held request"
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "403":
+        description: >-
+          `person_session_required`: withdrawing an approved version needs a Nexus UI session or a CLI sign-in;
+          `role_required`: the caller asks to withdraw an approved version and is not an approver of it (its requester
+          gets this); the matrix refuses a module key (`module_key`), a service account or an agent link
+          (`role_required`) and an operator (`operator_scope`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "404":
+        description: "`promotion_not_found`: no such promotion in your reach"
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "409":
+        description: "`promotion_decided`: the promotion was refused or is already withdrawn (`details` names its state)"
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "428":
+        $ref: ../components/common.yaml#/responses/PreconditionRequired
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: skills.promote
+    x-idempotency: required
+/v1/skills:
+  get:
+    tags:
+      - Skills
+    operationId: listSkills
+    summary: Your skills, most recently written first. A person keeps at most 200.
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/SkillList
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: chat.use
+  post:
+    tags:
+      - Skills
+    operationId: createSkill
+    summary: >-
+      Create a skill from a SKILL.md: version 1. Refused with 409 `duplicate_name` when you already have a skill of that
+      name; `error.nexus.skillId` names it. Audited as skill.created.
+    parameters:
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKeyRequired
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas.yaml#/CreateSkillRequest
+    responses:
+      "201":
+        description: Created
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/SkillWritten
+      "428":
+        $ref: ../components/common.yaml#/responses/PreconditionRequired
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: chat.use
+    x-idempotency: required
+/v1/skills/{id}:
+  get:
+    tags:
+      - Skills
+    operationId: getSkill
+    summary: >-
+      One of your skills and its versions, newest first. Or a library skill you may load (`listSkillLibrary`), where
+      only the versions an approver approved and did not withdraw exist.
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[A-Za-z0-9_-]+$
+        description: The skill's id (`skl_…`)
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/SkillDetail
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: chat.use
+  delete:
+    tags:
+      - Skills
+    operationId: deleteSkill
+    summary: Delete one of your skills, every version and its content, for good. Audited as skill.deleted.
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[A-Za-z0-9_-]+$
+        description: The skill's id (`skl_…`)
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKey
+    responses:
+      "200":
+        description: Deleted
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/SkillDeleted
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: chat.use
+    x-idempotency: optional
+/v1/skills/{id}/versions:
+  post:
+    tags:
+      - Skills
+    operationId: writeSkillVersion
+    summary: >-
+      Write the next version of one of your skills. With `baseVersion`, refused with 409 `skill_version_conflict` when
+      that is no longer the latest. A new `name` in the front matter renames the skill (409 `duplicate_name` when you
+      have another of that name). Audited as skill.version_written.
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[A-Za-z0-9_-]+$
+        description: The skill's id (`skl_…`)
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKeyRequired
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas.yaml#/WriteSkillVersionRequest
+    responses:
+      "201":
+        description: Written
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/SkillWritten
+      "428":
+        $ref: ../components/common.yaml#/responses/PreconditionRequired
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: chat.use
+    x-idempotency: required
+/v1/skills/{id}/versions/{version}:
+  get:
+    tags:
+      - Skills
+    operationId: getSkillVersion
+    summary: >-
+      One version of one of your skills, with its SKILL.md. Or a library skill you may load (`listSkillLibrary`), where
+      only the versions an approver approved and did not withdraw exist; `latest` is the newest approved one. A held,
+      refused or withdrawn version is 404 `skill_version_not_found`, and a library skill you may not load is 404
+      `skill_not_found`.
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[A-Za-z0-9_-]+$
+        description: The skill's id (`skl_…`)
+      - name: version
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^(?:[1-9][0-9]{0,18}|latest)$
+        description: A version number, or `latest`
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/SkillVersionDetail
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: chat.use
+/v1/skills/{id}/versions/{version}/export:
+  get:
+    tags:
+      - Skills
+    operationId: exportSkill
+    summary: >-
+      A version's SKILL.md exactly as it was written, byte for byte, as `text/markdown` (never rendered on the API's
+      origin). The `ETag` is its SHA-256. A library skill you may load (`listSkillLibrary`) exports at an approved
+      version, and `latest` is the newest approved one.
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[A-Za-z0-9_-]+$
+        description: The skill's id (`skl_…`)
+      - name: version
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^(?:[1-9][0-9]{0,18}|latest)$
+        description: A version number, or `latest`
+    responses:
+      "200":
+        description: The SKILL.md, `text/markdown`; the `x-nexus-skill-version` header names the version
+        content:
+          text/markdown:
+            schema:
+              type: string
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: chat.use
+/v1/skills/{id}/versions/{version}/promotions:
+  post:
+    tags:
+      - Skills
+    operationId: requestSkillPromotion
+    summary: >-
+      Ask to promote one version of one of your skills to the organization or to a team you are in. A copy of the
+      version is held until an approver who is not you approves or refuses it. Your skill stays yours. A repeat with the
+      same `Idempotency-Key` within 24 hours gets the first answer and writes no second event. Audited as
+      skill.promotion_requested, and the approvers are told.
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[A-Za-z0-9_-]+$
+        description: The skill's id (`skl_…`)
+      - name: version
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^(?:[1-9][0-9]{0,18}|latest)$
+        description: A version number, or `latest`
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKeyRequired
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas.yaml#/RequestSkillPromotion
+    responses:
+      "201":
+        description: Held
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/SkillPromotion
+      "400":
+        description: >-
+          `invalid_promotion`: a field is missing, unknown or out of bounds, `team` goes with `scope` `team` only, or
+          the note is over 500 characters
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "403":
+        description: >-
+          `not_in_team`: a team-scope request from someone who is not in the team; the matrix refuses a module key
+          (`module_key`), a service account or an agent link (`role_required`) and an operator (`operator_scope`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "404":
+        description: "`skill_not_found`, `skill_version_not_found` or `unknown_team`: no such skill of yours, version, or team"
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "409":
+        description: >-
+          `personal_org`: a personal organization has no one to approve; `promotion_exists`: this version already has a
+          held or approved promotion to this target (`details` names it and its state); `promotion_limit`: you hold 20
+          undecided requests, or the organization 200
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "428":
+        $ref: ../components/common.yaml#/responses/PreconditionRequired
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: skills.promote
+    x-idempotency: required

@@ -137,16 +137,16 @@ fn a_new_commit_in_a_nexus_repository_gets_one_trailer() {
         "-m",
         "Co-authored-by: Jane Doe <jane@example.com>\nCo-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>",
     ]);
+    let named = "feat: two\n\nCo-authored-by: Jane Doe <jane@example.com>\nCo-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>";
     let expected = if marks == 1 {
-        format!("feat: two\n\nCo-authored-by: Jane Doe <jane@example.com>\n{TRAILER}")
+        format!("{named}\n{TRAILER}")
     } else {
-        "feat: two\n\nCo-authored-by: Jane Doe <jane@example.com>\nCo-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
-            .to_string()
+        named.to_string()
     };
     assert_eq!(
         repo.message("HEAD"),
         expected,
-        "Nexus takes Claude Code's place; a person stays"
+        "Nexus joins the co-authors: Claude Code's trailer and the person stay"
     );
     repo.ok(&["commit", "-q", "--allow-empty", "-m", "feat: three\n\nbody\n---\nmore"]);
     assert!(

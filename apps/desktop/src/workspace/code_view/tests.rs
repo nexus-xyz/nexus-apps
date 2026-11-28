@@ -446,6 +446,7 @@ fn session() -> CodeSession {
         compact: false,
         orchestration: false,
         at_depth_limit: false,
+        handoff_from: None,
         agent_started: false,
         crew: Default::default(),
         start_choices: Vec::new(),

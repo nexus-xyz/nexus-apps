@@ -1,0 +1,602 @@
+# Path items. The root openapi.yaml references each one.
+/v1/anthropic/v1/messages:
+  post:
+    tags:
+      - Models
+    operationId: anthropicMessages
+    summary: "Anthropic Messages API (Claude Code: ANTHROPIC_BASE_URL=<core>/v1/anthropic). Metered."
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            description: The provider's own request body (https://docs.anthropic.com/en/api/messages).
+            additionalProperties: true
+    responses:
+      "200":
+        description: "The provider's response: JSON, or server-sent events when the request streams."
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+          text/event-stream:
+            schema:
+              type: string
+      "400":
+        $ref: ../components/common.yaml#/responses/ProviderBadRequest
+      "401":
+        $ref: ../components/common.yaml#/responses/ProviderUnauthorized
+      "402":
+        description: >-
+          The call's maximum cost is more than the budget left (`budget_exceeded`), or the organization has an unpaid
+          Nexus invoice past its grace (`payment_past_due`). A `budget_exceeded` refusal carries `notified: true` in its
+          details once Gateway has told the refused person and the organization's owners and admins. Its `error.nexus`
+          is a BudgetRefusal: each money figure with its exact decimal twin.
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/ProviderError
+      "403":
+        description: >-
+          `model_not_allowed`: the model is refused by a model policy (the message names the level and rule;
+          `error.nexus` carries them), or the organization has no provider key (`provider_key_required`: Nexus credit
+          never pays a pass-through call); or the team in `x-nexus-team` is not the caller's (`not_in_team`).
+          `provider_disabled`: the organization has turned off every provider that serves the model.
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/ProviderError
+      "404":
+        description: "`model_not_found`: not in the model catalog; or the team in `x-nexus-team` does not exist (`unknown_team`)."
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/ProviderError
+      "408":
+        $ref: ../components/common.yaml#/responses/ProviderRequestTimeout
+      "409":
+        $ref: ../components/common.yaml#/responses/ProviderIdempotencyConflict
+      "413":
+        $ref: ../components/common.yaml#/responses/ProviderPayloadTooLarge
+      "422":
+        $ref: ../components/common.yaml#/responses/ProviderIdempotencyKeyReused
+      "426":
+        $ref: ../components/common.yaml#/responses/ProviderUpgradeRequired
+      "429":
+        $ref: ../components/common.yaml#/responses/ProviderRateLimited
+      "502":
+        $ref: ../components/common.yaml#/responses/ProviderUpstreamFailed
+      "503":
+        $ref: ../components/common.yaml#/responses/ProviderCallUnavailable
+      "504":
+        $ref: ../components/common.yaml#/responses/ProviderUpstreamTimeout
+      default:
+        description: Error, in the provider's error shape.
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/ProviderError
+    parameters:
+      - name: x-nexus-team
+        in: header
+        required: false
+        description: >-
+          The team (slug) this call's spend goes to; you must be in it (`nexus claude --team`). Default: your default
+          team.
+        schema:
+          type: string
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKey
+    x-nexus-permission: agents.use
+    x-idempotency: optional
+    description: "Exempt: a provider-compatible route. Provider SDKs do not send the header. A key is honored when sent."
+/v1/anthropic/v1/messages/count_tokens:
+  post:
+    tags:
+      - Models
+    operationId: anthropicCountTokens
+    summary: Anthropic token counting. Free (not metered), but checked against the model policies like every call.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            description: The provider's own request body (https://docs.anthropic.com/en/api/messages-count-tokens).
+            additionalProperties: true
+    responses:
+      "200":
+        description: "The provider's response: JSON, or server-sent events when the request streams."
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+          text/event-stream:
+            schema:
+              type: string
+      "400":
+        $ref: ../components/common.yaml#/responses/ProviderBadRequest
+      "401":
+        $ref: ../components/common.yaml#/responses/ProviderUnauthorized
+      "402":
+        description: The call's maximum cost is more than the budget left.
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/ProviderError
+      "403":
+        description: >-
+          `model_not_allowed`: the model is refused by a model policy (the message names the level and rule;
+          `error.nexus` carries them), or the organization has no provider key (`provider_key_required`: Nexus credit
+          never pays a pass-through call); or the team in `x-nexus-team` is not the caller's (`not_in_team`).
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/ProviderError
+      "404":
+        description: "`model_not_found`: not in the model catalog; or the team in `x-nexus-team` does not exist (`unknown_team`)."
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/ProviderError
+      "408":
+        $ref: ../components/common.yaml#/responses/ProviderRequestTimeout
+      "409":
+        $ref: ../components/common.yaml#/responses/ProviderIdempotencyConflict
+      "413":
+        $ref: ../components/common.yaml#/responses/ProviderPayloadTooLarge
+      "422":
+        $ref: ../components/common.yaml#/responses/ProviderIdempotencyKeyReused
+      "426":
+        $ref: ../components/common.yaml#/responses/ProviderUpgradeRequired
+      "429":
+        $ref: ../components/common.yaml#/responses/ProviderRateLimited
+      "502":
+        $ref: ../components/common.yaml#/responses/ProviderUpstreamFailed
+      "503":
+        $ref: ../components/common.yaml#/responses/ProviderCountUnavailable
+      "504":
+        $ref: ../components/common.yaml#/responses/ProviderUpstreamTimeout
+      default:
+        description: Error, in the provider's error shape.
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/ProviderError
+    x-nexus-permission: agents.use
+    parameters:
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKey
+    x-idempotency: optional
+    description: "Exempt: this POST only reads. It changes no state."
+/v1/anthropic/v1/models:
+  get:
+    tags:
+      - Models
+    operationId: anthropicModels
+    summary: >-
+      The models you may use on the Anthropic API, by the provider's own ids, in the provider's list shape (for clients
+      that query it).
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+      "401":
+        $ref: ../components/common.yaml#/responses/ProviderUnauthorized
+      "403":
+        $ref: ../components/common.yaml#/responses/ProviderForbidden
+      "404":
+        $ref: ../components/common.yaml#/responses/ProviderNotFound
+      "426":
+        $ref: ../components/common.yaml#/responses/ProviderUpgradeRequired
+      "429":
+        $ref: ../components/common.yaml#/responses/ProviderRateLimited
+      "503":
+        $ref: ../components/common.yaml#/responses/ProviderUnavailable
+      default:
+        description: Error, in the provider's error shape.
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/ProviderError
+    x-nexus-permission: agents.use
+/v1/chat/completions:
+  post:
+    tags:
+      - Models
+    operationId: chatCompletion
+    summary: >-
+      OpenAI-compatible chat completion. Policy check, then the call's maximum cost is reserved against the budget, the
+      provider is called, and the reservation settles on reported usage (also on errors). Model `nexus/auto` lets
+      Gateway choose. `model` is a catalog id (any spelling), `nexus/auto` or `nexus/default` (the effective default
+      within policy); the answer's `model` and `x-nexus-model` header say which model ran. An answer the auto router
+      picked also names the router version in `x-nexus-router` and in `nexus.router`. A refused model: 403
+      `model_not_allowed` (policy, naming the level and rule), 404 `model_not_found`, 400 `model_not_supported` (coming
+      soon); never sent upstream or reserved, recorded as a refused call. Who pays: the organization's own key; Nexus's
+      own key for Nexus's own organizations; Nexus credit only for a module run's scoped key (a Nexus feature, such as a
+      Wiki or Review run). Any other caller with no key of its own gets 403 `provider_key_required`, never Nexus credit.
+      Tools (OpenAI's `tools`, `tool_choice`, `parallel_tool_calls`, an assistant's `tool_calls` and `tool` messages)
+      work for Anthropic and OpenAI models alike, translated by Gateway. `stream: true` answers as server-sent events in
+      OpenAI's `chat.completion.chunk` shape (the role, then text and tool-call pieces, a chunk with `finish_reason`, a
+      last chunk with no choices and the `usage` and `nexus` cost, then `data: [DONE]`; a failure after the stream
+      started is a `data: {"error": …}` event), so agent tools that speak Chat Completions (opencode's
+      `@ai-sdk/openai-compatible` and the like) use `<gateway>/v1` as their provider. A stream is checked, reserved and
+      refused exactly as a call that does not stream, and settles however it ends: on the reported usage, or on what
+      streamed when the provider fails or the caller goes away.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas.yaml#/ChatCompletionRequest
+    responses:
+      "200":
+        description: "OK: the answer, or with `stream: true` its server-sent events"
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/ChatCompletionResponse
+          text/event-stream:
+            schema:
+              $ref: ../components/schemas.yaml#/ChatCompletionChunk
+      "400":
+        $ref: ../components/common.yaml#/responses/BadRequest
+      "401":
+        $ref: ../components/common.yaml#/responses/Unauthorized
+      "402":
+        description: >-
+          The call's maximum cost is more than the budget left (`budget_exceeded`; `subsidy_exhausted` for the Nexus
+          subsidy, or `credit_exhausted` for the organization's prepaid credits), or the organization has an unpaid
+          Nexus invoice past its grace (`payment_past_due`). A `budget_exceeded` refusal carries `notified: true` in its
+          details once Gateway has told the refused person and the organization's owners and admins. The details are a
+          BudgetRefusal: each money figure with its exact decimal twin.
+        content:
+          application/json:
+            schema:
+              allOf:
+                - $ref: ../components/schemas.yaml#/Error
+                - properties:
+                    error:
+                      properties:
+                        nexus:
+                          $ref: ../components/schemas.yaml#/BudgetRefusal
+      "403":
+        $ref: ../components/common.yaml#/responses/Forbidden
+      "404":
+        $ref: ../components/common.yaml#/responses/NotFound
+      "408":
+        $ref: ../components/common.yaml#/responses/RequestTimeout
+      "409":
+        $ref: ../components/common.yaml#/responses/IdempotencyConflict
+      "413":
+        $ref: ../components/common.yaml#/responses/PayloadTooLarge
+      "422":
+        $ref: ../components/common.yaml#/responses/IdempotencyKeyReused
+      "426":
+        $ref: ../components/common.yaml#/responses/UpgradeRequired
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      "502":
+        description: >-
+          The provider failed the call. `upstream_auth`: it refused the provider key the call ran on (its 401), never
+          your Nexus API key. `upstream_forbidden`: it refused this model for that key (its 403); the key may still
+          serve other models. `upstream_billing`: the provider account behind that key is out of credit (its 402), never
+          your Nexus budget. The message says whose key it was: your organization's own, Nexus's, or the Nexus credit's.
+          Any other provider 5xx is a 502 with no code.
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "503":
+        description: >-
+          The provider's or the Gateway's own; every one may be retried. The provider's: it has no capacity now (its
+          529, or the 503 OpenAI documents as its overload), `upstream_overloaded`; retry after its `retry-after` when
+          it sent one, or try another model. The Gateway's: it is at its limit of requests in flight (`overloaded`,
+          retry after 1 s); it is stopping and takes no new request (`draining`, retry after 5 s); it stopped before the
+          call's first event (`gateway_stopping`, send the call again: it reaches a running Gateway); or its database is
+          busy (`database_busy`: nothing was committed, retry shortly).
+        headers:
+          Retry-After:
+            description: >-
+              Whole seconds to wait: 1 on `overloaded`, 5 on `draining`, the provider's own on `upstream_overloaded`
+              when it sent one; none on `gateway_stopping` or `database_busy`.
+            schema:
+              type: integer
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    parameters:
+      - name: x-nexus-team
+        in: header
+        required: false
+        description: "The team (slug) this call's spend goes to; you must be in it. Default: your default team."
+        schema:
+          type: string
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKey
+    x-nexus-permission: models.use
+    x-idempotency: optional
+    description: "Exempt: a provider-compatible route. Provider SDKs do not send the header. A key is honored when sent."
+/v1/models:
+  get:
+    tags:
+      - Models
+    operationId: listModels
+    summary: >-
+      The models you may use under your organization's, team's and key's policies (OpenAI-compatible list, with Nexus's
+      fields: each supported model's context window, output limit, reasoning and list prices, enough for a client to
+      offer it without a catalog of its own). Send the key as `Authorization: Bearer <key>` or `x-api-key: <key>`.
+      **With a key**: `status=allowed` (the default) gives the models you may use; `status=all` the whole catalog with
+      `allowed` and `status`; `supported` or `coming_soon` filter it. `team`: as for a call (else `x-nexus-team`, else
+      your default team). **Without a key** (the public catalog, for the model pages and other readers): the catalog
+      itself, the same for everyone, `supported` models by default and `status=all` or `coming_soon` on request, with no
+      `allowed` field, no `status=allowed` and no `team` (asking for `status=allowed` or a team, by `team` or
+      `x-nexus-team`, is a 401); limited per address, and cacheable (`Cache-Control: public`, `Vary: Authorization,
+      X-Api-Key, X-Nexus-Ui-Secret`). A wrong key is a 401, as on every route.
+    parameters:
+      - name: status
+        in: query
+        description: >-
+          With a key: `allowed` (the default), `all`, `supported` or `coming_soon`. Without a key: `supported` (the
+          default), `all` or `coming_soon`; `allowed` needs a key and is a 401 without one.
+        schema:
+          type: string
+          enum:
+            - allowed
+            - all
+            - supported
+            - coming_soon
+      - name: team
+        in: query
+        schema:
+          type: string
+    security:
+      - bearer: []
+      - apiKeyHeader: []
+      - {}
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                object:
+                  const: list
+                data:
+                  type: array
+                  items:
+                    $ref: ../components/schemas.yaml#/Model
+                unavailable:
+                  type: array
+                  description: >-
+                    Models the Gateway knows of but cannot serve yet, each with why. They are not in `data` and cannot
+                    be called. A model may move from here to `data` without notice.
+                  items:
+                    type: object
+                    required:
+                      - id
+                      - reason
+                    properties:
+                      id:
+                        type: string
+                      reason:
+                        type: string
+                team:
+                  type: string
+      "400":
+        $ref: ../components/common.yaml#/responses/BadRequest
+      "401":
+        $ref: ../components/common.yaml#/responses/Unauthorized
+      "403":
+        $ref: ../components/common.yaml#/responses/Forbidden
+      "404":
+        $ref: ../components/common.yaml#/responses/NotFound
+      "426":
+        $ref: ../components/common.yaml#/responses/UpgradeRequired
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      "503":
+        $ref: ../components/common.yaml#/responses/Unavailable
+      "504":
+        $ref: ../components/common.yaml#/responses/GatewayTimeout
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: models.use
+    x-nexus-key-optional: true
+/v1/openai/v1/models:
+  get:
+    tags:
+      - Models
+    operationId: openaiModels
+    summary: >-
+      The models you may use on the OpenAI API, by the provider's own ids, in the provider's list shape (for clients
+      that query it).
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+      "401":
+        $ref: ../components/common.yaml#/responses/ProviderUnauthorized
+      "403":
+        $ref: ../components/common.yaml#/responses/ProviderForbidden
+      "404":
+        $ref: ../components/common.yaml#/responses/ProviderNotFound
+      "426":
+        $ref: ../components/common.yaml#/responses/ProviderUpgradeRequired
+      "429":
+        $ref: ../components/common.yaml#/responses/ProviderRateLimited
+      "503":
+        $ref: ../components/common.yaml#/responses/ProviderUnavailable
+      default:
+        description: Error, in the provider's error shape.
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/ProviderError
+    x-nexus-permission: agents.use
+/v1/openai/v1/responses:
+  post:
+    tags:
+      - Models
+    operationId: openaiResponses
+    summary: >-
+      OpenAI Responses API (Codex: a model provider with base_url <core>/v1/openai/v1). Metered. A hosted tool Nexus
+      cannot price yet (code_interpreter, file_search), or an image_generation model, quality or size it has no price
+      for, is 400 hosted_tool_not_priced.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            description: The provider's own request body (https://platform.openai.com/docs/api-reference/responses).
+            additionalProperties: true
+    responses:
+      "200":
+        description: "The provider's response: JSON, or server-sent events when the request streams."
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+          text/event-stream:
+            schema:
+              type: string
+      "400":
+        $ref: ../components/common.yaml#/responses/ProviderBadRequest
+      "401":
+        $ref: ../components/common.yaml#/responses/ProviderUnauthorized
+      "402":
+        description: >-
+          The call's maximum cost is more than the budget left (`budget_exceeded`), or the organization has an unpaid
+          Nexus invoice past its grace (`payment_past_due`). A `budget_exceeded` refusal carries `notified: true` in its
+          details once Gateway has told the refused person and the organization's owners and admins. Its `error.nexus`
+          is a BudgetRefusal: each money figure with its exact decimal twin.
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/ProviderError
+      "403":
+        description: >-
+          `model_not_allowed`: the model is refused by a model policy (the message names the level and rule;
+          `error.nexus` carries them), or the organization has no provider key (`provider_key_required`: Nexus credit
+          never pays a pass-through call); or the team in `x-nexus-team` is not the caller's (`not_in_team`).
+          `provider_disabled`: the organization has turned off every provider that serves the model.
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/ProviderError
+      "404":
+        description: "`model_not_found`: not in the model catalog; or the team in `x-nexus-team` does not exist (`unknown_team`)."
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/ProviderError
+      "408":
+        $ref: ../components/common.yaml#/responses/ProviderRequestTimeout
+      "409":
+        $ref: ../components/common.yaml#/responses/ProviderIdempotencyConflict
+      "413":
+        $ref: ../components/common.yaml#/responses/ProviderPayloadTooLarge
+      "422":
+        $ref: ../components/common.yaml#/responses/ProviderIdempotencyKeyReused
+      "426":
+        $ref: ../components/common.yaml#/responses/ProviderUpgradeRequired
+      "429":
+        $ref: ../components/common.yaml#/responses/ProviderRateLimited
+      "502":
+        $ref: ../components/common.yaml#/responses/ProviderUpstreamFailed
+      "503":
+        $ref: ../components/common.yaml#/responses/ProviderCallUnavailable
+      "504":
+        $ref: ../components/common.yaml#/responses/ProviderUpstreamTimeout
+      default:
+        description: Error, in the provider's error shape.
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/ProviderError
+    parameters:
+      - name: x-nexus-team
+        in: header
+        required: false
+        description: >-
+          The team (slug) this call's spend goes to; you must be in it (`nexus claude --team`). Default: your default
+          team.
+        schema:
+          type: string
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKey
+    x-nexus-permission: agents.use
+    x-idempotency: optional
+    description: "Exempt: a provider-compatible route. Provider SDKs do not send the header. A key is honored when sent."
+/v1/providers:
+  get:
+    tags:
+      - Models
+    operationId: listProviders
+    summary: >-
+      The providers the Gateway calls, from the catalog: each one's id, name, country, whether an organization may bring
+      its own key (`byok`), whether the Gateway calls it (`status`), how many listed models it hosts, its `rates` (what
+      a model on it costs beyond its input and output prices), the host of its API (`apiHost`) and what the Gateway
+      calls it for (`serving`). Send the key as `Authorization: Bearer <key>` or `x-api-key: <key>`. **With a key**:
+      each BYOK provider also carries `key`, the state of the organization's own key: `none` (none stored, or disabled),
+      `valid` or `rejected`. It never returns the key or any part of it; `listProviderKeys` shows the last four
+      characters. **Without a key**: the same list for everyone, with no `key` field; limited per address with the
+      public model catalog, and cacheable (`Cache-Control: public`, `Vary: Authorization, X-Api-Key,
+      X-Nexus-Ui-Secret`). A wrong key is a 401, as on every route.
+    security:
+      - bearer: []
+      - apiKeyHeader: []
+      - {}
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - object
+                - data
+              properties:
+                object:
+                  const: list
+                data:
+                  type: array
+                  items:
+                    $ref: ../components/schemas.yaml#/Provider
+      "401":
+        $ref: ../components/common.yaml#/responses/Unauthorized
+      "403":
+        $ref: ../components/common.yaml#/responses/Forbidden
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: org.read
+    x-nexus-key-optional: true

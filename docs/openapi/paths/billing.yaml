@@ -1,0 +1,1014 @@
+# Path items. The root openapi.yaml references each one.
+/v1/billing:
+  get:
+    tags:
+      - Billing
+    operationId: getBilling
+    summary: >-
+      The organization's billing (owner only): the Stripe mode of this Gateway, whether the organization has a Stripe
+      customer yet, its payment method on file (`defaultPaymentMethod`, of any type; `paymentMethod` only when it is a
+      card), how it pays for what Nexus runs (pricing v2.0: `freeStart`, `credits` and `autoTopup`, `afterTheFact`;
+      `plan` where this Gateway sells plans), the numbers a page shows (`pricing`), and `pastDue`. `pastDue` is null, or
+      names the oldest month Stripe could not collect: when it first failed (`since`), its period, and when model calls
+      stop (`blockedFrom`, `since` plus a server setting, 7 days by default). From `blockedFrom` until an owner pays,
+      every model call is refused with 402 `payment_past_due`. Never Stripe's customer id or the card number. A customer
+      made in the other mode (test or live) is not shown. 503 `not_configured` until STRIPE_SECRET_KEY and
+      STRIPE_WEBHOOK_SECRET are both set and well formed (the message says which is wrong).
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Billing
+      "403":
+        description: Not the owner (`permission_error`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      "503":
+        description: "Stripe is not configured (`not_configured`): the message says which variable is wrong"
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: org.billing
+    x-internal-stability: beta
+/v1/billing/after-the-fact:
+  put:
+    tags:
+      - Billing
+    operationId: setAfterTheFact
+    summary: >-
+      Turn paying after the fact on or off, or change its monthly usage limit (owner only; pricing v2.0). Body:
+      `enabled`, and `limitUsd` as a decimal string in whole cents. Turning it on needs the payment method on file (409
+      `no_payment_method`), and so does turning it on again with no `limitUsd`; a call with `limitUsd` changes the limit
+      of a setting already on without one. A closed organization cannot turn it on (409 `organization_closed`). Calls
+      the free start and the credits cannot pay then go on the card, at provider price plus Nexus's rate, up to the
+      limit in a UTC month (past it, 402 `usage_limit_reached`). Gateway's Stripe sweep charges the card off session
+      each time the unpaid usage reaches `pricing.thresholdUsd` (less carries over, and what is left is charged once it
+      is turned off); a charge that fails stops the calls the card pays (402 `payment_failed`) and tells the owners,
+      until a charge goes through. A disputed payment (`charge.dispute.created`) stops its card the same way
+      (`failed.reason`: `disputed`) until an owner adds another card, and that card never pays again (409
+      `card_disputed` on turning it on with that card, or on again with no `limitUsd`; a limit change still works). Off
+      stops new calls on the card and still charges what is owed. Off with `limitUsd` keeps the limit, even when it was
+      never on. Audited as `billing.after_the_fact_changed`. 400 `invalid_amount`; 503 `not_configured` until Stripe is
+      set up.
+    parameters:
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKey
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/SetAfterTheFact
+      "400":
+        description: >-
+          `limitUsd` outside $1 to $100,000 ($100 in a new organization's first 7 days) or not in whole cents
+          (`invalid_amount`); `enabled` missing
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "403":
+        description: Not the owner (`permission_error`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "409":
+        description: Turning on with no payment method on file (`no_payment_method`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      "503":
+        description: Stripe is not configured (`not_configured`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: org.billing
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas.yaml#/SetAfterTheFactRequest
+    x-internal-stability: beta
+    x-idempotency: optional
+/v1/billing/auto-topup:
+  put:
+    tags:
+      - Billing
+    operationId: setAutoTopup
+    summary: >-
+      Turn the organization's auto top-up of Nexus credits on or off (owner only). Body: `enabled`, and `belowUsd` and
+      `addUsd` as decimal strings in whole cents (or the ones set before). On needs the payment method on file (409
+      `no_payment_method`), and not a card whose payment was disputed (409 `card_disputed`). A closed organization
+      cannot turn it on (409 `organization_closed`). When the credits left fall below `belowUsd`, Gateway's Stripe sweep
+      charges that payment method `addUsd` off session and credits it, one top-up at a time, at most 3 top-ups or $500 a
+      UTC day. A decline, a bank that wants the person, no payment method, a bank debit that fails later
+      (`payment_intent.payment_failed`), a dispute, or a refund that takes the credits below zero turns it off, and
+      `offReason` says why. Off keeps the amounts; turning off what was never set answers `autoTopup: null`. Audited as
+      `credit.auto_topup_changed`. 400 `invalid_amount`; 503 `not_configured` until Stripe is set up.
+    parameters:
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKey
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/SetAutoTopup
+      "400":
+        description: >-
+          `belowUsd` not above $0 or above $10,000, or `addUsd` outside $25 to $500 or not in whole cents
+          (`invalid_amount`); `enabled` missing; or turning on without both amounts
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "403":
+        description: Not the owner (`permission_error`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "409":
+        description: Turning on with no payment method on file (`no_payment_method`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      "503":
+        description: Stripe is not configured (`not_configured`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: org.billing
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas.yaml#/SetAutoTopupRequest
+    x-internal-stability: beta
+    x-idempotency: optional
+/v1/billing/confirm-payment:
+  post:
+    tags:
+      - Billing
+    operationId: confirmPayment
+    summary: >-
+      Confirm a payment the bank wants the cardholder to confirm (3-D Secure), owner only. Off session, Stripe refuses
+      such a charge with `authentication_required` and keeps its PaymentIntent; this confirms that same usage charge
+      after the fact again on session; one the bank's page never finished is cancelled at Stripe an hour later. An auto
+      top-up that turned off for the bank's check is fixed by saving the card again (startPaymentMethodSetup). `status`
+      `redirect`: open `url`, the bank's page, which sends the person back to the organization's billing page in Nexus
+      UI (<web app>/<org>/billing?confirmed=1`). `succeeded` or `processing`: Stripe took it, or a bank debit is on its
+      way. Stripe's notice records the payment as for any charge; nothing is charged twice. Takes no body. 409
+      `nothing_to_confirm` when no charge waits for the bank's check (save the card again with startPaymentMethodSetup),
+      `charge_running` while a usage charge is being taken. 402 when the card is declined on session.
+    parameters:
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKeyRequired
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/PaymentConfirmation
+      "402":
+        description: The card was declined on session (`stripe_error`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "403":
+        description: Not the owner (`permission_error`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "409":
+        description: >-
+          No charge waits for the bank's check (`nothing_to_confirm`), or a usage charge is being taken now
+          (`charge_running`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "428":
+        $ref: ../components/common.yaml#/responses/PreconditionRequired
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      "502":
+        description: Stripe refused the call or did not answer (`stripe_error`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "503":
+        description: Stripe is not configured, or the web app's address is not set (`not_configured`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: org.billing
+    x-internal-stability: beta
+    x-idempotency: required
+/v1/billing/credits:
+  post:
+    tags:
+      - Billing
+    operationId: buyCredits
+    summary: >-
+      Buy Nexus credits (owner only): the organization's own money, prepaid at face value and never expiring, spent by
+      Nexus features after the free start and a plan's included usage at provider price plus Nexus's rate. Body:
+      `amountUsd`, a decimal string in whole cents, from "10.00" to "10000.00"; a new organization buys at most $100 in
+      its first 7 days, counting the purchases still being paid, such as an open Checkout page until it expires (400
+      `purchase_limit`). With a payment method on file, Gateway charges it off session: `status: credited` with the
+      credits after, or `processing` for a bank debit still on its way (Stripe's notice credits it). Without one, or
+      when the bank wants the person (3-D Secure) or the card declines, `status: checkout` with a Stripe Checkout `url`
+      to open before `expiresAt`; Stripe sends the person back to <web app>/<org>/billing?checkout=credits`. A payment
+      credits once, from Stripe's `payment_intent.succeeded`, and only to the organization whose Stripe customer paid.
+      The Idempotency-Key header keys the Stripe call, so a retry never charges twice. Audited as `credit.purchased`.
+      400 `invalid_amount`; 502 `stripe_error`; 503 `not_configured` until Stripe is set up, or without the web app's
+      address for a hosted purchase. With paymentToken, charge the agent wallet shared payment token directly in Stripe
+      test mode. Live mode returns 503 payment_tokens_not_supported before contacting Stripe. There is no hosted
+      fallback. 400 invalid_payment_token rejects a malformed credential, or one Stripe has deactivated (used, revoked
+      or expired); 402 payment_authentication_required requires the cardholder. The same Idempotency-Key and body replay
+      the first result.
+    parameters:
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKeyRequired
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/BuyCredits
+            example:
+              status: credited
+              amountUsd: "250.000000"
+              credits:
+                purchasedUsd: "1250.000000"
+                spentUsd: "412.584300"
+                reservedUsd: "0.600000"
+                remainingUsd: "836.815700"
+                markupBps: 500
+      "400":
+        description: >-
+          An amount outside $25 to $10,000 or not in whole cents (`invalid_amount`), or past a new organization's limit
+          (`purchase_limit`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+            example:
+              error:
+                message: a purchase buys from $25.00 to $10000.00 of credits
+                type: invalid_request_error
+                code: invalid_amount
+      "402":
+        description: >-
+          The delegated payment requires cardholder authentication or was not completed
+          (payment_authentication_required, payment_declined, payment_failed).
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "403":
+        description: Only the owner buys credits (`role_required`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+            example:
+              error:
+                message: only the org's owner can buy Nexus credits (org.billing)
+                type: permission_error
+                code: role_required
+      "428":
+        $ref: ../components/common.yaml#/responses/PreconditionRequired
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      "502":
+        description: Stripe refused the call or did not answer (`stripe_error`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+            example:
+              error:
+                message: Stripe could not complete the request (status 402, type card_error, code card_declined)
+                type: stripe_error
+                code: stripe_error
+      "503":
+        description: >-
+          Delegated payment tokens are disabled in live mode (`payment_tokens_not_supported`), Stripe is not configured,
+          the web app's address is not set for a hosted purchase (`not_configured`), or a first call for this
+          organization is still running (`billing_setup_in_progress`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+            example:
+              error:
+                message: a card setup for this organization is already starting; try again in a moment
+                type: api_error
+                code: billing_setup_in_progress
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: org.billing
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas.yaml#/BuyCreditsRequest
+          example:
+            amountUsd: "250.00"
+    x-internal-stability: beta
+    x-idempotency: required
+/v1/billing/operations/{operationId}:
+  get:
+    tags:
+      - Billing
+    operationId: billingOperation
+    summary: Confirm one billing operation
+    parameters:
+      - name: operationId
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^(?:cs_[A-Za-z0-9_]+|pi_[A-Za-z0-9_]+)$
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/BillingOperation
+      "403":
+        description: Not the owner (`permission_error`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "404":
+        description: Not one of the organization's payments (`not_found`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      "503":
+        description: Stripe is not configured (`not_configured`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: org.billing
+    description: >-
+      Confirm only the authenticated organization’s exact Checkout session or direct credit payment. Credit purchases
+      complete after the matching payment is recorded; setup completes after its verified payment method is saved.
+    x-internal-stability: beta
+/v1/billing/payment-method:
+  post:
+    tags:
+      - Billing
+    operationId: startPaymentMethodSetup
+    summary: >-
+      Start saving a card for the organization (owner only): a link to a card page hosted by Stripe Checkout. Open `url`
+      in a browser before `expiresAt`. Stripe sends the person back to the organization's billing page in Nexus UI (<web
+      app>/<org>/billing?checkout=done` or `=cancelled`). Gateway makes the organization's Stripe customer on the first
+      call and reuses it after; each call makes a new link. Takes no body, or `{"embedded": true}`: the same card setup
+      as a form Nexus UI shows inside its billing page. With `STRIPE_PUBLISHABLE_KEY` on Gateway, that answer is
+      `EmbeddedCardSetup` (Stripe.js's `clientSecret` and the `publishableKey`, no `url`), and Stripe sends the page to
+      `?checkout=done` once the card is saved; without it, the hosted link as without the body. 400 when `embedded` is
+      not a boolean. Audited as `billing.customer_created` when the customer is made, and as `billing.customer_deleted`
+      when Stripe no longer has it; neither event names Stripe's customer id. 502 `stripe_error` when Stripe refuses or
+      does not answer (the message names Stripe's type and code). 503 `not_configured` until Stripe is set up, or
+      without the web app's address on Gateway; 503 `billing_setup_in_progress` while a first call for the organization
+      is still running (try again in a moment).
+    parameters:
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKeyRequired
+    requestBody:
+      required: false
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas.yaml#/PaymentMethodSetupRequest
+          example:
+            embedded: true
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - $ref: ../components/schemas.yaml#/PaymentMethodSetup
+                - $ref: ../components/schemas.yaml#/EmbeddedCardSetup
+      "400":
+        description: "`embedded` is not a boolean (`invalid_request`)"
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "403":
+        description: Not the owner (`permission_error`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "428":
+        $ref: ../components/common.yaml#/responses/PreconditionRequired
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      "502":
+        description: Stripe refused the call or did not answer (`stripe_error`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "503":
+        description: >-
+          Stripe is not configured, the web app's address is not set (`not_configured`), or a first call for this
+          organization is still running (`billing_setup_in_progress`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: org.billing
+    x-internal-stability: beta
+    x-idempotency: required
+/v1/billing/plan:
+  post:
+    tags:
+      - Billing
+    operationId: startPlan
+    summary: >-
+      Start a plan for the organization (owner only): a link to a Stripe Checkout page that starts the subscription.
+      Stripe sends the person back to <web app>/<org>/billing?checkout=plan`, or `=plan_cancelled`. The plans are the
+      ones in a server setting (Pro, Max's tiers, Team, Team Premium), billed monthly or yearly; a per-seat plan has one
+      seat per member, at least its minimum (the seats follow the members), so `seats` may be left out and, when given,
+      must be that number. The plan's included usage is granted once a month as a Nexus subsidy and does not roll over.
+      A per-seat plan is for companies and any other plan for personal organizations (`GET /v1/billing/plans` lists an
+      organization's). 400 `unknown_plan` for a plan or interval this Gateway does not sell; 400 `plan_not_for_org` for
+      a plan of the other kind of organization; 409 `plan_active` while the organization has a live subscription: change
+      it with `POST /v1/billing/plan/change`. 502 `stripe_error` when Stripe refuses or does not answer. 503
+      `not_configured` until Stripe and a server setting are set, or without the web app's address.
+    parameters:
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKeyRequired
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/PaymentMethodSetup
+      "400":
+        description: A bad plan, interval or seats (`unknown_plan`, `invalid_request`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "403":
+        description: Not the owner (`permission_error`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "409":
+        description: A live subscription already holds the plan (`plan_active`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "428":
+        $ref: ../components/common.yaml#/responses/PreconditionRequired
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      "502":
+        description: Stripe refused the call or did not answer (`stripe_error`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "503":
+        description: Stripe or a server setting is not configured, or the web app's address is not set (`not_configured`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: org.billing
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas.yaml#/PlanChoice
+    x-internal-stability: beta
+    x-idempotency: required
+/v1/billing/plan/change:
+  delete:
+    tags:
+      - Billing
+    operationId: cancelPlanChange
+    summary: >-
+      Cancel the plan change pending for the period's end (owner only): Stripe releases the schedule and the plan stays
+      as it is. 409 `no_pending_change` without one; 502 `stripe_error`; 503 `not_configured` until Stripe is set up.
+    parameters:
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKey
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - plan
+              properties:
+                plan:
+                  oneOf:
+                    - $ref: ../components/schemas.yaml#/BillingPlan
+                    - type: "null"
+      "403":
+        description: Not the owner (`permission_error`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "409":
+        description: No plan change pending (`no_pending_change`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      "502":
+        description: Stripe refused the call or did not answer (`stripe_error`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "503":
+        description: Stripe is not configured (`not_configured`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: org.billing
+    x-internal-stability: beta
+    x-idempotency: optional
+  post:
+    tags:
+      - Billing
+    operationId: changePlan
+    summary: >-
+      Change the organization's plan, interval or seats (owner only). Body: `plan`, `interval`, `seats` for a per-seat
+      plan (one per member, at least its minimum: left out, Gateway counts them), and `dryRun`. A change that costs more
+      a month applies now, and so does monthly to yearly at the same rate a month or more (a yearly price costs its
+      plan's monthly price a month): Stripe prorates it and invoices the difference at once, and the month's included
+      usage grows by the difference at once (live mode, or a server setting`). A payment that fails changes nothing (402
+      `payment_failed`). Any other change (a cheaper plan, fewer seats, yearly to monthly, monthly to a yearly plan that
+      costs less a month) applies at the period's end through a Stripe subscription schedule, shows as `pendingChange`
+      on `GET /v1/billing`, and replaces an earlier pending change; `DELETE` cancels it. `dryRun: true` answers `when`,
+      `at` and `amountDueUsd` (what is invoiced now) and changes nothing. The Idempotency-Key header keys the Stripe
+      call. 400 `unknown_plan`, `plan_not_for_org`, `same_plan`; 409 `no_plan` without a paid plan, `plan_ending` while
+      the plan is cancelled (renew it on Stripe's billing page first); 502 `stripe_error`; 503 `not_configured` until
+      Stripe and a server setting are set.
+    parameters:
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKeyRequired
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/PlanChange
+      "400":
+        description: >-
+          An unknown plan or interval, seats out of range, a plan for the other kind of organization, or the plan the
+          organization is on
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "402":
+        description: Stripe could not take the payment for the change (`payment_failed`); nothing changed
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "403":
+        description: Not the owner (`permission_error`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "409":
+        description: >-
+          No paid plan to change (`no_plan`), or the plan is cancelled, for this period or a later one (`plan_ending`,
+          with `cancelAt` on `GET /v1/billing`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "428":
+        $ref: ../components/common.yaml#/responses/PreconditionRequired
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      "502":
+        description: Stripe refused the call, did not answer, or gave no prices to compare (`stripe_error`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "503":
+        description: Stripe or a server setting is not configured (`not_configured`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: org.billing
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas.yaml#/PlanChangeRequest
+    x-internal-stability: beta
+    x-idempotency: required
+/v1/billing/plans:
+  get:
+    tags:
+      - Billing
+    operationId: listPlans
+    summary: >-
+      The plans this organization can take, priced as Stripe holds them (owner only): one source for Nexus UI, the
+      desktop app, both CLIs and the phone. A per-seat plan is for companies and any other plan for personal
+      organizations, so only the organization's kind is listed (`audience`). Each plan has its name (the Stripe
+      Product's), `perSeat`, `minSeats`, and per interval `amountUsd` (the price, per seat for a per-seat plan) and
+      `includedUsd` (included usage each month, per seat), as decimal strings. Each plan also has its cloud hours a
+      month per seat (`includedHours`), the price of an hour past them (`hourlyUsd`, a decimal string or null) and the
+      machine sizes it allows (`sizes`). A price Stripe could not give has `amountUsd: null` and a machine-readable
+      `error` (`stripe_error`, `stripe_timeout`, `inactive`, `not_usd`, `interval_mismatch`, `no_fixed_amount`).
+      Cheapest a month first. `current` is the plan the organization's subscription holds. Prices are cached for 10
+      minutes. 502 `stripe_error` when Stripe gave none of the listed prices; 503 `not_configured` without Stripe or a
+      server setting.
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/PlanCatalogue
+      "403":
+        description: Not the owner (`permission_error`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      "502":
+        description: Stripe gave none of the listed prices (`stripe_error`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "503":
+        description: Stripe or a server setting is not configured (`not_configured`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: org.billing
+    x-internal-stability: beta
+/v1/billing/portal:
+  post:
+    tags:
+      - Billing
+    operationId: startBillingPortal
+    summary: >-
+      Open the organization's Stripe customer portal (owner only): a link to a page hosted by Stripe where the owner
+      manages payment methods, sees and pays invoices, sets tax ids and cancels at period end. Plans and seats change
+      through Gateway, not the portal. Open `url` in a browser at once: Stripe's link expires within minutes. Stripe
+      sends the person back to the organization's billing page in Nexus UI (<web app>/<org>/billing`). Gateway makes the
+      organization's Stripe customer on the first call and reuses it after; each call makes a new link. Takes no body.
+      The Stripe account needs a default portal configuration. 502 `stripe_error` when Stripe refuses or does not answer
+      (the message names Stripe's type and code). 503 `not_configured` until Stripe is set up, or without the web app's
+      address on Gateway; 503 `billing_setup_in_progress` while a first call for the organization is still running (try
+      again in a moment).
+    parameters:
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKeyRequired
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/BillingPortal
+      "403":
+        description: Not the owner (`permission_error`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "428":
+        $ref: ../components/common.yaml#/responses/PreconditionRequired
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      "502":
+        description: Stripe refused the call or did not answer (`stripe_error`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "503":
+        description: >-
+          Stripe is not configured, the web app's address is not set (`not_configured`), or a first call for this
+          organization is still running (`billing_setup_in_progress`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: org.billing
+    x-internal-stability: beta
+    x-idempotency: required
+/v1/billing/receipts:
+  get:
+    tags:
+      - Billing
+    operationId: listReceipts
+    summary: >-
+      The organization's receipts (owner only; pricing v2.0), newest first, at most 100: credit purchases (`credits`,
+      `auto_topup`), charges for usage after the fact (`usage`) and invoiced months (`invoice`). Read from Gateway's own
+      records, with no call to Stripe. 503 `not_configured` until Stripe is set up.
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/ReceiptList
+      "403":
+        description: Not the owner (`permission_error`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      "503":
+        description: Stripe is not configured (`not_configured`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: org.billing
+    x-internal-stability: beta
+/v1/billing/receipts/{paymentId}:
+  get:
+    tags:
+      - Billing
+    operationId: getReceipt
+    summary: >-
+      Stripe's receipt page of one of the organization's payments (owner only; pricing v2.0): a credit purchase or a
+      charge for usage after the fact, by its `pi_…` id. 404 `not_found` for a payment that is not the organization's;
+      409 `no_receipt` while Stripe has none; 502 `stripe_error`; 503 `not_configured` until Stripe is set up.
+    parameters:
+      - name: paymentId
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[A-Za-z0-9_-]+$
+        description: The payment's id (`pi_…`); any other id is no receipt (404).
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/ReceiptLink
+      "403":
+        description: Not the owner (`permission_error`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "404":
+        description: Not one of the organization's payments (`not_found`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "409":
+        description: Stripe has no receipt for the payment yet (`no_receipt`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      "503":
+        description: Stripe is not configured (`not_configured`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: org.billing
+    x-internal-stability: beta
+/v1/billing/statement:
+  get:
+    tags:
+      - Billing
+    operationId: getBillingStatement
+    summary: >-
+      The organization's bill for one UTC month (owner only). A month the close stored answers from the stored row, as
+      it closed, and `invoice` shows its Stripe invoice. Any other month is priced now, from the ledger and the prices
+      Gateway has: a server setting and a server setting. Both are 0 until a price is set, so the total reads 0. It
+      counts the calls on the organization's own provider keys. Refused calls and calls a Nexus subsidy paid are left
+      out. Money is a decimal string. The bill is the total in whole cents, rounded down, as a string. `carriedInUsd` is
+      the rest of the newest stored month before this one. `carriedOutUsd` is the part below one cent, and it carries
+      into the next month. A month under 50 cents is not invoiced: all of its total carries. `providerCostUsd` is what
+      the providers charged. They bill it, not Nexus. The stored months are the ones of Gateway's Stripe key mode.
+      Without Stripe nothing is stored, so every month is priced now. The route reads no Stripe, so it answers with
+      Stripe off. 400 for a period that is not YYYY-MM or has not started.
+    parameters:
+      - name: period
+        in: query
+        required: false
+        description: YYYY-MM from 1970-01 to 9998-12, a UTC month that has started; default the current month
+        schema:
+          type: string
+          pattern: ^[0-9]{4}-(0[1-9]|1[0-2])$
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/BillingStatement
+      "400":
+        description: Not a month as YYYY-MM, or a month that has not started (`invalid_request_error`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "403":
+        description: Not the owner (`permission_error`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: org.billing
+    x-internal-stability: beta
+/v1/billing/statements:
+  get:
+    tags:
+      - Billing
+    operationId: listBillingStatements
+    summary: >-
+      The months the close stored for the organization (owner only), in the mode of Gateway's Stripe key, newest first,
+      at most 24. Each month shows its total, its whole cents, its state and its Stripe invoice page. A `closed` month
+      is under 50 cents: nothing was invoiced and its total carries into the next month. Money is a decimal string. The
+      route reads no Stripe. 503 `not_configured` until STRIPE_SECRET_KEY and STRIPE_WEBHOOK_SECRET are both set and
+      well formed (the message says which is wrong).
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/BillingStatementList
+      "403":
+        description: Not the owner (`permission_error`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      "503":
+        description: "Stripe is not configured (`not_configured`): the message says which variable is wrong"
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: org.billing
+    x-internal-stability: beta

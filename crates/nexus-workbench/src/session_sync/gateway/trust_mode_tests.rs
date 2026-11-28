@@ -1,5 +1,5 @@
-//! The runner follows the device list's `trust`: Gateway's own trust skips approvals and the approver's code, once the
-//! person opts in on a computer that relied on approvals.
+//! The runner follows the device list's `trust`: Gateway's own trust skips approvals and the approver's code. A
+//! computer that relied on approvals follows it once the person opts in; one that relied on nothing follows it at once.
 use super::*;
 use crate::session_sync::keystore::KeyStore;
 use bytes::Bytes;
@@ -112,35 +112,67 @@ fn ids(trusted: &Trusted) -> Vec<&str> {
     trusted.holders.iter().map(|holder| holder.id.as_str()).collect()
 }
 
-#[tokio::test]
-async fn the_runner_trusts_gateway_s_list_only_after_the_person_opts_in_and_while_it_names_gateway_trust() {
-    let (laptop, phone, desktop) = (DeviceKey::generate(), DeviceKey::generate(), DeviceKey::generate());
-    // Under approvals the laptop was approved by the phone, and the person has not confirmed the phone's code.
+/// The device lists of one person: under approvals (the laptop approved by the phone), and vouched for by Gateway.
+fn lists(laptop: &DeviceKey, phone: &DeviceKey, desktop: &DeviceKey) -> (Value, Value) {
     let approvals = json!({ "devices": [
-        row("dev_phone", &phone, None),
-        row("dev_laptop", &laptop, Some(("dev_phone", &phone))),
-        row("dev_desktop", &desktop, None),
+        row("dev_phone", phone, None),
+        row("dev_laptop", laptop, Some(("dev_phone", phone))),
+        row("dev_desktop", desktop, None),
     ]});
     // Gateway vouches for the person's devices: no approval and no code.
     let vouched = json!({ "trust": "gateway", "devices": [
-        row("dev_phone", &phone, None),
-        row("dev_laptop", &laptop, None),
-        row("dev_desktop", &desktop, None),
+        row("dev_phone", phone, None),
+        row("dev_laptop", laptop, None),
+        row("dev_desktop", desktop, None),
         { "id": "dev_code", "kind": "recovery_code", "state": "trusted", "signingKey": null,
           "encryptionKey": e2e::b64u(&DeviceKey::generate().encryption_key()),
           "approvedBy": null, "approvalSignature": null },
     ]});
-    let fixture = Fixture::new(laptop, approvals.clone()).await;
-    assert_eq!(fixture.backend.device_trust(), DeviceTrust::Approvals);
+    (approvals, vouched)
+}
+
+#[tokio::test]
+async fn a_runner_that_only_waited_under_approvals_follows_gateway_s_list_with_no_opt_in() {
+    // Under approvals the laptop never confirmed the phone's code, so it locked nothing and relied on no approval.
+    let (laptop, phone, desktop) = (DeviceKey::generate(), DeviceKey::generate(), DeviceKey::generate());
+    let (approvals, vouched) = lists(&laptop, &phone, &desktop);
+    let fixture = Fixture::new(laptop, approvals).await;
     assert_eq!(
         fixture.backend.directory().await.expect_err("waits for the code"),
         trust::APPROVER_UNCONFIRMED
     );
+    fixture.list(vouched);
+    let trusted = fixture.backend.directory().await.expect("vouched for");
+    assert_eq!(ids(&trusted), ["dev_laptop", "dev_phone", "dev_desktop"]);
+    assert_eq!(fixture.backend.device_trust(), DeviceTrust::Gateway);
+}
+
+#[tokio::test]
+async fn the_runner_trusts_gateway_s_list_only_after_the_person_opts_in_and_while_it_names_gateway_trust() {
+    let (laptop, phone, desktop) = (DeviceKey::generate(), DeviceKey::generate(), DeviceKey::generate());
+    let (approvals, vouched) = lists(&laptop, &phone, &desktop);
+    let phone_holder = trust::Holder {
+        id: "dev_phone".into(),
+        keys: trust::Keys {
+            encryption: phone.encryption_key(),
+            signing: Some(phone.signing_key()),
+        },
+    };
+    let fixture = Fixture::new(laptop, approvals.clone()).await;
+    assert_eq!(fixture.backend.device_trust(), DeviceTrust::Approvals);
+    // Under approvals the person confirmed the phone's code on this laptop: it relied on approvals.
+    fixture
+        .backend
+        .keys
+        .confirm_approver(&fixture.backend.owner, "dev_laptop", &phone_holder)
+        .expect("confirmed");
+    let confirmed = fixture.backend.directory().await.expect("approvals");
+    assert_eq!(ids(&confirmed), ["dev_laptop", "dev_phone"]);
     fixture.list(vouched.clone());
     // Gateway's answer alone does not move this computer off approvals: the list has no approvals, so the laptop
-    // reads as a root and trusts no other device.
+    // trusts only what it verified before.
     let alone = fixture.backend.directory().await.expect("approvals");
-    assert_eq!(ids(&alone), ["dev_laptop"]);
+    assert_eq!(ids(&alone), ["dev_laptop", "dev_phone"]);
     assert_eq!(fixture.backend.device_trust(), DeviceTrust::Approvals);
     // The person opts in on this computer.
     fixture
@@ -151,18 +183,15 @@ async fn the_runner_trusts_gateway_s_list_only_after_the_person_opts_in_and_whil
     let trusted = fixture.backend.directory().await.expect("vouched for");
     assert_eq!(ids(&trusted), ["dev_laptop", "dev_phone", "dev_desktop"]);
     assert_eq!(fixture.backend.device_trust(), DeviceTrust::Gateway);
-    // Back to approvals: nothing Gateway vouched for stays trusted. (The laptop read as a root above, so it trusts
-    // itself only, or waits for the code.)
+    // Back to approvals: nothing Gateway vouched for stays trusted, only what the laptop verified itself.
     fixture.list(approvals);
-    match fixture.backend.directory().await {
-        Ok(trusted) => assert_eq!(ids(&trusted), ["dev_laptop"]),
-        Err(error) => assert_eq!(error, trust::APPROVER_UNCONFIRMED),
-    }
+    let back = fixture.backend.directory().await.expect("approvals");
+    assert_eq!(ids(&back), ["dev_laptop", "dev_phone"]);
     assert_eq!(fixture.backend.device_trust(), DeviceTrust::Approvals);
-    // Gateway's trust again needs a new opt-in: no device Gateway lists becomes a holder.
+    // Gateway's trust again needs a new opt-in: the desktop Gateway lists does not become a holder.
     fixture.list(vouched);
     let again = fixture.backend.directory().await.expect("approvals");
-    assert_eq!(ids(&again), ["dev_laptop"]);
+    assert_eq!(ids(&again), ["dev_laptop", "dev_phone"]);
     assert_eq!(fixture.backend.device_trust(), DeviceTrust::Approvals);
 }
 

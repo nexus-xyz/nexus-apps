@@ -77,22 +77,20 @@ copy_cef_notices() {
 }
 
 # Nexus's own license (MIT), its NOTICE and the third-party notices of what the binary embeds: every package carries
-# them beside CEF's. LICENSE and NOTICE are in oss/community here, and at the root of the public repository, two
-# folders above the app. $1 the destination.
+# them beside CEF's. LICENSE and NOTICE are at the repository root, two folders above the app. $1 the destination.
 copy_nexus_notices() {
   local to="$1" file src
   [[ -f "$crate/THIRD_PARTY_NOTICES.txt" ]] || { echo "no THIRD_PARTY_NOTICES.txt in $crate; a package must carry it" >&2; exit 1; }
   cp "$crate/THIRD_PARTY_NOTICES.txt" "$to/THIRD_PARTY_NOTICES.txt"
   for file in LICENSE NOTICE; do
-    src="$crate/oss/community/$file"
-    [[ -f "$src" ]] || src="$crate/../../$file"
-    [[ -f "$src" ]] || { echo "no $file in $crate/oss/community or $crate/../..; a package must carry it" >&2; exit 1; }
+    src="$crate/../../$file"
+    [[ -f "$src" ]] || { echo "no $file in $crate/../..; a package must carry it" >&2; exit 1; }
     cp "$src" "$to/$file"
   done
 }
 
-# Nexus's app icon `assets/icons/$1`, or the neutral `assets/held/$2` where the marks are not in the tree (the
-# open-source repo: export manifest, B2).
+# Nexus's app icon `assets/icons/$1`, or the neutral `assets/held/$2` where the marks are not in the tree (logos
+# pending clearance).
 app_icon() {
   if [[ -f "assets/icons/$1" ]]; then echo "assets/icons/$1"; else echo "assets/held/$2"; fi
 }
@@ -117,6 +115,8 @@ package_linux() {
   fi
   cp "$(app_icon 128x128@2x.png app-icon.png)" "$stage/$bin.png"
   cp packaging/linux/nexus-desktop-gpui.desktop "$stage/"
+  # The license is at the repository root.
+  cp "$crate/../../LICENSE" "$stage/LICENSE"
   cp packaging/linux/install.sh "$stage/"
   chmod +x "$stage/install.sh"
   if [[ -n "${NO_ARCHIVE:-}" ]]; then

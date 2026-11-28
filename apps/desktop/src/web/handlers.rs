@@ -54,6 +54,9 @@ wrap_app! {
             if cfg!(target_os = "macos") {
                 disable_feature(command_line, "SystemNotifications");
             }
+            // Keep normal renderer allocation and site isolation; place GPU work in the separate CEF host.
+            #[cfg(target_os = "macos")]
+            super::process_limits::apply(command_line);
             // Debug builds only, for finding a stutter inside Chromium, e.g. its own trace:
             // `NEXUS_WEB_CHROME_FLAGS="--trace-startup=cc,viz --trace-startup-file=/tmp/chrome.json
             // --trace-startup-duration=30"`. Only `--trace-*` switches: anything else (`--remote-debugging-port`,
@@ -648,7 +651,7 @@ pub(super) fn dev_tools(id: u32) -> DevToolsMessageObserver {
 }
 
 /// Adds `feature` to the command line's `--disable-features`, beside the features already there.
-fn disable_feature(command_line: &mut CommandLine, feature: &str) {
+pub(super) fn disable_feature(command_line: &mut CommandLine, feature: &str) {
     let name: CefString = "disable-features".into();
     let current = CefString::from(&command_line.switch_value(Some(&name))).to_string();
     command_line.remove_switch(Some(&name));

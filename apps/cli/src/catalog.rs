@@ -2852,7 +2852,7 @@ pub fn command_catalog(version: &str) -> Value {
         commands.push(command(Literal {
             name: agent,
             // The TypeScript CLI's routes; this CLI lists them so its catalog stays commands.json, but runs every agent
-            // through Gateway (it is not distributed: eng/HANDOFF.md). Its `nexus agents` is the same as the
+            // through Gateway (it is not distributed). Its `nexus agents` is the same as the
             // TypeScript one.
             usage: format!(
                 "nexus {agent} [--json] [--subscription | --api | --via <route>] [--team <slug>] [--recording [<id>|latest]] [--no-skills] [--] [{agent} args…]"

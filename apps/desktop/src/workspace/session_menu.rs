@@ -163,16 +163,18 @@ impl Workspace {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> AnyElement {
-        self.render_session_row_at(session, 0, aside, now, palette, window, cx)
+        self.render_session_row_at(session, 0, false, aside, now, palette, window, cx)
     }
 
     /// A session's row at `depth` in its project's tree: a linked session's row sits 8px in from its line
-    /// (`.wb-linked-threads .wb-thread`), a top one 24px.
+    /// (`.wb-linked-threads .wb-thread`), a top one 24px. A row in a crew (`session_tree::in_crew`) or handed off to
+    /// names its agent; a handed-off one says under its title which agent it came from.
     #[allow(clippy::too_many_arguments)]
     pub(super) fn render_session_row_at(
         &self,
         session: &CodeSession,
         depth: usize,
+        crew: bool,
         aside: Option<Aside>,
         now: i64,
         palette: Palette,
@@ -302,6 +304,14 @@ impl Workspace {
             .child(
                 h_flex()
                     .gap(px(6.))
+                    .when(crew || session.handoff_from.is_some(), |tail| {
+                        tail.child(
+                            div()
+                                .text_size(px(11.))
+                                .text_color(palette.faint)
+                                .child(crate::agents::ui(session.agent).short_name()),
+                        )
+                    })
                     .when_some(pull_badge(&session.id, palette), |age, badge| age.child(badge))
                     .children(machine_state)
                     // While the session works or waits on the person, the row says so in place of its age. Work left
@@ -394,9 +404,31 @@ impl Workspace {
             ),
             |row, (phase, page)| row.child(self.render_session_menu(session, now, phase, page, false, palette, cx)),
         );
-        match exit {
-            Some(frame) => row_exit::draw(row.into_any_element(), &session.id, frame, palette, window),
+        let row: AnyElement = match super::session_tree::handoff_line(session) {
+            Some(line) => v_flex()
+                .child(row)
+                .child(
+                    div()
+                        .pl(px(indent + 24.))
+                        .h(px(super::session_tree::HANDOFF_CAPTION_HEIGHT))
+                        .line_height(px(super::session_tree::HANDOFF_CAPTION_HEIGHT))
+                        .text_size(px(11.))
+                        .text_color(palette.faint)
+                        .child(line),
+                )
+                .into_any_element(),
             None => row.into_any_element(),
+        };
+        match exit {
+            Some(frame) => row_exit::draw(
+                row,
+                &session.id,
+                super::session_tree::row_height(session),
+                frame,
+                palette,
+                window,
+            ),
+            None => row,
         }
     }
 
@@ -506,7 +538,9 @@ impl Workspace {
         // While it folds shut, it keeps its rows until the motion ends. Each row is one ROW tall, less
         // what a deleted one has folded (`row_exit.rs`).
         let height = self.row_exits.height(
-            sessions.iter().map(|session| session.id.as_str()),
+            sessions
+                .iter()
+                .map(|session| (session.id.as_str(), super::session_tree::row_height(session))),
             std::time::Instant::now(),
             cx.reduce_motion(),
         );

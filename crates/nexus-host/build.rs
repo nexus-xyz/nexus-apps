@@ -1,6 +1,6 @@
 //! The host's version (`NEXUS_HOST_VERSION`): the desktop app's own, so the app always asks for a host of exactly its
 //! version. `NEXUS_DESKTOP_BUILD_VERSION`, which the release sets for the app
-//! and its host alike, else the app's `version` in `desktop-gpui/Cargo.toml`, plus the git short sha as every Factory
+//! and its host alike, else the app's `version` in `apps/desktop/Cargo.toml`, plus the git short sha as every Nexus
 //! binary has it. The same rule as the app's build.rs.
 
 // git runs at build time, not in the host: the console rule (clippy.toml) is not for it.
@@ -10,11 +10,11 @@ include!("../../build/version.rs");
 
 fn main() {
     let manifest = PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").unwrap_or_default());
-    // Only for the `+<sha>` suffix; its semver is the Factory's, not ours.
+    // Only for the `+<sha>` suffix; its semver is the repository's, not the app's.
     let (_, factory) = factory_version(&manifest.join("../nexus-client"));
     let sha = factory.split_once('+').map(|(_, sha)| sha.to_string());
 
-    // The app's manifest, two folders up (`desktop-gpui/Cargo.toml`): its `[package]` version.
+    // The app's manifest, two folders up (`apps/desktop/Cargo.toml`): its `[package]` version.
     let file = manifest.join("../../apps/desktop/Cargo.toml");
     println!("cargo:rerun-if-changed={}", file.display());
     println!("cargo:rerun-if-env-changed=NEXUS_DESKTOP_BUILD_VERSION");

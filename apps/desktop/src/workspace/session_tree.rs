@@ -35,6 +35,31 @@ pub(super) fn tree<'a>(sessions: &[&'a CodeSession]) -> Vec<(&'a CodeSession, us
         .collect()
 }
 
+/// For each row of [`tree`], whether it is in a crew: a linked session, or a lead whose children follow it. A crew's
+/// rows name their agent, so a person sees which ones are Claude Code and which Codex.
+pub(super) fn in_crew(rows: &[(&CodeSession, usize)]) -> Vec<bool> {
+    rows.iter()
+        .enumerate()
+        .map(|(at, (_, depth))| *depth > 0 || rows.get(at + 1).is_some_and(|(_, next)| next > depth))
+        .collect()
+}
+
+pub(super) const HANDOFF_CAPTION_HEIGHT: f32 = 16.;
+
+pub(super) fn row_height(session: &CodeSession) -> f32 {
+    if session.handoff_from.is_some() {
+        super::sidebar::ROW + HANDOFF_CAPTION_HEIGHT
+    } else {
+        super::sidebar::ROW
+    }
+}
+
+/// The line under a session that another one handed its work to: "from a Claude session".
+pub(super) fn handoff_line(session: &CodeSession) -> Option<String> {
+    let from = session.handoff_from.as_ref()?;
+    Some(format!("from a {} session", crate::agents::ui(from.agent).short_name()))
+}
+
 /// For each row of `rows` (ids in tree order, with their depths), its family: the top-level session it hangs under
 /// (itself at the top level) and the family's last row. A session dropped on a family lands before its top or after
 /// its last row, never inside it (`session_drag.rs`).
@@ -79,14 +104,28 @@ fn level(
 }
 
 /// A level of linked sessions: the Nexus app's 13px in, 8px padding and its edge line, less the 4px this sidebar's
-/// rows sit further left.
+/// rows sit further left. Each child joins the line with a short tick at its row's middle, so the eye follows who
+/// started whom.
 fn linked(children: Vec<AnyElement>, palette: Palette) -> impl IntoElement {
     v_flex()
         .ml(px(9.))
         .pl(px(8.))
         .border_l_1()
         .border_color(palette.border)
-        .children(children)
+        .children(children.into_iter().map(|child| {
+            div()
+                .relative()
+                .child(
+                    div()
+                        .absolute()
+                        .left(px(-8.))
+                        .top(px(super::sidebar::ROW / 2.))
+                        .w(px(6.))
+                        .h(px(1.))
+                        .bg(palette.border),
+                )
+                .child(child)
+        }))
 }
 
 #[cfg(test)]
@@ -135,6 +174,35 @@ mod tests {
             .map(|(session, depth)| (session.id.as_str(), depth))
             .collect();
         assert_eq!(rows, [("other", 0), ("lead", 0), ("child", 1), ("grandchild", 2)]);
+    }
+
+    #[test]
+    fn a_lead_with_children_and_its_children_are_a_crew_and_a_lone_session_is_not() {
+        let sessions = [
+            session("lead", None),
+            session("child", Some("lead")),
+            session("alone", None),
+        ];
+        let listed: Vec<&CodeSession> = sessions.iter().collect();
+        let rows = tree(&listed);
+        let crew: Vec<(&str, bool)> = rows
+            .iter()
+            .zip(super::in_crew(&rows))
+            .map(|((session, _), crew)| (session.id.as_str(), crew))
+            .collect();
+        assert_eq!(crew, [("lead", true), ("child", true), ("alone", false)]);
+    }
+
+    #[test]
+    fn a_handed_off_session_says_which_agent_it_came_from() {
+        let mut next = session("next", None);
+        assert_eq!(super::handoff_line(&next), None);
+        next.handoff_from = Some(nexus_workbench::event::HandoffFrom {
+            thread_id: "old".into(),
+            title: "Fix login".into(),
+            agent: nexus_workbench::event::SessionAgent::Claude,
+        });
+        assert_eq!(super::handoff_line(&next).as_deref(), Some("from a Claude session"));
     }
 
     #[test]

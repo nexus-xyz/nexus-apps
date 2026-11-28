@@ -1,0 +1,1520 @@
+# Path items. The root openapi.yaml references each one.
+/v1/analytics/agents:
+  get:
+    tags:
+      - Usage and budgets
+    operationId: getAgentAdoption
+    summary: >-
+      Agent adoption: for each UTC day of a range (inclusive; at most 366), the people whose agent calls (`nexus
+      claude`, `nexus codex`) went through the agent gateway, with their email and how many calls. Refused calls are
+      left out. Each day also lists the people with only `subscription` sessions that day. Each day also counts the
+      active engineers by product: the people with at least one non-refused call that day, and for `agents` the people
+      with only subscription sessions too. Owners and admins see the organization; members only themselves.
+    parameters:
+      - name: from
+        in: query
+        required: false
+        description: YYYY-MM-DD; default 29 days before to
+        schema:
+          type: string
+          format: date
+      - name: to
+        in: query
+        required: false
+        description: YYYY-MM-DD; default today
+        schema:
+          type: string
+          format: date
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/AgentAdoption
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: spend.read_own
+/v1/analytics/chat:
+  get:
+    tags:
+      - Usage and budgets
+    operationId: getChatUsage
+    summary: >-
+      Chat sessions in numbers, never content or titles: sessions, messages, people and cost by mode and team (and
+      person, for owners and admins). Members see their own.
+    parameters:
+      - name: days
+        in: query
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 366
+          default: 30
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/ChatUsage
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: spend.read_own
+/v1/analytics/usage:
+  get:
+    tags:
+      - Usage and budgets
+    operationId: usage
+    summary: >-
+      Usage over a date range (UTC days, inclusive; at most 366): totals, groups with their share, and a daily series.
+      Spend with no team is the Unassigned group. Owners and admins see the organization; members their own usage and
+      their teams', with teammates as one row by person. An agent link sees only its person's own calls, as `person=me`
+      does for anyone. with groupBy=team, `depth` and `under` roll spend up the tree: each group includes its teams
+      below; spend on a team that has child teams, above the depth shown, is its own `(direct)` group. Members see
+      rollups only from their own teams down. With groupBy=key, each key shows by its name and prefix, never its token.
+      A revoked key keeps its name and says revoked. A person's Nexus UI sessions are one group. A member sees the keys
+      of their own calls. All other calls in their teams are one Others row. A member's own call with no key is
+      Unassigned. With groupBy=hour, each group is one UTC hour with calls (`YYYY-MM-DDTHH`), in order, under the same
+      scope as by day; the series stays by day.
+    parameters:
+      - name: groupBy
+        in: query
+        required: false
+        description: How to group (default team)
+        schema:
+          type: string
+          enum:
+            - team
+            - person
+            - model
+            - provider
+            - product
+            - key
+            - day
+            - hour
+      - name: from
+        in: query
+        required: false
+        description: YYYY-MM-DD; default 29 days before to
+        schema:
+          type: string
+          format: date
+      - name: to
+        in: query
+        required: false
+        description: YYYY-MM-DD; default today
+        schema:
+          type: string
+          format: date
+      - name: team
+        in: query
+        required: false
+        description: "Only this team's usage and its child teams' (slug); members: their own teams and the teams under them"
+        schema:
+          type: string
+      - name: depth
+        in: query
+        required: false
+        description: "groupBy=team: roll up to the teams at this depth (1 = top level; with `under`, counted below it)"
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 10
+      - name: under
+        in: query
+        required: false
+        description: "groupBy=team: roll up to the child teams of this team (slug)"
+        schema:
+          type: string
+      - name: person
+        in: query
+        required: false
+        description: "`me`: only your own calls, under every groupBy, and `scope` is `own`. No other value is accepted (400)."
+        schema:
+          type: string
+          enum:
+            - me
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/UsageReport
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: spend.read_own
+/v1/analytics/usage/export.csv:
+  get:
+    tags:
+      - Usage and budgets
+    operationId: exportUsageCsv
+    summary: >-
+      The organization's usage, one row per day, team, person, model, provider and product, as CSV (owners and admins).
+      At most 100,000 rows a file: past that the file stops, and its manifest says `complete: false` and gives
+      `nextCursor`. Each export is an audit event (`observability.exported`) with the file's manifest, never its rows.
+      An organization runs at most 60 exports an hour: the 61st is a 429 `export_rate_limited`, whose `Retry-After` is
+      the seconds until the hour frees one (the `RateLimit-*` headers stay the per-minute limit's). A bad filter is a
+      400 before any row.
+    parameters:
+      - $ref: ../components/common.yaml#/parameters/ObservabilityFrom
+      - $ref: ../components/common.yaml#/parameters/ObservabilityTo
+      - $ref: ../components/common.yaml#/parameters/ObservabilityTeam
+      - $ref: ../components/common.yaml#/parameters/ObservabilityPerson
+      - $ref: ../components/common.yaml#/parameters/ObservabilityModel
+      - $ref: ../components/common.yaml#/parameters/ObservabilityProvider
+      - $ref: ../components/common.yaml#/parameters/ObservabilityProduct
+      - $ref: ../components/common.yaml#/parameters/ObservabilityFileCursor
+    responses:
+      "200":
+        description: "CSV with a header row: one column per field of `UsageRow`, in its order."
+        headers:
+          x-nexus-export-id:
+            $ref: ../components/common.yaml#/headers/x-nexus-export-id
+        content:
+          text/csv:
+            schema:
+              type: string
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: spend.export
+/v1/analytics/usage/export.jsonl:
+  get:
+    tags:
+      - Usage and budgets
+    operationId: exportUsageJsonl
+    summary: >-
+      The organization's usage, one row per day, team, person, model, provider and product, as JSON Lines (owners and
+      admins). At most 100,000 rows a file: past that the file stops, and its manifest says `complete: false` and gives
+      `nextCursor`. Each export is an audit event (`observability.exported`) with the file's manifest, never its rows.
+      An organization runs at most 60 exports an hour: the 61st is a 429 `export_rate_limited`, whose `Retry-After` is
+      the seconds until the hour frees one (the `RateLimit-*` headers stay the per-minute limit's). A bad filter is a
+      400 before any row.
+    parameters:
+      - $ref: ../components/common.yaml#/parameters/ObservabilityFrom
+      - $ref: ../components/common.yaml#/parameters/ObservabilityTo
+      - $ref: ../components/common.yaml#/parameters/ObservabilityTeam
+      - $ref: ../components/common.yaml#/parameters/ObservabilityPerson
+      - $ref: ../components/common.yaml#/parameters/ObservabilityModel
+      - $ref: ../components/common.yaml#/parameters/ObservabilityProvider
+      - $ref: ../components/common.yaml#/parameters/ObservabilityProduct
+      - $ref: ../components/common.yaml#/parameters/ObservabilityFileCursor
+    responses:
+      "200":
+        description: "JSON Lines: one `UsageRow` per line, then one line `{\"manifest\": ExportManifest}`."
+        headers:
+          x-nexus-export-id:
+            $ref: ../components/common.yaml#/headers/x-nexus-export-id
+        content:
+          application/jsonl:
+            schema:
+              type: string
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: spend.export
+/v1/audit:
+  get:
+    tags:
+      - Usage and budgets
+    operationId: listAuditEvents
+    summary: >-
+      The audit log, newest first: everything for owners and admins, a lead's teams (and those under them), else your
+      own actions.
+    parameters:
+      - name: since
+        in: query
+        required: false
+        description: "ISO time, or relative: 30m, 24h, 7d, 2w"
+        schema:
+          type: string
+      - name: until
+        in: query
+        required: false
+        description: ISO time, or relative
+        schema:
+          type: string
+      - name: action
+        in: query
+        required: false
+        description: An action, a comma-separated list, or a prefix ending in * (team.*)
+        schema:
+          type: string
+      - name: actor
+        in: query
+        required: false
+        description: The actor's user id or email
+        schema:
+          type: string
+      - name: target
+        in: query
+        required: false
+        description: The target's id or slug
+        schema:
+          type: string
+      - name: team
+        in: query
+        required: false
+        description: "A team slug or id: events of that team and every team under it"
+        schema:
+          type: string
+      - name: limit
+        in: query
+        required: false
+        description: Events per page, 1 to 500 (default 50)
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 500
+      - name: cursor
+        in: query
+        required: false
+        description: nextCursor from the previous page
+        schema:
+          type: string
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/AuditPage
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: audit.read_own
+/v1/audit/export.csv:
+  get:
+    tags:
+      - Usage and budgets
+    operationId: exportAuditEvents
+    summary: Every matching audit event you may read, newest first, streamed as CSV (owners, admins and team leads).
+    parameters:
+      - name: since
+        in: query
+        required: false
+        description: "ISO time, or relative: 30m, 24h, 7d, 2w"
+        schema:
+          type: string
+      - name: until
+        in: query
+        required: false
+        description: ISO time, or relative
+        schema:
+          type: string
+      - name: action
+        in: query
+        required: false
+        description: An action, a comma-separated list, or a prefix ending in * (team.*)
+        schema:
+          type: string
+      - name: actor
+        in: query
+        required: false
+        description: The actor's user id or email
+        schema:
+          type: string
+      - name: target
+        in: query
+        required: false
+        description: The target's id or slug
+        schema:
+          type: string
+      - name: team
+        in: query
+        required: false
+        description: "A team slug or id: events of that team and every team under it"
+        schema:
+          type: string
+    responses:
+      "200":
+        description: >-
+          CSV: id, at, action, actor_email, actor_user_id, actor_kind, key_id, surface, target_type, target_id,
+          target_slug, request_id, before, after, metadata
+        content:
+          text/csv:
+            schema:
+              type: string
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: audit.export
+/v1/budgets:
+  get:
+    tags:
+      - Usage and budgets
+    operationId: listBudgets
+    summary: >-
+      Spend limits this month: the organization's default per person and, for owners and admins, every person's limit
+      (override or default), month-to-date spend, what is left, whether they are at their limit and the overspends
+      prevented. Members see only their own row. `canManage`: you may set a person's limit (an owner, or an admin an
+      owner allowed); `canGrant`: you may set the default per person and allow admins to set person limits (owners).
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Budgets
+            example:
+              period: 2026-10
+              periodStart: "2026-10-01T00:00:00.000Z"
+              resetsAt: "2026-11-01T00:00:00.000Z"
+              personDefault:
+                monthlyUsd: 50
+                updatedAt: "2026-10-02T09:15:44.000Z"
+                updatedBy: usr_1Fz8NcR4hWq7
+              scope: org
+              people:
+                - userId: usr_3Kd9TqW2bNxe
+                  email: ana@acme.com
+                  name: Ana Souza
+                  role: admin
+                  limitManager: true
+                  limitUsd: 200
+                  source: override
+                  overrideUsd: 200
+                  spentUsd: 84.37
+                  reservedUsd: 1.2
+                  remainingUsd: 114.43
+                  atLimit: false
+                  overspendsPrevented: 0
+                - userId: usr_7Pq4XcV8mLza
+                  email: bruno@acme.com
+                  name: Bruno Lima
+                  role: member
+                  limitManager: false
+                  limitUsd: 50
+                  source: default
+                  overrideUsd: null
+                  spentUsd: 49.86
+                  reservedUsd: 0
+                  remainingUsd: 0.14
+                  atLimit: false
+                  overspendsPrevented: 3
+              canManage: true
+              canGrant: true
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: spend.read_own
+/v1/budgets/limit-managers/{userId}:
+  delete:
+    tags:
+      - Usage and budgets
+    operationId: revokeLimitManager
+    summary: >-
+      Stop an admin setting person spend limits (owners only). The limits they set stay. Revoking from someone without
+      the grant writes nothing. Audited as budget.limit_manager_revoked, `limitManager` before and after, ids only.
+    parameters:
+      - name: userId
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[A-Za-z0-9_-]+$
+        description: A user id, or `me`
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKey
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/LimitManager
+            example:
+              userId: usr_3Kd9TqW2bNxe
+              limitManager: false
+      "403":
+        description: Not an owner (`role_required`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+            example:
+              error:
+                message: only the org's owner can stop admins setting spend limits (budgets.delegate)
+                type: permission_error
+                code: role_required
+      "404":
+        description: No such member
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+            example:
+              error:
+                message: no member usr_0Xx9Yy8Zz7Ww in this organization
+                type: not_found
+                code: not_found
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: budgets.delegate
+    x-idempotency: optional
+  put:
+    tags:
+      - Usage and budgets
+    operationId: grantLimitManager
+    summary: >-
+      Allow an admin to set each person's spend limit, but not an owner's and not the default per person (owners only;
+      owners always can). The grant is on the admin's membership: it ends when they stop being an admin or leave, and
+      does not come back when they return. Granting an admin who has it writes nothing. Audited as
+      budget.limit_manager_granted, `limitManager` before and after, ids only. 409 `not_an_admin` for an owner, a team
+      lead or a member.
+    parameters:
+      - name: userId
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[A-Za-z0-9_-]+$
+        description: A user id, or `me`
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKey
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/LimitManager
+            example:
+              userId: usr_3Kd9TqW2bNxe
+              limitManager: true
+      "403":
+        description: Not an owner (`role_required`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+            example:
+              error:
+                message: only the org's owner can allow admins to set spend limits (budgets.delegate)
+                type: permission_error
+                code: role_required
+      "404":
+        description: No such member
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+            example:
+              error:
+                message: no member usr_0Xx9Yy8Zz7Ww in this organization
+                type: not_found
+                code: not_found
+      "409":
+        description: The person is not an admin (`not_an_admin`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+            example:
+              error:
+                message: only an admin can be allowed to set spend limits; owners always can
+                type: invalid_request_error
+                code: not_an_admin
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: budgets.delegate
+    x-idempotency: optional
+/v1/budgets/person-default:
+  put:
+    tags:
+      - Usage and budgets
+    operationId: setPersonDefaultBudget
+    summary: >-
+      Set the organization's default monthly limit per person in USD (owners only), or null to clear it: then people
+      without an override have no limit of their own. Audited as budget.person_default_changed, before and after. 403
+      `role_required` for an admin an owner allowed (only an owner changes the default per person), and
+      `limit_grant_required` for an admin without the grant (both gateways). The amount is `monthlyUsd` (a number,
+      deprecated, or a decimal string) or `monthlyUsdDecimal`, read exactly. 400 `invalid_amount`, `too_many_decimals`,
+      `amount_mismatch`.
+    parameters:
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKey
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              monthlyUsd:
+                type:
+                  - number
+                  - string
+                  - "null"
+                description: >-
+                  The default monthly limit per person, in US dollars, at most 1000000: a JSON number (deprecated) or a
+                  decimal string with at most 6 decimals (`"12.245"`), read exactly; null clears it. Send
+                  `monthlyUsdDecimal` instead to send only a string.
+              monthlyUsdDecimal:
+                type:
+                  - string
+                  - "null"
+                pattern: ^[0-9]+(\.[0-9]{1,6})?$
+                examples:
+                  - "50.00"
+                description: >-
+                  The default monthly limit per person as a decimal string in US dollars, at most 6 decimals, never
+                  below 0; read exactly into micro-dollars, never through a float. null clears it. With `monthlyUsd`
+                  too, both must name the same amount (400 `amount_mismatch`).
+            anyOf:
+              - required:
+                  - monthlyUsd
+              - required:
+                  - monthlyUsdDecimal
+          example:
+            monthlyUsdDecimal: "50.00"
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Budgets
+            example:
+              period: 2026-10
+              periodStart: "2026-10-01T00:00:00.000Z"
+              resetsAt: "2026-11-01T00:00:00.000Z"
+              personDefault:
+                monthlyUsd: 50
+                monthlyUsdDecimal: "50.000000"
+                updatedAt: "2026-10-02T09:15:44.000Z"
+                updatedBy: usr_1Fz8NcR4hWq7
+              scope: org
+              people:
+                - userId: usr_3Kd9TqW2bNxe
+                  email: ana@acme.com
+                  name: Ana Souza
+                  role: admin
+                  limitManager: true
+                  limitUsd: 200
+                  limitUsdDecimal: "200.000000"
+                  source: override
+                  overrideUsd: 200
+                  overrideUsdDecimal: "200.000000"
+                  spentUsd: 84.37
+                  spentUsdDecimal: "84.370000"
+                  reservedUsd: 1.2
+                  reservedUsdDecimal: "1.200000"
+                  remainingUsd: 114.43
+                  remainingUsdDecimal: "114.430000"
+                  atLimit: false
+                  overspendsPrevented: 0
+                - userId: usr_7Pq4XcV8mLza
+                  email: bruno@acme.com
+                  name: Bruno Lima
+                  role: member
+                  limitManager: false
+                  limitUsd: 50
+                  limitUsdDecimal: "50.000000"
+                  source: default
+                  overrideUsd: null
+                  overrideUsdDecimal: null
+                  spentUsd: 49.86
+                  spentUsdDecimal: "49.860000"
+                  reservedUsd: 0
+                  reservedUsdDecimal: "0.000000"
+                  remainingUsd: 0.14
+                  remainingUsdDecimal: "0.140000"
+                  atLimit: false
+                  overspendsPrevented: 3
+              canManage: true
+              canGrant: true
+      "400":
+        description: >-
+          `monthlyUsd` and `monthlyUsdDecimal` both missing (`invalid_request`), a decimal string with more than 6
+          decimals (`too_many_decimals`), an amount that is not one, is below 0 or is above 1000000 (`invalid_amount`),
+          or a number and its `Decimal` twin that name different amounts, or `null` beside an amount (`amount_mismatch`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+            example:
+              error:
+                message: monthlyUsd has more than 6 decimals; a micro-dollar (0.000001) is the smallest amount
+                type: invalid_request_error
+                code: too_many_decimals
+      "403":
+        description: >-
+          A member (`role_required`), an admin an owner has not allowed (`limit_grant_required`), or an allowed admin
+          (`role_required`: only an owner changes the default per person)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+            example:
+              error:
+                message: only an owner can change the default spend limit per person
+                type: permission_error
+                code: role_required
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: budgets.manage
+    x-idempotency: optional
+/v1/budgets/products/{product}/{capability}:
+  get:
+    tags:
+      - Usage and budgets
+    operationId: getProductBudget
+    summary: >-
+      The monthly cap on one module capability, such as Nexus Review's `robustness` / `review` (owners and admins): its
+      limit, the UTC month's spend of every call attributed to it (whoever paid the provider), what open calls hold,
+      what is left and when it resets. Every amount is a decimal string. `cap` is null when the capability has none. 400
+      `invalid_product`.
+    parameters:
+      - name: product
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[a-z][a-z0-9-]*$
+        description: The module's product, as its calls are attributed (`robustness` for Nexus Review).
+      - name: capability
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[a-z][a-z0-9-]*$
+        description: The capability within it (`review`).
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/ProductBudget
+            example:
+              product: robustness
+              capability: review
+              cap:
+                monthlyUsd: "200.000000"
+                period: 2026-10
+                spentUsd: "136.412800"
+                reservedUsd: "0.900000"
+                remainingUsd: "62.687200"
+                resetsAt: "2026-11-01T00:00:00.000Z"
+                updatedAt: "2026-10-05T16:42:31.000Z"
+              canManage: true
+      "400":
+        description: Not a product or capability slug (`invalid_product`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+            example:
+              error:
+                message: >-
+                  product and capability are slugs: a lowercase letter, then lowercase letters, digits or -, at most 64
+                  long
+                type: invalid_request_error
+                code: invalid_product
+      "403":
+        description: "Only owners and admins read a product's cap (`role_required`): a member without `spend.read_all`"
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+            example:
+              error:
+                message: >-
+                  only the org's owner or admins can the whole organization's spend, analytics and agent sessions
+                  (spend.read_all)
+                type: permission_error
+                code: role_required
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: spend.read_all
+  put:
+    tags:
+      - Usage and budgets
+    operationId: setProductBudget
+    summary: >-
+      Set or remove the monthly cap on one module capability (owners and admins). `monthlyUsd` is a decimal string in US
+      dollars, or null to remove the cap. The ledger refuses a call that would take the capability's UTC month past it
+      with 402 `budget_exceeded`, `details.level: product`; a cap cut below what the month used refuses the next call
+      and leaves calls in progress alone. Audited as budget.product_changed, before and after. 400 `invalid_amount`,
+      `too_many_decimals`, `invalid_product`.
+    parameters:
+      - name: product
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[a-z][a-z0-9-]*$
+        description: The module's product, as its calls are attributed (`robustness` for Nexus Review).
+      - name: capability
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[a-z][a-z0-9-]*$
+        description: The capability within it (`review`).
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKey
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas.yaml#/ProductBudgetSetting
+          example:
+            monthlyUsd: "200.00"
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/ProductBudgetChange
+            example:
+              product: robustness
+              capability: review
+              before:
+                monthlyUsd: "150.000000"
+              after:
+                monthlyUsd: "200.000000"
+      "400":
+        description: >-
+          Not a valid cap (`invalid_amount`), a decimal string with more than 6 decimals (`too_many_decimals`), or not a
+          slug (`invalid_product`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+            example:
+              error:
+                message: >-
+                  monthlyUsd must be a non-negative decimal string in US dollars (at most 6 decimals), or null to remove
+                  the cap
+                type: invalid_request_error
+                code: invalid_amount
+      "403":
+        description: "Members: only owners and admins set a cap (`role_required`)"
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+            example:
+              error:
+                message: only the org's owner or admins can set product budgets (budgets.manage)
+                type: permission_error
+                code: role_required
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: budgets.manage
+    x-idempotency: optional
+/v1/people/{userId}/budget:
+  get:
+    tags:
+      - Usage and budgets
+    operationId: getPersonBudget
+    summary: >-
+      One person's spend limit this month: their limit and where it comes from (override, default or none),
+      month-to-date spend, what is left and whether they are at it. Yours (`me`) for anyone; anyone's for owners and
+      admins.
+    parameters:
+      - name: userId
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[A-Za-z0-9_-]+$
+        description: A user id, or `me`
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/PersonBudget
+            example:
+              userId: usr_7Pq4XcV8mLza
+              email: bruno@acme.com
+              name: Bruno Lima
+              role: member
+              limitManager: false
+              limitUsd: 50
+              source: default
+              overrideUsd: null
+              spentUsd: 49.86
+              reservedUsd: 0
+              remainingUsd: 0.14
+              atLimit: false
+              overspendsPrevented: 3
+        headers:
+          ETag:
+            $ref: ../components/common.yaml#/headers/ETag
+      "403":
+        description: A member asking for another person's limit (`role_required`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+            example:
+              error:
+                message: only the org's owners and admins can read another person's limit
+                type: permission_error
+                code: role_required
+      "404":
+        description: No member with this user id in the organization (`not_found`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+            example:
+              error:
+                message: no member usr_0Xx9Yy8Zz7Ww in this organization
+                type: not_found
+                code: not_found
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: spend.read_own
+  put:
+    tags:
+      - Usage and budgets
+    operationId: setPersonBudget
+    summary: >-
+      Set one person's monthly limit in USD, above or below the organization's default (owners, and admins an owner
+      allowed: `grantLimitManager`; an owner's limit: owners only), or null to remove the override so the default
+      applies again. Stored at the organization, naming the person; audited as budget.person_limit_changed, before and
+      after. 403 `limit_grant_required` for an admin without the grant, and `role_required` for an owner's limit set by
+      an allowed admin (both gateways). The amount is `monthlyUsd` (a number, deprecated, or a decimal string) or
+      `monthlyUsdDecimal`, read exactly. 400 `invalid_amount`, `too_many_decimals`, `amount_mismatch`.
+    parameters:
+      - name: userId
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[A-Za-z0-9_-]+$
+        description: A user id, or `me`
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKey
+      - $ref: ../components/common.yaml#/parameters/IfMatch
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              monthlyUsd:
+                type:
+                  - number
+                  - string
+                  - "null"
+                description: >-
+                  This person's monthly limit, in US dollars, at most 1000000: a JSON number (deprecated) or a decimal
+                  string with at most 6 decimals (`"12.245"`), read exactly; null removes the override. Send
+                  `monthlyUsdDecimal` instead to send only a string.
+              monthlyUsdDecimal:
+                type:
+                  - string
+                  - "null"
+                pattern: ^[0-9]+(\.[0-9]{1,6})?$
+                examples:
+                  - "200.00"
+                description: >-
+                  This person's monthly limit as a decimal string in US dollars, at most 6 decimals, never below 0; read
+                  exactly into micro-dollars, never through a float. null removes the override. With `monthlyUsd` too,
+                  both must name the same amount (400 `amount_mismatch`).
+            anyOf:
+              - required:
+                  - monthlyUsd
+              - required:
+                  - monthlyUsdDecimal
+          example:
+            monthlyUsdDecimal: "200.00"
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/PersonBudget
+            example:
+              userId: usr_3Kd9TqW2bNxe
+              email: ana@acme.com
+              name: Ana Souza
+              role: admin
+              limitManager: true
+              limitUsd: 200
+              limitUsdDecimal: "200.000000"
+              source: override
+              overrideUsd: 200
+              overrideUsdDecimal: "200.000000"
+              spentUsd: 84.37
+              spentUsdDecimal: "84.370000"
+              reservedUsd: 1.2
+              reservedUsdDecimal: "1.200000"
+              remainingUsd: 114.43
+              remainingUsdDecimal: "114.430000"
+              atLimit: false
+              overspendsPrevented: 0
+        headers:
+          ETag:
+            $ref: ../components/common.yaml#/headers/ETag
+      "400":
+        description: >-
+          `monthlyUsd` and `monthlyUsdDecimal` both missing (`invalid_request`), a decimal string with more than 6
+          decimals (`too_many_decimals`), an amount that is not one, is below 0 or is above 1000000 (`invalid_amount`),
+          or a number and its `Decimal` twin that name different amounts, or `null` beside an amount (`amount_mismatch`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+            example:
+              error:
+                message: monthlyUsd has more than 6 decimals; a micro-dollar (0.000001) is the smallest amount
+                type: invalid_request_error
+                code: too_many_decimals
+      "403":
+        description: >-
+          A member (`role_required`), an admin an owner has not allowed (`limit_grant_required`), or an allowed admin
+          setting an owner's limit (`role_required`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+            example:
+              error:
+                message: only the org's owners, and admins an owner allows, can set person spend limits
+                type: permission_error
+                code: limit_grant_required
+      "404":
+        description: No member with this user id in the organization (`not_found`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+            example:
+              error:
+                message: no member usr_0Xx9Yy8Zz7Ww in this organization
+                type: not_found
+                code: not_found
+      "412":
+        $ref: ../components/common.yaml#/responses/VersionMismatch
+      "428":
+        $ref: ../components/common.yaml#/responses/PreconditionRequired
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: budgets.manage
+    x-idempotency: optional
+    x-if-match: required
+/v1/spend:
+  get:
+    tags:
+      - Usage and budgets
+    operationId: spend
+    summary: >-
+      Budget, spend and reservations, by product and capability, with recent calls. Owners and admins (`spend.read_all`)
+      get the organization's figures. Everyone else gets their own calls and, in place of the organization's budget,
+      spent and reserved, only what is left for them (`remainingUsd`): the least room of the organization, the caps on
+      the team their call is charged to (`x-nexus-team`, else their default team) and their monthly limit, the figure
+      the next 402 gives, with the `period` and `resetsAt` of the cap that binds it.
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Spend
+            example:
+              budgetUsd: 5000
+              spentUsd: 18342.61
+              reservedUsd: 3.4
+              budgetPeriod: month
+              periodSpentUsd: 2210.85
+              remainingUsd: 2785.75
+              resetsAt: "2026-11-01T00:00:00.000Z"
+              scope: org
+              byProduct:
+                - product: agents
+                  calls: 4120
+                  costUsd: 1874.12
+                - product: robustness
+                  capability: review
+                  calls: 316
+                  costUsd: 336.73
+              recent:
+                - id: spd_9fK2mQ7xLp4T
+                  at: "2026-10-28T14:32:07.418Z"
+                  status: settled
+                  model: anthropic/claude-opus-5.5
+                  provider: anthropic
+                  product: agents
+                  userId: usr_3Kd9TqW2bNxe
+                  teamId: team_x7Ka2LmPq9Rd
+                  promptTokens: 18240
+                  completionTokens: 1312
+                  costUsd: 0.3726
+                  fundedBy: nexus_credit
+                  inferenceGeo: us
+                  keyId: key_6Tb3Rz9LmQ2x
+                  keyKind: cli
+              credits:
+                purchasedUsd: "1000.000000"
+                spentUsd: "412.584300"
+                reservedUsd: "0.600000"
+                remainingUsd: "586.815700"
+                markupBps: 500
+      "403":
+        description: A member who names a team they are not in with `x-nexus-team` (`not_in_team`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+            example:
+              error:
+                message: you are not in team platform; spend can only go to a team you belong to
+                type: permission_error
+                code: not_in_team
+      "404":
+        description: A member names, with `x-nexus-team`, a team that does not exist in the organization (`unknown_team`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+            example:
+              error:
+                message: no team research in this organization; see `nexus team list`
+                type: not_found
+                code: unknown_team
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    parameters:
+      - name: x-nexus-team
+        in: header
+        required: false
+        description: >-
+          Members: the team (slug) the left-for-you figure is for, as for a call; you must be in it. Default: your
+          default team. Owners and admins get the organization's figures whatever it says.
+        schema:
+          type: string
+    x-nexus-permission: spend.read_own
+/v1/spend/calls:
+  get:
+    tags:
+      - Usage and budgets
+    operationId: listSpendCalls
+    summary: >-
+      One page of the organization's model calls, newest first, with the filters below (owners and admins). People and
+      teams by id only. A bad filter or a range over 366 days is a 400. One request reads at most 10,000 calls, so a
+      narrow filter can answer a short page, even an empty one, with a `nextCursor` that resumes the scan.
+    parameters:
+      - $ref: ../components/common.yaml#/parameters/ObservabilityFrom
+      - $ref: ../components/common.yaml#/parameters/ObservabilityTo
+      - $ref: ../components/common.yaml#/parameters/ObservabilityTeam
+      - $ref: ../components/common.yaml#/parameters/ObservabilityPerson
+      - $ref: ../components/common.yaml#/parameters/ObservabilityModel
+      - $ref: ../components/common.yaml#/parameters/ObservabilityProvider
+      - $ref: ../components/common.yaml#/parameters/ObservabilityProduct
+      - $ref: ../components/common.yaml#/parameters/SpendCallStatus
+      - $ref: ../components/common.yaml#/parameters/SpendCallSession
+      - $ref: ../components/common.yaml#/parameters/SpendCallLimit
+      - $ref: ../components/common.yaml#/parameters/SpendCallCursor
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/SpendCallPage
+            example:
+              from: "2026-10-01"
+              to: "2026-10-28"
+              calls:
+                - id: spd_9fK2mQ7xLp4T
+                  at: "2026-10-28T14:32:07.418Z"
+                  status: settled
+                  model: anthropic/claude-opus-5.5
+                  provider: anthropic
+                  product: agents
+                  capability: null
+                  userId: usr_3Kd9TqW2bNxe
+                  teamId: team_x7Ka2LmPq9Rd
+                  agentSessionId: ags_4Rt8Wn2KqZ6v
+                  chatSessionId: null
+                  inputTokens: 18240
+                  outputTokens: 1312
+                  costUsd: "0.372600"
+                  reservedUsd: "0.600000"
+                  reason: null
+                  overspendLevel: null
+                  overspendLimitUsd: null
+                  overspendAmountUsd: null
+                  overspendOverUsd: null
+                  overspendPeriod: null
+                  fundedBy: nexus_credit
+                - id: spd_2Lw6Hy9RtB3c
+                  at: "2026-10-28T14:29:51.102Z"
+                  status: refused
+                  model: anthropic/claude-opus-5.5
+                  provider: null
+                  product: agents
+                  capability: null
+                  userId: usr_7Pq4XcV8mLza
+                  teamId: team_x7Ka2LmPq9Rd
+                  agentSessionId: ags_8Mx3Pd5VeQ1n
+                  chatSessionId: null
+                  inputTokens: 0
+                  outputTokens: 0
+                  costUsd: "0.000000"
+                  reservedUsd: null
+                  reason: "person limit: this call may cost up to $0.600000, and $0.140000 is left this month"
+                  overspendLevel: person
+                  overspendLimitUsd: "50.000000"
+                  overspendAmountUsd: "0.600000"
+                  overspendOverUsd: "0.460000"
+                  overspendPeriod: 2026-10
+                  fundedBy: null
+              nextCursor: c3BkXzJMdzZIeTlSdEIzYw.kR8vN2xQ4mTpL6wZ
+      "400":
+        description: >-
+          A filter Nexus cannot read: a date not YYYY-MM-DD, `from` after `to` or a range past 366 days, a `limit`
+          outside 1 to 500 or an unknown `status` (`invalid_request`), a team that does not exist (`unknown_team`), or a
+          cursor issued for another caller or query (`invalid_cursor`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+            example:
+              error:
+                message: limit must be a whole number from 1 to 500
+                type: invalid_request_error
+                code: invalid_request
+      "403":
+        description: "Only owners and admins list the organization's calls (`role_required`): a member without `spend.read_all`"
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+            example:
+              error:
+                message: only the org's owner or admins can list the organization's spend calls (spend.read_all)
+                type: permission_error
+                code: role_required
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: spend.read_all
+/v1/spend/calls/export.csv:
+  get:
+    tags:
+      - Usage and budgets
+    operationId: exportSpendCallsCsv
+    summary: >-
+      Every model call of the organization that matches the filters, newest first, as CSV (owners and admins): the rows
+      `listSpendCalls` pages through, with its filters. A series of files reads the calls written up to the newest one
+      when its first file started. At most 100,000 rows a file: past that the file stops, and its manifest says
+      `complete: false` and gives `nextCursor`. Each export is an audit event (`observability.exported`) with the file's
+      manifest, never its rows. An organization runs at most 60 exports an hour: the 61st is a 429
+      `export_rate_limited`, whose `Retry-After` is the seconds until the hour frees one (the `RateLimit-*` headers stay
+      the per-minute limit's). A bad filter is a 400 before any row.
+    parameters:
+      - $ref: ../components/common.yaml#/parameters/ObservabilityFrom
+      - $ref: ../components/common.yaml#/parameters/ObservabilityTo
+      - $ref: ../components/common.yaml#/parameters/ObservabilityTeam
+      - $ref: ../components/common.yaml#/parameters/ObservabilityPerson
+      - $ref: ../components/common.yaml#/parameters/ObservabilityModel
+      - $ref: ../components/common.yaml#/parameters/ObservabilityProvider
+      - $ref: ../components/common.yaml#/parameters/ObservabilityProduct
+      - $ref: ../components/common.yaml#/parameters/SpendCallStatus
+      - $ref: ../components/common.yaml#/parameters/SpendCallSession
+      - $ref: ../components/common.yaml#/parameters/ObservabilityFileCursor
+    responses:
+      "200":
+        description: "CSV with a header row: one column per field of `SpendCall`, in its order."
+        headers:
+          x-nexus-export-id:
+            $ref: ../components/common.yaml#/headers/x-nexus-export-id
+        content:
+          text/csv:
+            schema:
+              type: string
+            example: >
+              id,at,status,model,provider,product,capability,userId,teamId,agentSessionId,chatSessionId,inputTokens,outputTokens,costUsd,reservedUsd,reason,overspendLevel,overspendLimitUsd,overspendAmountUsd,overspendOverUsd,overspendPeriod,fundedBy
+
+              spd_9fK2mQ7xLp4T,2026-10-28T14:32:07.418Z,settled,anthropic/claude-opus-5.5,anthropic,agents,,usr_3Kd9TqW2bNxe,team_x7Ka2LmPq9Rd,ags_4Rt8Wn2KqZ6v,,18240,1312,0.372600,0.600000,,,,,,,nexus_credit
+      "400":
+        description: >-
+          A filter Nexus cannot read: a date not YYYY-MM-DD, `from` after `to` or a range past 366 days, or an unknown
+          `status` (`invalid_request`), a team that does not exist (`unknown_team`), or a cursor issued for another
+          caller or query (`invalid_cursor`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+            example:
+              error:
+                message: no team research in this organization
+                type: invalid_request_error
+                code: unknown_team
+      "403":
+        description: "Only owners and admins export the organization's calls (`role_required`): a member without `spend.export`"
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+            example:
+              error:
+                message: only the org's owner or admins can export spend calls (spend.export)
+                type: permission_error
+                code: role_required
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: spend.export
+/v1/spend/calls/export.jsonl:
+  get:
+    tags:
+      - Usage and budgets
+    operationId: exportSpendCallsJsonl
+    summary: >-
+      Every model call of the organization that matches the filters, newest first, as JSON Lines (owners and admins):
+      the rows `listSpendCalls` pages through, with its filters. A series of files reads the calls written up to the
+      newest one when its first file started. At most 100,000 rows a file: past that the file stops, and its manifest
+      says `complete: false` and gives `nextCursor`. Each export is an audit event (`observability.exported`) with the
+      file's manifest, never its rows. An organization runs at most 60 exports an hour: the 61st is a 429
+      `export_rate_limited`, whose `Retry-After` is the seconds until the hour frees one (the `RateLimit-*` headers stay
+      the per-minute limit's). A bad filter is a 400 before any row.
+    parameters:
+      - $ref: ../components/common.yaml#/parameters/ObservabilityFrom
+      - $ref: ../components/common.yaml#/parameters/ObservabilityTo
+      - $ref: ../components/common.yaml#/parameters/ObservabilityTeam
+      - $ref: ../components/common.yaml#/parameters/ObservabilityPerson
+      - $ref: ../components/common.yaml#/parameters/ObservabilityModel
+      - $ref: ../components/common.yaml#/parameters/ObservabilityProvider
+      - $ref: ../components/common.yaml#/parameters/ObservabilityProduct
+      - $ref: ../components/common.yaml#/parameters/SpendCallStatus
+      - $ref: ../components/common.yaml#/parameters/SpendCallSession
+      - $ref: ../components/common.yaml#/parameters/ObservabilityFileCursor
+    responses:
+      "200":
+        description: "JSON Lines: one `SpendCall` per line, then one line `{\"manifest\": ExportManifest}`."
+        headers:
+          x-nexus-export-id:
+            $ref: ../components/common.yaml#/headers/x-nexus-export-id
+        content:
+          application/jsonl:
+            schema:
+              type: string
+            example: >
+              {"id":"spd_9fK2mQ7xLp4T","at":"2026-10-28T14:32:07.418Z","status":"settled","model":"anthropic/claude-opus-5.5","provider":"anthropic","product":"agents","capability":null,"userId":"usr_3Kd9TqW2bNxe","teamId":"team_x7Ka2LmPq9Rd","agentSessionId":"ags_4Rt8Wn2KqZ6v","chatSessionId":null,"inputTokens":18240,"outputTokens":1312,"costUsd":"0.372600","reservedUsd":"0.600000","reason":null,"overspendLevel":null,"overspendLimitUsd":null,"overspendAmountUsd":null,"overspendOverUsd":null,"overspendPeriod":null,"fundedBy":"nexus_credit"}
+
+              {"manifest":{"exportId":"exp_5Vn8Qa2Kd7Wm","family":"spend_calls","format":"jsonl","schemaVersion":1,"scope":{"userId":"usr_3Kd9TqW2bNxe","keyId":"key_6Tb3Rz9LmQ2x","filters":{"from":"2026-10-01","to":"2026-10-28","team":"platform"}},"range":{"from":"2026-10-01","to":"2026-10-28"},"rows":1,"checksum":"sha256:3b7f0c9a1e4d8b2f6a5c0e9d7b3a1f4e8c2d6b0a9f7e5c3d1b8a6f4e2c0d9b7a","generatedAt":"2026-10-28T15:00:02.731Z","watermark":"c3BkXzlmSzJtUTd4THA0VA.Hq2LmP4x","complete":true,"nextCursor":null,"policyVersion":null,"integrity":"not_verifiable"}}
+      "400":
+        description: >-
+          A filter Nexus cannot read: a date not YYYY-MM-DD, `from` after `to` or a range past 366 days, or an unknown
+          `status` (`invalid_request`), a team that does not exist (`unknown_team`), or a cursor issued for another
+          caller or query (`invalid_cursor`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+            example:
+              error:
+                message: cursor is not one this API returned for this caller and these filters; start again without it
+                type: invalid_request_error
+                code: invalid_cursor
+      "403":
+        description: "Only owners and admins export the organization's calls (`role_required`): a member without `spend.export`"
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+            example:
+              error:
+                message: only the org's owner or admins can export spend calls (spend.export)
+                type: permission_error
+                code: role_required
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: spend.export
+/v1/spend/calls/{id}:
+  get:
+    tags:
+      - Usage and budgets
+    operationId: getSpendCall
+    summary: >-
+      One of the organization's model calls, as its row in the files: what was reserved, what was charged and why it was
+      refused (owners and admins). Another organization's call reads as missing: 404 `unknown_call`.
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[A-Za-z0-9_-]+$
+        description: The call's record id
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/SpendCall
+            example:
+              id: spd_2Lw6Hy9RtB3c
+              at: "2026-10-28T14:29:51.102Z"
+              status: refused
+              model: anthropic/claude-opus-5.5
+              provider: null
+              product: agents
+              capability: null
+              userId: usr_7Pq4XcV8mLza
+              teamId: team_x7Ka2LmPq9Rd
+              agentSessionId: ags_8Mx3Pd5VeQ1n
+              chatSessionId: null
+              inputTokens: 0
+              outputTokens: 0
+              costUsd: "0.000000"
+              reservedUsd: null
+              reason: "person limit: this call may cost up to $0.600000, and $0.140000 is left this month"
+              overspendLevel: person
+              overspendLimitUsd: "50.000000"
+              overspendAmountUsd: "0.600000"
+              overspendOverUsd: "0.460000"
+              overspendPeriod: 2026-10
+              fundedBy: null
+      "403":
+        description: "Only owners and admins read the organization's calls (`role_required`): a member without `spend.read_all`"
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+            example:
+              error:
+                message: only the org's owner or admins can read the organization's spend calls (spend.read_all)
+                type: permission_error
+                code: role_required
+      "404":
+        description: >-
+          No call with this id in the caller's organization (`unknown_call`); another organization's call reads as
+          missing
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+            example:
+              error:
+                message: no call spd_7Qm4Zr1XcV8b in this organization
+                type: not_found
+                code: unknown_call
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: spend.read_all

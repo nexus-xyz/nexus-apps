@@ -46,10 +46,10 @@ Remote control is then on until the person turns it off on this computer (`code_
 A switch stored before that table stays as it was, off included.
 An absent or other `trust` keeps the approvals rules above.
 This computer pins its trust per person (`sync_trust_pins`, `KeyStore::settle_trust`).
-A computer that read approvals, or remembers a verified device or a confirmed approver, keeps approvals when Gateway says `gateway`.
+A computer that remembers a verified device or a confirmed approver relied on approvals, and keeps them when Gateway says `gateway`.
 It follows Gateway's trust only after the person opts in on the Devices page (`KeyStore::trust_gateway`).
 A return to approvals needs no opt-in, and a later Gateway trust needs a new one.
-A new computer with no pin follows Gateway's trust.
+A computer that never relied on approvals follows Gateway's trust, even when it read approvals before.
 Remember revocations durably and refresh the directory before preparing each batch's key.
 Persist keys and locked copies before returning a `ContentKey`.
 The key store holds each key only as this device's own HPKE copy.

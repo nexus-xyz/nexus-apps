@@ -1,0 +1,978 @@
+# Path items. The root openapi.yaml references each one.
+/v1/jobs:
+  post:
+    tags:
+      - Routines and jobs
+    operationId: submitJob
+    summary: >-
+      Submit a job: the verb of a module to run, with its input. `module` is `<product>/<capability>`
+      (`intelligence/wiki`), the path of the verb's own route, and the caller needs the action the module declares for
+      the verb (`wiki.run` for Nexus Wiki's `run`), as on that route. Needs an `Idempotency-Key`: the job's id is
+      derived from it, with the organization and the credential, so a resend names the job the first send made. For 24
+      hours a resend replays the first answer (202, with `Idempotent-Replayed: true`), even after the job has moved on.
+      After that it answers 200 with the job as it is now. A resend with a different `module`, `verb` or `input` is a
+      422 `idempotency_key_reused`. `team` (or `x-nexus-team`) names the team the job's model calls go to; the caller's
+      default team when absent. A job stays `accepted` until a worker takes it.
+    parameters:
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKeyRequired
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas.yaml#/SubmitJobRequest
+    responses:
+      "200":
+        description: The job a send with this key made, found after its replay window
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Job
+            example:
+              id: job_FiyTNoWq2Szr92Uk7rVGtldqjXCy_vWUgt81xwC4WpQ
+              module: intelligence/wiki
+              verb: run
+              state: done
+              teamId: team_x7Ka2LmPq9Rd
+              createdAt: "2026-11-01T09:14:03.512Z"
+              updatedAt: "2026-11-01T09:16:41.930Z"
+              deadlineAt: "2026-11-01T10:14:03.512Z"
+              startedAt: "2026-11-01T09:14:04.087Z"
+              finishedAt: "2026-11-01T09:16:41.930Z"
+      "202":
+        description: "Accepted: the job is recorded"
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Job
+            example:
+              id: job_FiyTNoWq2Szr92Uk7rVGtldqjXCy_vWUgt81xwC4WpQ
+              module: intelligence/wiki
+              verb: run
+              state: accepted
+              teamId: team_x7Ka2LmPq9Rd
+              createdAt: "2026-11-01T09:14:03.512Z"
+              updatedAt: "2026-11-01T09:14:03.512Z"
+              deadlineAt: "2026-11-01T10:14:03.512Z"
+      "400":
+        description: >-
+          No `Idempotency-Key`, or `module`, `verb`, `input` or `team` is not valid. `module` is not
+          `<product>/<capability>` (`invalid_request`). A malformed `Idempotency-Key` is `invalid_idempotency_key`.
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+            example:
+              error:
+                message: a job needs an Idempotency-Key header
+                type: invalid_request_error
+                code: invalid_request
+      "401":
+        description: No credential (`missing_credential`), or a credential Gateway does not accept (`invalid_credential`).
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+            example:
+              error:
+                message: invalid API key
+                type: authentication_error
+                code: invalid_credential
+      "403":
+        description: >-
+          The caller does not hold the action the module declares for the verb (`role_required`), or the team named is
+          not the caller's (`not_in_team`).
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+            example:
+              error:
+                message: only the org's owner can run Nexus Wiki (wiki.run)
+                type: permission_error
+                code: role_required
+      "404":
+        description: >-
+          No registered module is `module`, or it does not declare `verb` (`not_found`). The team named does not exist
+          in this organization (`unknown_team`).
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+            example:
+              error:
+                message: no capability intelligence/wikis is registered
+                type: not_found
+                code: not_found
+      "409":
+        description: >-
+          The `Idempotency-Key`'s first request still runs (`idempotency_in_progress`) or was interrupted
+          (`idempotency_interrupted`). The request does not run again.
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+            example:
+              error:
+                message: a request with this Idempotency-Key is still running; retry in a moment
+                type: invalid_request_error
+                code: idempotency_in_progress
+      "422":
+        description: >-
+          The `Idempotency-Key` named a different job (`idempotency_key_reused`): a resend with another `module`, `verb`
+          or `input`.
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+            example:
+              error:
+                message: this Idempotency-Key named a different job; use a new key for a new job
+                type: invalid_request_error
+                code: idempotency_key_reused
+      "428":
+        $ref: ../components/common.yaml#/responses/PreconditionRequired
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      "502":
+        description: >-
+          No registered module is `module` and a module did not answer, so it may be that one (`module_unavailable`);
+          try again.
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+            example:
+              error:
+                message: "intelligence/wiki is not available: a module did not answer; try again"
+                type: module_unavailable
+                code: module_unavailable
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: products.use
+    x-internal-stability: beta
+    x-idempotency: required
+/v1/jobs/{id}:
+  get:
+    tags:
+      - Routines and jobs
+    operationId: getJob
+    summary: "A job's state: `accepted`, `running`, `done`, `failed` or `cancelled`."
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[A-Za-z0-9_-]+$
+        description: The job's id (`job_…`), as POST /v1/jobs answered it
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Job
+            example:
+              id: job_FiyTNoWq2Szr92Uk7rVGtldqjXCy_vWUgt81xwC4WpQ
+              module: intelligence/wiki
+              verb: run
+              state: running
+              teamId: team_x7Ka2LmPq9Rd
+              createdAt: "2026-11-01T09:14:03.512Z"
+              updatedAt: "2026-11-01T09:14:04.087Z"
+              deadlineAt: "2026-11-01T10:14:03.512Z"
+              startedAt: "2026-11-01T09:14:04.087Z"
+      "401":
+        description: No credential (`missing_credential`), or a credential Gateway does not accept (`invalid_credential`).
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+            example:
+              error:
+                message: invalid API key
+                type: authentication_error
+                code: invalid_credential
+      "403":
+        description: >-
+          The key does not hold `products.use` (`role_required`: a service account, a sandbox, or an agent not granted
+          it).
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+            example:
+              error:
+                message: >-
+                  this agent was not granted this (products.use): Run modules and read their reports; open and end agent
+                  sessions
+                type: permission_error
+                code: role_required
+      "404":
+        description: >-
+          No such job of yours (`not_found`): a job is its creator's and its organization's owners' and admins'. Another
+          member's job, and another organization's, is as absent as a missing one.
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+            example:
+              error:
+                message: no such job
+                type: not_found
+                code: not_found
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: products.use
+    x-internal-stability: beta
+/v1/jobs/{id}/cancel:
+  post:
+    tags:
+      - Routines and jobs
+    operationId: cancelJob
+    summary: >-
+      Cancel a job that no worker has taken (`accepted` becomes `cancelled`). A job in any other state comes back as it
+      is: a running one is its backend's to stop, and a finished one is never left. Cancelling twice is the same as
+      once.
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[A-Za-z0-9_-]+$
+        description: The job's id (`job_…`), as POST /v1/jobs answered it
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKeyRequired
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Job
+            example:
+              id: job_8TsepcjuJheK6fnb-pPCjdEc0tm-BnRMRuA_HCHtsN4
+              module: intelligence/wiki
+              verb: run
+              state: cancelled
+              teamId: team_x7Ka2LmPq9Rd
+              createdAt: "2026-11-02T08:30:12.204Z"
+              updatedAt: "2026-11-02T08:30:19.641Z"
+              deadlineAt: "2026-11-02T09:30:12.204Z"
+              finishedAt: "2026-11-02T08:30:19.641Z"
+      "400":
+        description: A malformed `Idempotency-Key` (`invalid_idempotency_key`).
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+            example:
+              error:
+                message: Idempotency-Key must be 1 to 255 printable ASCII characters
+                type: invalid_request_error
+                code: invalid_idempotency_key
+      "401":
+        description: No credential (`missing_credential`), or a credential Gateway does not accept (`invalid_credential`).
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+            example:
+              error:
+                message: invalid API key
+                type: authentication_error
+                code: invalid_credential
+      "403":
+        description: >-
+          The key does not hold `products.use` (`role_required`: a service account, a sandbox, or an agent not granted
+          it).
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+            example:
+              error:
+                message: >-
+                  this agent was not granted this (products.use): Run modules and read their reports; open and end agent
+                  sessions
+                type: permission_error
+                code: role_required
+      "404":
+        description: >-
+          No such job of yours (`not_found`): a job is its creator's and its organization's owners' and admins'. Another
+          member's job, and another organization's, is as absent as a missing one.
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+            example:
+              error:
+                message: no such job
+                type: not_found
+                code: not_found
+      "409":
+        description: >-
+          The `Idempotency-Key`'s first request still runs (`idempotency_in_progress`) or was interrupted
+          (`idempotency_interrupted`). The request does not run again.
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+            example:
+              error:
+                message: a request with this Idempotency-Key is still running; retry in a moment
+                type: invalid_request_error
+                code: idempotency_in_progress
+      "422":
+        description: The `Idempotency-Key` was used for a different request (`idempotency_key_reused`).
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+            example:
+              error:
+                message: >-
+                  this Idempotency-Key was used for a different request (POST
+                  /v1/jobs/job_FiyTNoWq2Szr92Uk7rVGtldqjXCy_vWUgt81xwC4WpQ/cancel); use a new key for a new request
+                type: invalid_request_error
+                code: idempotency_key_reused
+      "428":
+        $ref: ../components/common.yaml#/responses/PreconditionRequired
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: products.use
+    x-internal-stability: beta
+    x-idempotency: required
+/v1/jobs/{id}/result:
+  get:
+    tags:
+      - Routines and jobs
+    operationId: getJobResult
+    summary: A job's state, and its `result` once it is `done` or `failed` (with `failureKind` when it failed).
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[A-Za-z0-9_-]+$
+        description: The job's id (`job_…`), as POST /v1/jobs answered it
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/JobResult
+            example:
+              id: job_FiyTNoWq2Szr92Uk7rVGtldqjXCy_vWUgt81xwC4WpQ
+              state: done
+              result:
+                id: job_FiyTNoWq2Szr92Uk7rVGtldqjXCy_vWUgt81xwC4WpQ
+                status: succeeded
+                input:
+                  repo: https://github.com/nexus-demo/hello-factory
+                startedAt: "2026-11-01T09:14:04.311Z"
+                finishedAt: "2026-11-01T09:16:41.804Z"
+                costUsd: 0.0817
+                commit: 86164179b7bc487953bb5e6d888a124cf257c447
+                coverage: 0.62
+      "401":
+        description: No credential (`missing_credential`), or a credential Gateway does not accept (`invalid_credential`).
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+            example:
+              error:
+                message: invalid API key
+                type: authentication_error
+                code: invalid_credential
+      "403":
+        description: >-
+          The key does not hold `products.use` (`role_required`: a service account, a sandbox, or an agent not granted
+          it).
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+            example:
+              error:
+                message: >-
+                  this agent was not granted this (products.use): Run modules and read their reports; open and end agent
+                  sessions
+                type: permission_error
+                code: role_required
+      "404":
+        description: >-
+          No such job of yours (`not_found`): a job is its creator's and its organization's owners' and admins'. Another
+          member's job, and another organization's, is as absent as a missing one.
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+            example:
+              error:
+                message: no such job
+                type: not_found
+                code: not_found
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: products.use
+    x-internal-stability: beta
+/v1/routines:
+  post:
+    tags:
+      - Routines and jobs
+    operationId: createRoutine
+    summary: >-
+      Create a routine for yourself: a `schedule` trigger and the `brief` action. It runs as you and no one else, reads
+      and notifies only (`writes: never`), and reports to your Slack direct messages. Gateway records it and its Runtime
+      schedule (`source: routine:<id>`), whose slots each start one job. The brief is not available yet:
+      `delivery.available` is `false` with `routine_brief_unavailable`, and each slot's job ends without reading or
+      sending anything. A person owns at most 50 routines in an organization. `team` (or `x-nexus-team`) names the team
+      its model calls go to.
+    parameters:
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKeyRequired
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas.yaml#/CreateRoutineRequest
+          example:
+            title: Morning brief
+            trigger:
+              kind: schedule
+              at: "08:00"
+              days:
+                - mon
+                - tue
+                - wed
+                - thu
+                - fri
+              timezone: America/Costa_Rica
+            action:
+              kind: brief
+            caps:
+              maxRunsPerDay: 1
+    responses:
+      "201":
+        description: "Created: the routine and its schedule"
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Routine
+            example:
+              id: rtn_3f1c2a9b8e7d4c6f9a0b1c2d3e4f5a6b
+              title: Morning brief
+              ownerId: usr_Q2x8LmPq9RdK
+              teamId: team_x7Ka2LmPq9Rd
+              executor: gateway
+              trigger:
+                kind: schedule
+                at: "08:00"
+                days:
+                  - mon
+                  - tue
+                  - wed
+                  - thu
+                  - fri
+                timezone: America/Costa_Rica
+                catchUp: latest
+              action:
+                kind: brief
+              proactivity:
+                notify: always
+                writes: never
+              caps:
+                maxRunsPerDay: 1
+              reportTo: slack
+              state: active
+              scheduleId: sch_8e7d4c6f9a0b1c2d3e4f5a6b3f1c2a9b
+              nextRunAt: "2026-11-04T14:00:00.000Z"
+              delivery:
+                available: false
+                code: routine_brief_unavailable
+                reason: >-
+                  The morning brief is not available yet. A routine runs when its owner is not present, and the
+                  credential such a run uses is not decided (Accounts, schedules-design.md open question 2). Until it
+                  is, each slot's job ends without reading or sending anything.
+              createdVia: cli
+              version: 2
+              createdAt: "2026-11-03T15:02:11.204Z"
+              updatedAt: "2026-11-03T15:02:11.388Z"
+      "400":
+        description: A body that is not a routine, or a malformed `Idempotency-Key`.
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+            example:
+              error:
+                message: "a routine is { title?, trigger, action, proactivity?, caps?, reportTo? }: missing field `trigger`"
+                type: invalid_request_error
+      "401":
+        description: No credential (`missing_credential`), or a credential Gateway does not accept (`invalid_credential`).
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+            example:
+              error:
+                message: invalid API key
+                type: authentication_error
+                code: invalid_credential
+      "403":
+        description: >-
+          The key does not hold `routines.use` (`role_required`), or it is not a person's own key, Nexus UI or an agent
+          link its person granted `routines.use` (`routine_agent_refused`). A module's scoped key, a service account and
+          a sandbox are refused the same way. An agent link's routine writes nothing: any `proactivity.writes` but
+          `never` is `routine_agent_writes_refused`.
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+            example:
+              error:
+                message: >-
+                  only a person manages routines, with their own key or Nexus UI; an agent creates one after the
+                  person's confirm card, which is not built yet
+                type: permission_error
+                code: routine_agent_refused
+      "409":
+        description: >-
+          You own 50 routines in this organization (`routine_limit`), or the `Idempotency-Key`'s first request still
+          runs.
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+            example:
+              error:
+                message: you have 50 routines in this organization, the most one person has; delete one first
+                type: invalid_request_error
+                code: routine_limit
+      "422":
+        description: >-
+          A routine Gateway does not build yet or cannot run (`invalid_routine`): a trigger other than `schedule`, both
+          or neither of `everySeconds` and `at`, an interval under 600 s, an unknown time zone or day, an action other
+          than `brief`, a `reportTo` other than `slack`. `writes: ask_first` is `routine_writes_unavailable`: it waits
+          for Policy's approval records (PO1).
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+            example:
+              error:
+                message: trigger.everySeconds is 600 to 604800
+                type: invalid_request_error
+                code: invalid_routine
+      "428":
+        $ref: ../components/common.yaml#/responses/PreconditionRequired
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      "503":
+        description: >-
+          Routines are off on this Gateway (`routines_disabled`): they need a server setting and a server setting. The
+          route still mounts.
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+            example:
+              error:
+                message: "routines are off on this Gateway: they need a server setting and a server setting"
+                type: not_configured
+                code: routines_disabled
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: routines.use
+    x-internal-stability: beta
+    x-idempotency: required
+/v1/routines/{id}:
+  get:
+    tags:
+      - Routines and jobs
+    operationId: getRoutine
+    summary: A routine, with its schedule's next run and its last slot.
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[A-Za-z0-9_-]+$
+        description: The routine's id (`rtn_…`), as POST /v1/routines answered it
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Routine
+            example:
+              id: rtn_3f1c2a9b8e7d4c6f9a0b1c2d3e4f5a6b
+              title: Morning brief
+              ownerId: usr_Q2x8LmPq9RdK
+              teamId: team_x7Ka2LmPq9Rd
+              executor: gateway
+              trigger:
+                kind: schedule
+                at: "08:00"
+                days:
+                  - mon
+                  - tue
+                  - wed
+                  - thu
+                  - fri
+                timezone: America/Costa_Rica
+                catchUp: latest
+              action:
+                kind: brief
+              proactivity:
+                notify: always
+                writes: never
+              caps:
+                maxRunsPerDay: 1
+              reportTo: slack
+              state: active
+              scheduleId: sch_8e7d4c6f9a0b1c2d3e4f5a6b3f1c2a9b
+              nextRunAt: "2026-11-04T14:00:00.000Z"
+              delivery:
+                available: false
+                code: routine_brief_unavailable
+                reason: >-
+                  The morning brief is not available yet. A routine runs when its owner is not present, and the
+                  credential such a run uses is not decided (Accounts, schedules-design.md open question 2). Until it
+                  is, each slot's job ends without reading or sending anything.
+              createdVia: cli
+              version: 2
+              createdAt: "2026-11-03T15:02:11.204Z"
+              updatedAt: "2026-11-03T15:02:11.388Z"
+      "401":
+        description: No credential (`missing_credential`), or a credential Gateway does not accept (`invalid_credential`).
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+            example:
+              error:
+                message: invalid API key
+                type: authentication_error
+                code: invalid_credential
+      "403":
+        description: >-
+          The key does not hold `products.use` (`role_required`), or it is not a person's own key or Nexus UI
+          (`routine_agent_refused`): an agent link creates a routine only after the person's confirm card, which is not
+          built yet. A module's scoped key, a service account and a sandbox are refused the same way.
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+            example:
+              error:
+                message: >-
+                  only a person manages routines, with their own key or Nexus UI; an agent creates one after the
+                  person's confirm card, which is not built yet
+                type: permission_error
+                code: routine_agent_refused
+      "404":
+        description: >-
+          No such routine you may see (`not_found`). A routine is its owner's, and its organization's owners' and
+          admins' to read, pause and delete. Another member's routine, and another organization's, is as absent as a
+          missing one.
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+            example:
+              error:
+                message: no such routine
+                type: not_found
+                code: not_found
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      "503":
+        description: >-
+          Routines are off on this Gateway (`routines_disabled`): they need a server setting and a server setting. The
+          route still mounts.
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+            example:
+              error:
+                message: "routines are off on this Gateway: they need a server setting and a server setting"
+                type: not_configured
+                code: routines_disabled
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: routines.use
+    x-internal-stability: beta
+  patch:
+    tags:
+      - Routines and jobs
+    operationId: updateRoutine
+    summary: >-
+      Pause (`state: paused`) or resume (`state: active`) a routine. A pause stops its schedule first, so no slot after
+      it starts a job. A resume runs from the next slot after now and replays nothing. The owner does both. An owner or
+      admin of the organization may pause someone else's routine, and may not resume it. Pausing twice is the same as
+      once.
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[A-Za-z0-9_-]+$
+        description: The routine's id (`rtn_…`), as POST /v1/routines answered it
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKey
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas.yaml#/UpdateRoutineRequest
+          example:
+            state: paused
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Routine
+            example:
+              id: rtn_3f1c2a9b8e7d4c6f9a0b1c2d3e4f5a6b
+              title: Morning brief
+              ownerId: usr_Q2x8LmPq9RdK
+              teamId: team_x7Ka2LmPq9Rd
+              executor: gateway
+              trigger:
+                kind: schedule
+                at: "08:00"
+                days:
+                  - mon
+                  - tue
+                  - wed
+                  - thu
+                  - fri
+                timezone: America/Costa_Rica
+                catchUp: latest
+              action:
+                kind: brief
+              proactivity:
+                notify: always
+                writes: never
+              caps:
+                maxRunsPerDay: 1
+              reportTo: slack
+              state: paused
+              scheduleId: sch_8e7d4c6f9a0b1c2d3e4f5a6b3f1c2a9b
+              delivery:
+                available: false
+                code: routine_brief_unavailable
+                reason: >-
+                  The morning brief is not available yet. A routine runs when its owner is not present, and the
+                  credential such a run uses is not decided (Accounts, schedules-design.md open question 2). Until it
+                  is, each slot's job ends without reading or sending anything.
+              createdVia: cli
+              version: 3
+              createdAt: "2026-11-03T15:02:11.204Z"
+              updatedAt: "2026-11-03T16:10:42.019Z"
+              pausedReason: owner
+      "400":
+        description: "`state` is not `paused` or `active`."
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+            example:
+              error:
+                message: state is paused or active
+                type: invalid_request_error
+      "401":
+        description: No credential (`missing_credential`), or a credential Gateway does not accept (`invalid_credential`).
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+            example:
+              error:
+                message: invalid API key
+                type: authentication_error
+                code: invalid_credential
+      "403":
+        description: >-
+          Not a person's key (`routine_agent_refused`), or an admin resuming someone else's routine
+          (`routine_resume_refused`).
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+            example:
+              error:
+                message: only the routine's owner resumes it
+                type: permission_error
+                code: routine_resume_refused
+      "404":
+        description: >-
+          No such routine you may see (`not_found`). A routine is its owner's, and its organization's owners' and
+          admins' to read, pause and delete. Another member's routine, and another organization's, is as absent as a
+          missing one.
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+            example:
+              error:
+                message: no such routine
+                type: not_found
+                code: not_found
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      "503":
+        description: >-
+          Routines are off on this Gateway (`routines_disabled`): they need a server setting and a server setting. The
+          route still mounts.
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+            example:
+              error:
+                message: "routines are off on this Gateway: they need a server setting and a server setting"
+                type: not_configured
+                code: routines_disabled
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: routines.use
+    x-internal-stability: beta
+    x-idempotency: optional
+  delete:
+    tags:
+      - Routines and jobs
+    operationId: deleteRoutine
+    summary: >-
+      Delete a routine and its schedule: its owner, or an owner or admin of the organization. The schedule goes first,
+      so no slot after it starts a job. A job already started runs to its end.
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[A-Za-z0-9_-]+$
+        description: The routine's id (`rtn_…`), as POST /v1/routines answered it
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKey
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/RoutineDeleted
+            example:
+              id: rtn_3f1c2a9b8e7d4c6f9a0b1c2d3e4f5a6b
+              deleted: true
+      "401":
+        description: No credential (`missing_credential`), or a credential Gateway does not accept (`invalid_credential`).
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+            example:
+              error:
+                message: invalid API key
+                type: authentication_error
+                code: invalid_credential
+      "403":
+        description: >-
+          The key does not hold `products.use` (`role_required`), or it is not a person's own key or Nexus UI
+          (`routine_agent_refused`): an agent link creates a routine only after the person's confirm card, which is not
+          built yet. A module's scoped key, a service account and a sandbox are refused the same way.
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+            example:
+              error:
+                message: >-
+                  only a person manages routines, with their own key or Nexus UI; an agent creates one after the
+                  person's confirm card, which is not built yet
+                type: permission_error
+                code: routine_agent_refused
+      "404":
+        description: >-
+          No such routine you may see (`not_found`). A routine is its owner's, and its organization's owners' and
+          admins' to read, pause and delete. Another member's routine, and another organization's, is as absent as a
+          missing one.
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+            example:
+              error:
+                message: no such routine
+                type: not_found
+                code: not_found
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      "503":
+        description: >-
+          Routines are off on this Gateway (`routines_disabled`): they need a server setting and a server setting. The
+          route still mounts.
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+            example:
+              error:
+                message: "routines are off on this Gateway: they need a server setting and a server setting"
+                type: not_configured
+                code: routines_disabled
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: routines.use
+    x-internal-stability: beta
+    x-idempotency: optional

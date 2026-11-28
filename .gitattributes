@@ -1,0 +1,3 @@
+# Every text file is checked out with LF, Windows too. Tests read source files as text (`include_str!`) and
+# expect LF; a CRLF checkout (Git for Windows' default) failed them.
+* text=auto eol=lf

@@ -1,0 +1,599 @@
+# Path items. The root openapi.yaml references each one.
+/v1/devices:
+  get:
+    tags:
+      - Devices
+    operationId: listDevices
+    summary: Your devices for end-to-end encrypted session sync, oldest first, with their public keys and approvals.
+    description: >-
+      Revoked devices are listed too. Each approved device names its approver and the approver's Ed25519 signature, so a
+      client verifies the approval chain from your first device itself.
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/DeviceList
+      "403":
+        description: "Not a person: an agent link, a module or a service account (`person_required`)"
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: chat.use
+  post:
+    tags:
+      - Devices
+    operationId: registerDevice
+    summary: >-
+      Register a device's or a recovery key's public keys. Your first device is trusted at once; anything later is
+      pending until a trusted device approves it.
+    description: >-
+      The device makes its own X25519 and Ed25519 key pairs and sends only the public keys, 32 bytes each in base64url
+      without padding. A passkey or recovery code (`kind`) sends its X25519 key only. A device is trusted without an
+      approval only while you never had a trusted device; a recovery key never is. After that, signing in alone never
+      adds a trusted device: the way back after losing every device is `recoverDevice`, with a recovery key's proof. You
+      may have at most 10 pending devices.
+    parameters:
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKeyRequired
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas.yaml#/RegisterDeviceRequest
+    responses:
+      "201":
+        description: Registered
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Device
+      "400":
+        description: A name or key of the wrong form
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "403":
+        description: >-
+          Not a person: an agent link, a module or a service account (`person_required`); or a device from Nexus UI
+          while the organization's `webSessionViewer` is off (`web_session_viewer_off`). A recovery key still registers
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "409":
+        description: "10 pending devices already (`too_many_pending_devices`): approve or revoke one first"
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "428":
+        $ref: ../components/common.yaml#/responses/PreconditionRequired
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: chat.use
+    x-idempotency: required
+/v1/devices/recover:
+  post:
+    tags:
+      - Devices
+    operationId: recoverDevice
+    summary: >-
+      The way back after every device is lost: with a recovery key's proof, revoke your devices and register this one as
+      a new root.
+    description: >-
+      Open the challenge from `recoverDeviceChallenge` with your passkey or recovery code and send it with that recovery
+      key's id. Gateway compares it in constant time with the challenge it issued for that recovery key. Only then, in
+      one step, does it revoke each of your devices that is not revoked, delete their copies, register this device as
+      trusted without an approval, and record `devices.recovered` in the audit log. Your recovery keys stay trusted,
+      with their copies: unlock the history with one, then approve it again from this device with `approveDevice`.
+      Without the proof nothing changes. The challenges are tried once, so a wrong proof closes them too.
+    parameters:
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKeyRequired
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas.yaml#/RecoverDeviceRequest
+    responses:
+      "201":
+        description: Registered as your new root
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Device
+      "400":
+        description: A name or key of the wrong form
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "403":
+        description: >-
+          No proof (`recovery_proof_required`), a proof that does not match an open challenge for that recovery key:
+          wrong, expired, used or replaced (`invalid_recovery_proof`), or not a person (`person_required`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "428":
+        $ref: ../components/common.yaml#/responses/PreconditionRequired
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: chat.use
+    x-idempotency: required
+/v1/devices/recover/challenge:
+  post:
+    tags:
+      - Devices
+    operationId: recoverDeviceChallenge
+    summary: Challenges sealed to each of your trusted recovery keys, the first step of the way back.
+    description: >-
+      For each of your trusted recovery keys, Gateway draws 32 random bytes, seals them to that key, and keeps only
+      their SHA-256. Open the one for your passkey or recovery code and send it to `recoverDevice`, with that key's id,
+      within five minutes. New challenges replace the open ones. You are issued them at most 5 times an hour.
+    parameters:
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKeyRequired
+    responses:
+      "201":
+        description: Issued
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/RecoveryChallenge
+      "403":
+        description: "Not a person: an agent link, a module or a service account (`person_required`)"
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "409":
+        description: >-
+          You have no trusted passkey or recovery code (`no_recovery_key`): your history cannot be recovered, and your
+          devices cannot be reset
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "428":
+        $ref: ../components/common.yaml#/responses/PreconditionRequired
+      "429":
+        description: More than 5 challenges in an hour (`too_many_recovery_challenges`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: chat.use
+    x-idempotency: required
+/v1/devices/{id}/approve:
+  post:
+    tags:
+      - Devices
+    operationId: approveDevice
+    summary: Approve your pending device or recovery key with a trusted device's signature, and store its first locked copies.
+    description: >-
+      `signature` is the approver's Ed25519 signature, base64url, over the UTF-8 bytes
+      `nexus-device-approval:v1:{deviceId}:{encryptionKey}:{signingKey}` for a device, or
+      `nexus-device-approval:v2:{holderId}:{kind}:{encryptionKey}:` for a recovery key, with the holder's id and keys as
+      `listDevices` shows them. Each of `keys` is a thread you already have, its content key locked to the new holder.
+      In one step the holder becomes trusted and gets its copies; a refusal stores nothing. Store more copies with
+      `putThreadKeys`. A trusted recovery key whose approver is revoked takes a new approval the same way, which
+      replaces the old one: after `recoverDevice`, your new device approves the recovery key it unlocked with.
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[A-Za-z0-9_-]+$
+        description: The device's id (`dev_…`)
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKeyRequired
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas.yaml#/ApproveDeviceRequest
+    responses:
+      "200":
+        description: Approved
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Device
+      "400":
+        description: >-
+          A malformed signature, key or handover, a handover for a recovery key, a thread named twice, or more than 1000
+          keys
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "403":
+        description: >-
+          The signature does not verify with the approver's signing key (`invalid_signature`), the approver is a
+          recovery key (`recovery_key_cannot_sign`), or not a person (`person_required`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "404":
+        description: Not your device, or not your thread (`device_not_found`, `thread_not_found`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "409":
+        description: >-
+          The approver is not trusted (`device_not_trusted`), the holder is not pending and is no recovery key whose
+          approver is revoked (`device_not_pending`), it registered more than 15 minutes ago (`pairing_expired`), or you
+          already have a trusted recovery key of its kind (`recovery_key_exists`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "428":
+        $ref: ../components/common.yaml#/responses/PreconditionRequired
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: chat.use
+    x-idempotency: required
+/v1/devices/{id}/keys:
+  get:
+    tags:
+      - Devices
+    operationId: listDeviceThreadKeys
+    summary: >-
+      Your trusted device's locked copies, in thread and key version order, a page at a time: a newly paired device
+      catches up.
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[A-Za-z0-9_-]+$
+        description: The device's id (`dev_…`)
+      - name: after
+        in: query
+        required: false
+        schema:
+          type: string
+        description: "The `nextAfter` of the previous page: `{threadId}:{keyVersion}`"
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 500
+          default: 100
+        description: The most copies a page holds
+    responses:
+      "200":
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/ThreadKeyList
+      "400":
+        description: A malformed `after` or `limit`
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "403":
+        description: >-
+          Not a person: an agent link, a module or a service account (`person_required`); or Nexus UI while the
+          organization's `webSessionViewer` is off (`web_session_viewer_off`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "404":
+        description: Not your device (`device_not_found`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "409":
+        description: The device is pending or revoked (`device_not_trusted`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: chat.use
+/v1/devices/{id}/revoke:
+  post:
+    tags:
+      - Devices
+    operationId: revokeDevice
+    summary: >-
+      Revoke one of your devices or recovery keys with a trusted device's signature, and delete its locked copies.
+      Revoked is final.
+    description: >-
+      `signature` is the revoker's Ed25519 signature, base64url, over the UTF-8 bytes
+      `nexus-device-revoke:v1:{deviceId}`. The revoker is the device itself or another of your trusted devices. A
+      revoked device gets no copies again.
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[A-Za-z0-9_-]+$
+        description: The device's id (`dev_…`)
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKeyRequired
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas.yaml#/RevokeDeviceRequest
+    responses:
+      "200":
+        description: Revoked
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Device
+      "400":
+        description: A malformed signature
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "403":
+        description: >-
+          The signature does not verify with the revoker's signing key (`invalid_signature`), the revoker is a recovery
+          key (`recovery_key_cannot_sign`), or not a person (`person_required`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "404":
+        description: Not your device (`device_not_found`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "409":
+        description: The revoker is not trusted (`device_not_trusted`), or the device is already revoked (`device_revoked`)
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+      "428":
+        $ref: ../components/common.yaml#/responses/PreconditionRequired
+      "429":
+        $ref: ../components/common.yaml#/responses/RateLimited
+      default:
+        description: Error
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/Error
+    x-nexus-permission: chat.use
+    x-idempotency: required
+/v1/devices/{inviterDeviceId}/pairing-requests:
+  get:
+    operationId: listPhonePairingRequests
+    tags:
+      - Devices
+    summary: Read your device pairing relay
+    description: >-
+      Only the verified person and organization can access this opaque relay. Pending devices may send their own signed
+      encrypted proof. Gateway never receives the plaintext scan secret. This operation does not approve devices; the
+      scanned desktop verifies the proof and submits the existing device approval. Five-minute expiry, five requests per
+      invitation and 128 retained per owner scope.
+    x-nexus-permission: keys.manage_own
+    parameters:
+      - name: inviterDeviceId
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^dev_[A-Za-z0-9]{12}$
+    responses:
+      "200":
+        description: Current signed state.
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/PhonePairingRequests
+      "400":
+        description: Malformed scope, identifier or ciphertext.
+      "403":
+        description: Not an owner, current member or valid signer.
+      "404":
+        description: No such owned computer, request or device.
+      "409":
+        description: >-
+          Stale generation, disabled/offline computer, expired admission, immutable body conflict, unavailable content
+          policy or full bounded mailbox.
+  post:
+    operationId: submitPhonePairingRequest
+    tags:
+      - Devices
+    summary: Relay an encrypted phone scan proof
+    description: >-
+      Submit a signed encrypted scan proof for a device in the same account and organization. Retry the same envelope to
+      read the inviting computer’s signed outcome. An approval is returned only to the approved request and sender. A
+      cancellation applies to the entire invitation.
+    x-nexus-permission: keys.manage_own
+    parameters:
+      - name: inviterDeviceId
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^dev_[A-Za-z0-9]{12}$
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKeyRequired
+    responses:
+      "200":
+        description: The relay request and its signed decision, when available.
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/PhonePairingRequest
+      "400":
+        description: Malformed scope, identifier or ciphertext.
+      "403":
+        description: Not an owner, current member or valid signer.
+      "404":
+        description: No such owned computer, request or device.
+      "409":
+        description: >-
+          The invitation expired or was already used. The request conflicts with an existing entry, or the relay is
+          full.
+      "428":
+        $ref: ../components/common.yaml#/responses/PreconditionRequired
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../components/schemas.yaml#/PhonePairingEnvelope
+    x-idempotency: required
+/v1/devices/{inviterDeviceId}/pairing-requests/{id}/finish:
+  post:
+    operationId: finishPhonePairingRequest
+    tags:
+      - Devices
+    summary: Publish the inviting computer’s signed pairing decision
+    description: >-
+      Publish an immutable, signed approval or cancellation in the caller’s organization. The route id is the invitation
+      ID for a signed decision. For legacy requests with an empty body, the route id is the relay request ID. An
+      approval confirms existing device trust. The decision does not grant trust.
+    x-nexus-permission: keys.manage_own
+    parameters:
+      - name: inviterDeviceId
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^dev_[A-Za-z0-9]{12}$
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          pattern: ^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKeyRequired
+    requestBody:
+      required: false
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              decision:
+                $ref: ../components/schemas.yaml#/PhonePairingDecision
+            additionalProperties: false
+    responses:
+      "200":
+        description: The decision or legacy delivery marker is recorded.
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/PhonePairingFinished
+      "400":
+        description: Malformed scope, identifier or ciphertext.
+      "403":
+        description: Not an owner, current member or valid signer.
+      "404":
+        description: No such owned computer, request or device.
+      "409":
+        description: >-
+          Stale generation, disabled/offline computer, expired admission, immutable body conflict, unavailable content
+          policy or full bounded mailbox.
+      "428":
+        $ref: ../components/common.yaml#/responses/PreconditionRequired
+    x-idempotency: required
+/v1/devices/{runnerDeviceId}/code-commands:
+  get:
+    operationId: listRunnerCodeCommands
+    tags:
+      - Devices
+    summary: Read queued encrypted commands across your runner's sessions
+    description: >-
+      Only the session owner may use this operation. Organization auditors cannot control another person's sessions.
+      Sender and runner must be trusted signing devices of that person. Commands are sealed on the phone; Gateway never
+      reads action content. Leases and commands expire within 60 seconds, with 30 more seconds allowed for clock skew;
+      seal by `serverTime` from `getCodeControl`. A claimed command reads as expired 2 minutes after its expiry, and a
+      late result still finishes it. A repeated identical command id returns its original delivery state; a changed body
+      is a 409. Claims are atomic and never replay an action. Local computer opt-in is required.
+    x-nexus-permission: sessions.control
+    parameters:
+      - name: runnerDeviceId
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[A-Za-z0-9_-]+$
+    responses:
+      "200":
+        description: Current control or delivery state.
+        content:
+          application/json:
+            schema:
+              $ref: ../components/schemas.yaml#/CodeCommands
+      "400":
+        description: Malformed fields, ciphertext or expiry.
+      "403":
+        description: Invalid signature or a caller that is not a person.
+      "404":
+        description: The session, command or device does not belong to the caller.
+      "409":
+        description: >-
+          A device is untrusted, control is disabled or offline, the organization forbids synced content, or a command
+          state conflicts.
+      "410":
+        description: The session was deleted.
+      "429":
+        description: The bounded command mailbox is full.

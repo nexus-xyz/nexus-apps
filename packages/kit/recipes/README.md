@@ -3,8 +3,8 @@
 One JSON file per tool: how a person runs it through Nexus Gateway, the limits to read first, and what is claimed. The
 schema is `nexus-recipe/1`, checked by `recipeProblems` in `recipes.ts`, which lives in Nexus's private kit package
 with the Nexus UI pages that read it. Each recipe's docs page is generated into [`pages/`](pages/), and
-`recipes.test.ts` there fails when a committed page and its recipe disagree. Do not edit a page: change the recipe, then
-run that test with `-u` in `eng/factory`.
+`recipes.test.ts` there fails when a committed page and its recipe disagree. Do not edit a page: change the recipe, and
+Nexus generates the page again.
 
 | Field | What it holds |
 | --- | --- |
@@ -63,8 +63,8 @@ to `RUNS` in `recipes.ts`, and the recipe's page is generated again.
 
 The records stay private: each names a production ledger call, its agent session and the tester's machine, and the
 open-source export leaves `runs/` out. The CLI carries [`runs.json`](runs.json) instead: the launchers'
-runs with the fields its status line reads, written by `carriedRuns` in `recipes.ts`. After adding a record, run
-`npx vitest run kit/src/recipes.test.ts -u` in `eng/factory` to write it again.
+runs with the fields its status line reads, written by `carriedRuns` in `recipes.ts`. Nexus writes it again after
+adding a record.
 
 | Field | What it holds |
 | --- | --- |
