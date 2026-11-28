@@ -139,7 +139,7 @@ impl Workbench {
         let linked = match self.store().linked_threads() {
             Ok(linked) => linked,
             Err(error) => {
-                eprintln!("nexus-workbench: {project_id}: {error}");
+                eprintln!("nexus-workbench: could not read the subsessions of a removed project: {error}");
                 return;
             }
         };
