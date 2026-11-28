@@ -163,7 +163,7 @@ pub struct Feed {
     pub target: String,
     /// The installed version. A manifest at or below it clears the cached download.
     pub installed: String,
-    /// The update key: the base64 of a minisign public key file.
+    /// The update keys: the base64 of one or more minisign public key files, separated by whitespace.
     pub pubkey: String,
     /// The download service's credential for the internal channel (`access::update_channel`).
     pub authorization: Option<HeaderValue>,

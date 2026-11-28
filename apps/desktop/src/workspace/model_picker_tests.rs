@@ -624,9 +624,19 @@ fn saved_server_model_selection_controls_send_and_catalog_picks_clear_it(cx: &mu
             window,
             cx,
         );
-        assert!(workspace.code_form.provider.is_none());
-        assert_eq!(workspace.code_form.model.as_deref(), Some("zai/glm-5.3"));
-        assert!(!workspace.composer_send_enabled(), "no saved provider for this agent");
+        // Servers serve only OpenCode, which runs local sessions only where `nexus_agents` lists it (Linux today).
+        // Elsewhere the picker does not offer its rows, so the pick changes nothing.
+        if SessionAgent::Opencode.supported_on_current_platform() {
+            assert!(workspace.code_form.provider.is_none());
+            assert_eq!(workspace.code_form.model.as_deref(), Some("zai/glm-5.3"));
+            assert!(!workspace.composer_send_enabled(), "no saved provider for this agent");
+        } else {
+            assert!(
+                workspace.code_form.provider.is_some(),
+                "a row this system cannot run is not picked"
+            );
+            assert!(workspace.composer_send_enabled(), "the saved model stays picked");
+        }
     });
 }
 

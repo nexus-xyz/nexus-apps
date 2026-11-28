@@ -82,6 +82,10 @@ pub fn switch_gateway(settings: &mut Settings, from: &str, signed_in: bool, to: 
     Ok(to)
 }
 
+/// A full path on this system, for a test's folder setting: `/w` is not one on Windows.
+#[cfg(test)]
+pub const FULL_PATH: &str = if cfg!(windows) { r"C:\w" } else { "/w" };
+
 /// A temporary `settings.json` for a test, removed when dropped.
 #[cfg(test)]
 pub struct TempFile(PathBuf);
@@ -141,14 +145,14 @@ mod tests {
                     secrets: vec!["LINEAR_KEY".into()],
                     tool_timeout_sec: None,
                 });
-                settings.set_worktree_root(WorktreeRoot::Worktrees, Some("/w".into()))
+                settings.set_worktree_root(WorktreeRoot::Worktrees, Some(super::FULL_PATH.into()))
             })
             .expect("update");
         let read = settings::load(file.path());
         assert_eq!(read, saved);
         assert_eq!(read.shortcut.as_deref(), Some("Alt+Shift+Space"));
         assert_eq!(read.panel_size, Some([520.0, 680.0]));
-        assert_eq!(read.worktrees_dir.as_deref(), Some("/w"));
+        assert_eq!(read.worktrees_dir.as_deref(), Some(super::FULL_PATH));
         assert_eq!(read.mcp_servers.len(), 1);
     }
 

@@ -596,16 +596,14 @@
       "429":
         $ref: ../components/common.yaml#/responses/RateLimited
       "503":
-        description: >-
-          Routines are off on this Gateway (`routines_disabled`): they need a server setting and a server setting. The
-          route still mounts.
+        description: "Routines are off on this Gateway (`routines_disabled`): they need the server settings. The route still mounts."
         content:
           application/json:
             schema:
               $ref: ../components/schemas.yaml#/Error
             example:
               error:
-                message: "routines are off on this Gateway: they need a server setting and a server setting"
+                message: "routines are off on this Gateway: they need the server settings"
                 type: not_configured
                 code: routines_disabled
       default:
@@ -721,16 +719,14 @@
       "429":
         $ref: ../components/common.yaml#/responses/RateLimited
       "503":
-        description: >-
-          Routines are off on this Gateway (`routines_disabled`): they need a server setting and a server setting. The
-          route still mounts.
+        description: "Routines are off on this Gateway (`routines_disabled`): they need the server settings. The route still mounts."
         content:
           application/json:
             schema:
               $ref: ../components/schemas.yaml#/Error
             example:
               error:
-                message: "routines are off on this Gateway: they need a server setting and a server setting"
+                message: "routines are off on this Gateway: they need the server settings"
                 type: not_configured
                 code: routines_disabled
       default:
@@ -864,16 +860,14 @@
       "429":
         $ref: ../components/common.yaml#/responses/RateLimited
       "503":
-        description: >-
-          Routines are off on this Gateway (`routines_disabled`): they need a server setting and a server setting. The
-          route still mounts.
+        description: "Routines are off on this Gateway (`routines_disabled`): they need the server settings. The route still mounts."
         content:
           application/json:
             schema:
               $ref: ../components/schemas.yaml#/Error
             example:
               error:
-                message: "routines are off on this Gateway: they need a server setting and a server setting"
+                message: "routines are off on this Gateway: they need the server settings"
                 type: not_configured
                 code: routines_disabled
       default:
@@ -955,16 +949,14 @@
       "429":
         $ref: ../components/common.yaml#/responses/RateLimited
       "503":
-        description: >-
-          Routines are off on this Gateway (`routines_disabled`): they need a server setting and a server setting. The
-          route still mounts.
+        description: "Routines are off on this Gateway (`routines_disabled`): they need the server settings. The route still mounts."
         content:
           application/json:
             schema:
               $ref: ../components/schemas.yaml#/Error
             example:
               error:
-                message: "routines are off on this Gateway: they need a server setting and a server setting"
+                message: "routines are off on this Gateway: they need the server settings"
                 type: not_configured
                 code: routines_disabled
       default:

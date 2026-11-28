@@ -238,6 +238,7 @@ impl ShellHost for MachineShells {
     }
 }
 
-#[cfg(test)]
+// The tests run the host's shells in this process: `/bin/sh`, `stty` and a Unix socket, as on the servers. Unix only.
+#[cfg(all(test, unix))]
 #[path = "server_shell_tests.rs"]
 mod tests;

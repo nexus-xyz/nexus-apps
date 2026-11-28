@@ -55,7 +55,7 @@ nexus-local-agents = { path = "../nexus-local-agents" }
 nexus-agents = { path = "../nexus-agents" }
 # The provider layer's shared values: kinds, offers, credentials and settings (src/provider/).
 nexus-providers = { path = "../nexus-providers" }
-# Pinned to the desktop app's (and eng/factory/rs's) versions.
+# Pinned to the desktop app's versions.
 serde = { version = "=1.0.229", features = ["derive"] }
 serde_json = { version = "=1.0.154", features = ["preserve_order"] }
 toml = { version = "=1.1.8", default-features = false, features = ["std", "parse", "serde"] }

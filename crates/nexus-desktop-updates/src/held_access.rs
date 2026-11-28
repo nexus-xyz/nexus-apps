@@ -73,6 +73,9 @@ pub(crate) async fn channel_with(
     manual: bool,
     now: Instant,
 ) -> Result<(Channel, Option<HeaderValue>), Failure> {
+    if let Some(channel) = Channel::fixed(installed) {
+        return Ok((channel, None));
+    }
     let key = key(gateway, token);
     let kept = held.lock().as_ref().and_then(|(whose, at, answer)| {
         let fresh = *whose == key && now.saturating_duration_since(*at) < hold(answer);

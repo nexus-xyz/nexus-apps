@@ -1683,6 +1683,9 @@
       snapshot 20 MiB, an awareness update or a presence object 4 KiB. At most 1200 updates, snapshots and awareness
       posts a minute per person, and 1800 presence posts. Send it without an `Idempotency-Key`: a repeated update
       changes nothing.
+
+
+      Exempt: a page's shared draft. A key would store an answer per keystroke.
     parameters:
       - name: id
         in: path
@@ -1691,7 +1694,7 @@
           type: string
           pattern: ^[A-Za-z0-9_-]+$
         description: The page's id (`pag_…`)
-      - $ref: ../components/common.yaml#/parameters/IdempotencyKeyRequired
+      - $ref: ../components/common.yaml#/parameters/IdempotencyKey
     requestBody:
       required: true
       content:
@@ -1735,8 +1738,6 @@
           application/json:
             schema:
               $ref: ../components/schemas.yaml#/Error
-      "428":
-        $ref: ../components/common.yaml#/responses/PreconditionRequired
       "429":
         $ref: ../components/common.yaml#/responses/RateLimited
       default:
@@ -1746,7 +1747,7 @@
             schema:
               $ref: ../components/schemas.yaml#/Error
     x-nexus-permission: chat.use
-    x-idempotency: required
+    x-idempotency: optional
 /v1/pages/{id}/events:
   get:
     tags:

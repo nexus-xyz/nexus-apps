@@ -310,6 +310,13 @@ package by its key, `<os>-<arch>-<format>` (`darwin-aarch64-dmg`, `windows-x86_6
 and installs it only when the package's minisign signature checks against the public key compiled in.
 Settings › App shows the version, channel and state, with Check for updates and Restart to update.
 
+The channels are stable (`desktop/stable/`), internal (`desktop/internal/`, Nexus employees) and beta
+(`desktop-oss/beta/`, the `-beta.<N>` releases of this repository). A build stays on its own channel: the beta is
+signed with its own key and a stable or internal build refuses a beta version. To try the beta from a stable or internal
+install, install a beta by hand from this repository's
+[releases](https://github.com/nexus-xyz/nexus-apps/releases); it then updates from the beta feed. A beta whose update
+key is broken sends you to that page too, not to the stable download page.
+
 - Linux: the new `.tar.xz` folder is unpacked beside this one and takes its place. The launcher entry still works.
 - Windows: the installer runs silently with `/UPDATE` after the app quits, then starts the new version.
 - macOS: Restart to update mounts the verified `.dmg` and checks the staged app's identity, version and code signature.

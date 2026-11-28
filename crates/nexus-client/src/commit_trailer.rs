@@ -3,8 +3,8 @@
 //! config. The hook ([`HOOK`], `commit_trailer.sh`) adds a `Co-authored-by` trailer that names the surface. GitHub keeps
 //! the trailer when it squashes a pull request, so `git log` on main says which merged work came from a Nexus session.
 //!
-//! - Nexus is the only agent co-author: the hook removes the trailer Claude Code adds for Anthropic
-//!   (`<noreply@anthropic.com>`). A person named as a co-author stays.
+//! - The hook only adds the Nexus trailer. Every co-author already named stays: the trailer Claude Code adds for
+//!   Anthropic (`<noreply@anthropic.com>`) and any person.
 //! - Desktop includes every Nexus organization member, as [`desktop_eligible`] decides. CLIs use [`crate::staff`].
 //! - Only repositories whose push remote is in nexus-xyz (its URL as git expands it, on any host name), and only new
 //!   commits: not a merge, a rebase, a cherry-pick or a revert. The hook never fails a commit, and the repository's
@@ -21,9 +21,9 @@ pub const VARIABLE: &str = "GIT_CONFIG_PARAMETERS";
 pub const NAME: &str = "nexus-commit-trailer";
 /// The hook: a shell function that git runs with the trailer and the message file.
 pub const HOOK: &str = include_str!("commit_trailer.sh");
-/// What the agent is told in its system prompt, next to the page instructions. Without it, an agent that finds its own
-/// co-author line gone tells the person and offers to put it back. A message from the hook is not enough: the agent
-/// reads it as untrusted output. True with or without the hook, so a launcher may add it to every session.
+/// What the agent is told in its system prompt, next to the page instructions. Without it, an agent that finds a
+/// co-author line it did not write tells the person and offers to remove it. A message from the hook is not enough: the
+/// agent reads it as untrusted output. True with or without the hook, so a launcher may add it to every session.
 pub const INSTRUCTIONS: &str = include_str!("commit_trailer.txt").trim_ascii_end();
 
 /// Where the session runs, named in the trailer.
