@@ -275,15 +275,26 @@ impl SideChat {
         let busy = self.summary.status.busy();
         let has_text = !(self.input.read(cx).value().trim().is_empty() && self.draft.is_empty());
         // A send in flight does not hold the next message: it waits in line (`commands.rs`).
-        let enabled = self.can_compose() && self.request.is_none() && self.secret_id.is_none() && has_text;
-        let send_tip = if busy {
-            "Send now: the agent reads it at its next step (Enter)"
-        } else {
-            "Send"
-        };
+        // A used-up budget fades Send, as the session's, and its tooltip says why; Enter still holds the message.
+        let enabled = self.can_compose()
+            && self.request.is_none()
+            && self.secret_id.is_none()
+            && has_text
+            && self.budget.is_none();
+        let send_tip: SharedString = self
+            .budget
+            .clone()
+            .unwrap_or_else(|| {
+                if busy {
+                    "Send now: the agent reads it at its next step (Enter)".into()
+                } else {
+                    "Send".into()
+                }
+            })
+            .into();
         let send = send_circle("send-side-chat", enabled, p)
             .debug_selector(|| "side-send".into())
-            .tooltip(move |window, cx| Tooltip::new(send_tip).build(window, cx))
+            .tooltip(move |window, cx| Tooltip::new(send_tip.clone()).build(window, cx))
             .on_click(cx.listener(|this, _, window, cx| this.send(false, window, cx)));
         let queue_tip: SharedString = format!(
             "Queue: sent when this turn ends ({})",

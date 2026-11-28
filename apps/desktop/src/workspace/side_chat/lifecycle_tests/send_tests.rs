@@ -107,6 +107,34 @@ fn a_sent_message_shows_at_once_and_the_landed_send_reads_it(cx: &mut TestAppCon
     });
 }
 
+/// A used-up budget holds the send in the composer, as the session's; the raise sends it, queued as it was pressed.
+#[gpui_kit::test]
+fn a_used_up_budget_holds_the_send_until_it_is_raised(cx: &mut TestAppContext) {
+    let rpc = Rpc::default();
+    let (chat, cx) = chat(cx, &rpc);
+    chat.update_in(cx, |chat, window, cx| {
+        chat.set_budget(Some("The budget is used up.".into()), window, cx)
+    });
+    type_and_send(&chat, cx, "held for the budget", true);
+    assert_eq!(rpc.count("wb_send_files"), 0);
+    chat.read_with(cx, |chat, cx| {
+        assert_eq!(chat.input.read(cx).value().as_ref(), "held for the budget");
+        assert_eq!(
+            chat.budget_note().as_deref(),
+            Some("The budget is used up. Your message sends once it is raised.")
+        );
+    });
+    chat.update_in(cx, |chat, window, cx| chat.set_budget(None, window, cx));
+    cx.run_until_parked();
+    let send = rpc.take("wb_send_files");
+    assert_eq!(send.args["text"], "held for the budget");
+    assert_eq!(send.args["queued"], true);
+    chat.read_with(cx, |chat, cx| {
+        assert_eq!(chat.input.read(cx).value().as_ref(), "");
+        assert_eq!(chat.budget_note(), None);
+    });
+}
+
 #[gpui_kit::test]
 fn a_refused_message_comes_back_ahead_of_what_was_typed_since(cx: &mut TestAppContext) {
     let rpc = Rpc::default();

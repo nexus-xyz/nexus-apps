@@ -127,6 +127,11 @@ impl SideChat {
         if text.trim().is_empty() && self.draft.is_empty() {
             return;
         }
+        // A used-up budget holds the message in the composer, as the session's (`budget.rs`).
+        if self.hold_for_budget(queued, cx) {
+            return;
+        }
+        self.held = None;
         let draft = std::mem::take(&mut self.draft);
         self.input.update(cx, |input, cx| input.set_value("", window, cx));
         self.brought_back = false;

@@ -19,6 +19,10 @@ impl SideChat {
         if let Some(note) = &self.note {
             dock = dock.child(line(note.clone(), p.muted));
         }
+        // The used-up budget's amber line, as over the session's composer (`limit_line.rs`).
+        if let Some(budget) = self.budget_note() {
+            dock = dock.child(line(budget, p.warning).debug_selector(|| "side-budget".into()));
+        }
         if self.summary.pending.is_some() {
             dock = dock.child(line("Settings changes await the agent.".into(), p.faint));
         }
