@@ -279,7 +279,7 @@ actions!(workspace, [GoBack, GoForward]);
 // Settings › Preferences from anywhere in the window: Ctrl+, (⌘, on macOS).
 actions!(workspace, [OpenSettings]);
 // The Assistant from anywhere in the window (Cmd+J, or Ctrl+J), as its sidebar row's hint shows.
-actions!(workspace, [OpenAssistant]);
+actions!(workspace, [OpenAssistant, AskAboutNexus]);
 // A new errand from anywhere in the window (Cmd+Shift+J, or Ctrl+Shift+J): Errands with its New errand box.
 actions!(workspace, [NewErrand]);
 /// ⌃⌘O: the account switcher.
@@ -4116,8 +4116,8 @@ impl Workspace {
             .when(show_navigation, |head| {
                 head.child(
                     bar_button("toggle-sidebar", Lucide::PanelLeft, palette)
-                        .tooltip(|window, cx| {
-                            Tooltip::new("Toggle sidebar")
+                        .tooltip(move |window, cx| {
+                            Tooltip::new(if open { "Hide sidebar" } else { "Show sidebar" })
                                 .action(&ToggleSidebar, None)
                                 .build(window, cx)
                         })
@@ -4390,6 +4390,7 @@ impl Render for Workspace {
             .on_action(cx.listener(|this, _: &GoForward, window, cx| this.go(1, window, cx)))
             .on_action(cx.listener(|this, _: &OpenSettings, window, cx| this.open_settings_from_keys(window, cx)))
             .on_action(cx.listener(Self::on_open_assistant))
+            .on_action(cx.listener(Self::on_ask_about_nexus))
             .on_action(cx.listener(Self::on_switch_account))
             .on_action(cx.listener(Self::on_new_errand))
             // The mouse's back and forward buttons (X11's buttons 8 and 9, Wayland's BTN_SIDE and BTN_EXTRA), as in a

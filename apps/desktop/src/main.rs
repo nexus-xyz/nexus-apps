@@ -13,6 +13,7 @@ mod artifact_refs;
 mod assets;
 mod attachments;
 mod backend;
+mod canon_keys;
 mod catalog;
 mod channel;
 mod chat_bar;
@@ -121,8 +122,8 @@ mod zoom;
 use gpui_kit::*;
 
 use crate::workspace::{
-    FindChat, NewErrand, NewTerminal, OpenAssistant, OpenSettings, StashPrompt, SwitchAccount, ToggleChatBrowser,
-    ToggleSidebar,
+    AskAboutNexus, FindChat, NewErrand, NewTerminal, OpenAssistant, OpenSettings, StashPrompt, SwitchAccount,
+    ToggleChatBrowser, ToggleSidebar,
 };
 #[cfg(test)]
 use crate::workspace::{GoBack, GoForward, ToggleMaximizeWorkbench, ToggleSidePane, ToggleTerminal};
@@ -153,6 +154,11 @@ const GO_FORWARD: &str = if cfg!(target_os = "macos") {
 /// terminal keys: Cmd+` switches windows on macOS. The ones a person can change in Settings › Keyboard shortcuts come
 /// from `key_bindings.rs`, with the keys they set.
 fn key_bindings() -> Vec<KeyBinding> {
+    key_bindings_with(canon_keys::enabled())
+}
+
+/// [`key_bindings`], with the canon's new keys (`canon_keys.rs`) in or out.
+fn key_bindings_with(canon: bool) -> Vec<KeyBinding> {
     let mut bindings = vec![
         KeyBinding::new(shortcut!("q"), Quit, None),
         // Another app window, from any window or field.
@@ -193,6 +199,18 @@ fn key_bindings() -> Vec<KeyBinding> {
             Some("Workspace"),
         ),
     ];
+    if canon {
+        bindings.extend([
+            // ⌃⌘N is the canon's key (nav.yaml) for another window. Off a Mac, Ctrl+Alt is AltGr, so Ctrl+Shift+N is
+            // the one key.
+            #[cfg(target_os = "macos")]
+            KeyBinding::new("ctrl-cmd-n", windows::NewWindow, None),
+            // Ask about Nexus (the Assistant). Cmd+/ stays "Pick the model", the Nexus app's key (`key_bindings.rs`).
+            // Shift+/ is ? where a platform reports the shifted key.
+            KeyBinding::new(shortcut!("shift-/"), AskAboutNexus, Some("Workspace")),
+            KeyBinding::new(shortcut!("shift-?"), AskAboutNexus, Some("Workspace")),
+        ]);
+    }
     bindings.extend(key_bindings::bindings(&key_bindings::current()));
     bindings
 }
@@ -414,7 +432,7 @@ mod tests {
     /// of its own (its context is `Input`, under `Workspace`).
     #[test]
     fn workbench_keys_reach_the_workspace_from_the_composer() {
-        let keymap = Keymap::new(key_bindings());
+        let keymap = Keymap::new(key_bindings_with(false));
         let stack = [
             KeyContext::parse("Workspace").unwrap(),
             KeyContext::parse("Input").unwrap(),
@@ -440,6 +458,16 @@ mod tests {
             },
             &windows::NewWindow,
         );
+        // The canon's keys are off until the cutover: the default bindings leave them out.
+        assert!(action("ctrl-cmd-n").is_none());
+        assert!(
+            action(if cfg!(target_os = "macos") {
+                "cmd-shift-/"
+            } else {
+                "ctrl-shift-/"
+            })
+            .is_none()
+        );
         // Off a Mac, Ctrl+Alt is AltGr, so Ctrl+Alt+\\ leaves a text box alone, as the Nexus app's `forPlatform`.
         if cfg!(target_os = "macos") {
             is(shortcut_label::TOGGLE_SIDE_PANE, &ToggleSidePane);
@@ -449,6 +477,34 @@ mod tests {
         // The keys the Back and Forward hints show.
         is(GO_BACK, &GoBack);
         is(GO_FORWARD, &GoForward);
+    }
+
+    /// With the canon's keys on: Ask about Nexus, and a second key for a new window on a Mac. Cmd+/ stays the Nexus
+    /// app's "Pick the model".
+    #[test]
+    fn canon_keys_are_bound_when_on() {
+        let keymap = Keymap::new(key_bindings_with(true));
+        let stack = [KeyContext::parse("Workspace").unwrap()];
+        let is = |keys: &str, expected: &dyn Action| {
+            let (bindings, _) = keymap.bindings_for_input(&[Keystroke::parse(keys).unwrap()], &stack);
+            let found = bindings.first().unwrap_or_else(|| panic!("{keys} is not bound"));
+            assert!(
+                found.action().partial_eq(expected),
+                "{keys} runs {}",
+                found.action().name()
+            );
+        };
+        if cfg!(target_os = "macos") {
+            is("ctrl-cmd-n", &windows::NewWindow);
+        }
+        is(
+            if cfg!(target_os = "macos") {
+                "cmd-shift-/"
+            } else {
+                "ctrl-shift-/"
+            },
+            &AskAboutNexus,
+        );
     }
 
     /// The hinted Back and Forward keys run from anywhere in the window, not only from the composer.

@@ -1561,6 +1561,7 @@ fn shortcut_rows() -> Vec<Row> {
         "NewChat" => Some("New session"),
         "ToggleSidebar" => Some("Toggle sidebar"),
         "OpenAssistant" => Some("Open the Assistant"),
+        "AskAboutNexus" => Some("Ask about Nexus"),
         "NewErrand" => Some("New errand"),
         "FindChat" => Some("Search"),
         "FindInChat" => Some("Find in the session"),
