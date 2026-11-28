@@ -3112,7 +3112,7 @@ impl Workspace {
         if let Some(session) = self
             .code_session()
             .filter(|session| in_session && session.agent == row.agent)
-            && super::effort::has_fast(
+            && super::code_dock::effort::has_fast(
                 row.agent,
                 session.via,
                 &self.agent_catalog(row.agent),
