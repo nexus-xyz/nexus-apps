@@ -32,6 +32,11 @@ impl QueuedDrag {
     pub(super) fn seq(&self) -> i64 {
         self.seq
     }
+
+    /// The session or side chat whose queue it belongs to: a drop on another's row moves nothing.
+    pub(super) fn thread(&self) -> &str {
+        &self.thread
+    }
 }
 
 /// The row under the pointer while it moves: a raised copy of the dragged row.

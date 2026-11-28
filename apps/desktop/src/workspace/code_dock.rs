@@ -2235,7 +2235,7 @@ fn on_queue_row(id: impl Into<ElementId>, text: &str, grip: Option<Stateful<Div>
 }
 
 /// A queued message's first words on one line, or "Image" when it has no text.
-fn queue_line(text: &str) -> String {
+pub(super) fn queue_line(text: &str) -> String {
     let line = text.split_whitespace().collect::<Vec<_>>().join(" ");
     if line.is_empty() { tr("Image").to_string() } else { line }
 }
@@ -2271,6 +2271,17 @@ pub(super) fn queued_header(count: usize, when: &'static str, palette: Palette) 
 
 /// A queued message's chip: its place in the queue and its first words. Its actions follow.
 pub(super) fn queued_chip(id: impl Into<ElementId>, ix: usize, text: &str, palette: Palette) -> Stateful<Div> {
+    queued_chip_led(id, ix, text, None, palette)
+}
+
+/// A queued chip with `lead` before its number: the side chat's reorder grip (`queue_drag::grip`).
+pub(super) fn queued_chip_led(
+    id: impl Into<ElementId>,
+    ix: usize,
+    text: &str,
+    lead: Option<AnyElement>,
+    palette: Palette,
+) -> Stateful<Div> {
     let line = text.split_whitespace().collect::<Vec<_>>().join(" ");
     let line = if line.is_empty() { tr("Image").to_string() } else { line };
     h_flex()
@@ -2284,6 +2295,7 @@ pub(super) fn queued_chip(id: impl Into<ElementId>, ix: usize, text: &str, palet
         .border_color(palette.border)
         .bg(palette.raised)
         .text_size(px(13.))
+        .children(lead)
         .child(
             div()
                 .flex_none()

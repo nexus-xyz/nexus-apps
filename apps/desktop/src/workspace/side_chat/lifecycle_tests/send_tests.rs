@@ -135,6 +135,43 @@ fn a_used_up_budget_holds_the_send_until_it_is_raised(cx: &mut TestAppContext) {
     });
 }
 
+/// A queued message dragged onto another moves there through the engine, as in the session's queue.
+#[gpui_kit::test]
+fn a_queued_message_dropped_on_another_moves_there(cx: &mut TestAppContext) {
+    use crate::code::Block;
+    use crate::workspace::queue_drag::QueuedDrag;
+    let rpc = Rpc::default();
+    let (chat, cx) = chat(cx, &rpc);
+    chat.update_in(cx, |chat, window, cx| {
+        chat.blocks = vec![
+            Block::Queued {
+                seq: 2,
+                text: "first".into(),
+            },
+            Block::Queued {
+                seq: 3,
+                text: "second".into(),
+            },
+            Block::Queued {
+                seq: 4,
+                text: "third".into(),
+            },
+        ];
+        let palette =
+            crate::palette::Palette::for_choice(crate::palette::ThemeChoice::Dark, gpui_kit::WindowAppearance::Dark);
+        // From another queue: nothing moves.
+        let other = QueuedDrag::new("another".into(), 2, "first".into(), palette);
+        chat.drop_queued(&other, 4, window, cx);
+        let drag = QueuedDrag::new("send-side".into(), 2, "first".into(), palette);
+        chat.drop_queued(&drag, 3, window, cx);
+    });
+    cx.run_until_parked();
+    assert_eq!(rpc.count("wb_queue_move"), 1);
+    let moved = rpc.take("wb_queue_move");
+    assert_eq!(moved.args["seq"], 2);
+    assert_eq!(moved.args["before"], 4, "dragged down, it lands after its target");
+}
+
 #[gpui_kit::test]
 fn a_refused_message_comes_back_ahead_of_what_was_typed_since(cx: &mut TestAppContext) {
     let rpc = Rpc::default();

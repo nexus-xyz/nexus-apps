@@ -3,6 +3,7 @@
 use super::*;
 use crate::palette::Palette;
 use crate::workspace::code_dock::{self, MODES, menu_box, menu_label, menu_row};
+use crate::workspace::queue_drag::{QueuedDrag, drop_before, grip};
 use gpui_kit::assets::IconName as Lucide;
 use gpui_kit::component::input::Textarea;
 use gpui_kit::component::{h_flex, v_flex};
@@ -118,6 +119,25 @@ impl SideChat {
                 })
                 .collect();
         }
+    }
+    /// `drag` was dropped on the queued row `target`: the engine moves it there, as in the session (`drop_queued`).
+    pub(super) fn drop_queued(&mut self, drag: &QueuedDrag, target: i64, window: &mut Window, cx: &mut Context<Self>) {
+        if drag.thread() != self.summary.id {
+            return;
+        }
+        let order: Vec<i64> = self
+            .blocks
+            .iter()
+            .filter_map(|block| match block {
+                Block::Queued { seq, .. } => Some(*seq),
+                _ => None,
+            })
+            .collect();
+        let Some(before) = drop_before(&order, drag.seq(), target) else {
+            return;
+        };
+        let args = json!({"threadId":self.summary.id,"seq":drag.seq(),"before":before});
+        self.command("wb_queue_move", args, false, None, window, cx);
     }
     pub(super) fn edit_queued(&mut self, seq: i64, text: String, window: &mut Window, cx: &mut Context<Self>) {
         if self.retired || !self.pending.valid() {
@@ -365,8 +385,28 @@ impl SideChat {
                     .into_any_element();
             }
             let edit = text.to_string();
-            code_dock::queued_chip(("side-queued", ix), ix, text, p)
+            // As the session's queue: with two or more, a row's grip drags it onto another row (`queue_drag.rs`).
+            let grip = (queued.len() > 1 && !self.sending).then(|| {
+                let drag = QueuedDrag::new(self.summary.id.clone(), seq, code_dock::queue_line(text).into(), p);
+                grip(("side-queued-grip", ix), drag, p)
+                    .debug_selector(move || format!("side-grip-{seq}"))
+                    .tooltip(|window, cx| {
+                        gpui_kit::component::tooltip::Tooltip::new("Drag to reorder").build(window, cx)
+                    })
+                    .into_any_element()
+            });
+            let target = p.hover;
+            code_dock::queued_chip_led(("side-queued", ix), ix, text, grip, p)
                 .when(self.sending, |chip| chip.opacity(0.5))
+                // The row a drop would land on lights up; the dragged row itself does not.
+                .drag_over::<QueuedDrag>(
+                    move |style, drag, _, _| {
+                        if drag.seq() == seq { style } else { style.bg(target) }
+                    },
+                )
+                .on_drop(
+                    cx.listener(move |this, drag: &QueuedDrag, window, cx| this.drop_queued(drag, seq, window, cx)),
+                )
                 .child(
                     code_dock::text_button(SharedString::from(format!("side-steer-{seq}")), "Send now", false, p)
                         .debug_selector(move || format!("side-steer-{seq}"))
