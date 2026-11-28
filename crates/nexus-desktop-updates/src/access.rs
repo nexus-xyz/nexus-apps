@@ -118,6 +118,9 @@ pub async fn update_channel(
     token: Option<&str>,
     installed: &str,
 ) -> Result<(Channel, Option<HeaderValue>), Failure> {
+    if let Some(channel) = Channel::fixed(installed) {
+        return Ok((channel, None));
+    }
     match authorize(gateway, token).await {
         Ok(header) => Ok((Channel::Internal, Some(header))),
         Err(error) => Ok((crate::unverified_channel(installed, error)?, None)),

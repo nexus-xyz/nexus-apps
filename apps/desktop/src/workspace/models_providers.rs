@@ -411,8 +411,7 @@ mod tests {
     use crate::catalog::{parse, parse_providers};
     use serde_json::json;
 
-    /// `GET /v1/providers` without a key, in the Gateway's order (`nexus-gateway/tests/providers.rs` checks these
-    /// values).
+    /// `GET /v1/providers` without a key, in the Gateway's order (Gateway's own tests check these values).
     fn listed() -> serde_json::Value {
         let per_model = json!({ "cacheReadShare": null, "cacheWrite": { "rule": "model_rate" }, "webSearchUsd": null });
         json!({ "object": "list", "data": [

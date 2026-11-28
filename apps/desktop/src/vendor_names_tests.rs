@@ -29,16 +29,6 @@ const WIRE_NAMES: [(&str, &str); 8] = [
     (TEAM_E2E, "\"{}_{person}\""),
 ];
 
-/// Files that do not leave the monorepo (`oss/export-manifest.toml` matches no rule for them): the export's own plan,
-/// and tests, which exercise the vendor blocklist, and its go/no-go list and rehearsal log.
-const PRIVATE: [&str; 5] = [
-    "oss/INVENTORY.md",
-    "oss/export-manifest.toml",
-    "oss/go-no-go.md",
-    "oss/split-rehearsal.md",
-    "oss/test_export.py",
-];
-
 fn files(dir: &Path, out: &mut Vec<PathBuf>) {
     for entry in std::fs::read_dir(dir).expect("read dir") {
         let path = entry.expect("dir entry").path();
@@ -54,7 +44,7 @@ fn files(dir: &Path, out: &mut Vec<PathBuf>) {
 }
 
 /// Every `file:line` under `root` that names the vendor, in any case, once the allowed wire names are taken out.
-fn vendor_names(root: &Path, allowed: &[(&str, &str)], private: &[&str]) -> Vec<String> {
+fn vendor_names(root: &Path, allowed: &[(&str, &str)]) -> Vec<String> {
     let vendor = vendor();
     let mut all = Vec::new();
     files(root, &mut all);
@@ -66,9 +56,6 @@ fn vendor_names(root: &Path, allowed: &[(&str, &str)], private: &[&str]) -> Vec<
             .expect("under root")
             .to_string_lossy()
             .replace('\\', "/");
-        if private.contains(&relative.as_str()) {
-            continue;
-        }
         let Ok(bytes) = std::fs::read(&path) else { continue };
         let text = String::from_utf8_lossy(&bytes);
         for (number, line) in text.lines().enumerate() {
@@ -89,7 +76,7 @@ fn vendor_names(root: &Path, allowed: &[(&str, &str)], private: &[&str]) -> Vec<
 #[test]
 fn the_app_names_no_sign_in_vendor() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
-    let found = vendor_names(root, &WIRE_NAMES, &PRIVATE);
+    let found = vendor_names(root, &WIRE_NAMES);
     assert!(
         found.is_empty(),
         "say \"sign-in provider\" instead, at:\n{}",
@@ -109,8 +96,7 @@ fn the_check_finds_the_name_in_any_case_and_allows_only_listed_wire_names() {
     )
     .expect("a");
     std::fs::write(dir.join("src/b.rs"), format!("let id = text(\"{vendor}OrgId\");\n")).expect("b");
-    std::fs::write(dir.join("private.md"), &vendor).expect("private");
-    let found = vendor_names(&dir, &[("src/a.rs", "\"{}OrgId\"")], &["private.md"]);
+    let found = vendor_names(&dir, &[("src/a.rs", "\"{}OrgId\"")]);
     std::fs::remove_dir_all(&dir).ok();
     assert_eq!(found, ["src/a.rs:2", "src/b.rs:1"]);
 }

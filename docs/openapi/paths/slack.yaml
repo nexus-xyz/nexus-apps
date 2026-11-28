@@ -31,9 +31,7 @@
       "429":
         $ref: ../components/common.yaml#/responses/RateLimited
       "503":
-        description: >-
-          The Slack app is not configured on this Gateway: `SLACK_CLIENT_ID`, `SLACK_CLIENT_SECRET` and a server setting
-          (`not_configured`)
+        description: "The Slack app is not configured on this Gateway: the server settings (`not_configured`)"
         content:
           application/json:
             schema:
@@ -161,9 +159,7 @@
             schema:
               $ref: ../components/schemas.yaml#/Error
       "503":
-        description: >-
-          The Slack app is not configured on this Gateway: `SLACK_CLIENT_ID`, `SLACK_CLIENT_SECRET` and a server setting
-          (`not_configured`)
+        description: "The Slack app is not configured on this Gateway: the server settings (`not_configured`)"
         content:
           application/json:
             schema:
@@ -317,9 +313,7 @@
             schema:
               $ref: ../components/schemas.yaml#/Error
       "503":
-        description: >-
-          The Slack app is not configured on this Gateway: `SLACK_CLIENT_ID`, `SLACK_CLIENT_SECRET` and a server setting
-          (`not_configured`)
+        description: "The Slack app is not configured on this Gateway: the server settings (`not_configured`)"
         content:
           application/json:
             schema:

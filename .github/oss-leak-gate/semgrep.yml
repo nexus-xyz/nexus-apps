@@ -1,5 +1,5 @@
-# Custom semgrep rules for the open-source export of Nexus Desktop. semgrep 1.186.
-# They run on the files the open-source export ships (in the monorepo, `.github/scripts/oss_export_paths.py` lists them).
+# Custom semgrep rules for this repository. semgrep 1.186.
+# They run on every tracked file (`.github/scripts/leak_gate.py tree`).
 # Each rule covers what gitleaks' regexes cannot see: names and structure in Rust code.
 # Test code may hold fakes. Name a fake as one (`fake_`, `test_`, `dummy_`) instead of adding an exception.
 

@@ -357,7 +357,9 @@
               $ref: ../components/schemas.yaml#/Error
             example:
               error:
-                message: Nexus Gateway has no CLERK_SECRET_KEY, so it cannot delete your sign-in; nothing was deleted
+                message: >-
+                  Nexus Gateway has no identity provider secret key, so it cannot delete your sign-in; nothing was
+                  deleted
                 type: not_configured
                 code: not_configured
       default:

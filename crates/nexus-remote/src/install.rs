@@ -38,6 +38,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use futures::future::BoxFuture;
+use nexus_desktop_updates::Channel;
 use nexus_desktop_updates::verify::verify_signed_file;
 use serde_json::Value;
 use sha2::{Digest, Sha256};
@@ -135,22 +136,15 @@ impl Source {
         }
     }
 
-    /// The release of the app's `version` on `downloads` (by default [`DOWNLOADS`]): its channel is `internal`
-    /// for `-internal.` builds, else `stable`; the manifest is that version's own copy, so the host is exactly the
-    /// app's build.
+    /// The release of the app's `version` on `downloads` (by default [`DOWNLOADS`]), in its channel's folder
+    /// (`Channel::folder`: `-internal.` and `-beta.` builds have their own, others are stable); the manifest is that
+    /// version's own copy, so the host is exactly the app's build.
     pub fn release(downloads: &str, version: &str, pubkey: Option<&str>) -> Source {
         let semver = semver(version);
-        let channel = if semver.contains("-internal.") {
-            "internal"
-        } else {
-            "stable"
-        };
+        let folder = Channel::of(semver).unwrap_or(Channel::Stable).folder();
         Source::Release {
             version: version.to_string(),
-            manifest: format!(
-                "{}/desktop/{channel}/{semver}/latest.json",
-                downloads.trim_end_matches('/')
-            ),
+            manifest: format!("{}/{folder}/{semver}/latest.json", downloads.trim_end_matches('/')),
             pubkey: pubkey.map(str::to_string),
         }
     }
@@ -886,6 +880,14 @@ mod tests {
             Source::release("https://d.test", "1.0.0+abc", None),
             Source::Release { manifest, .. } if manifest == "https://d.test/desktop/stable/1.0.0/latest.json"
         ));
+        assert!(matches!(
+            Source::release("https://d.test", "1.0.0-beta.2+abc", None),
+            Source::Release { manifest, .. } if manifest == "https://d.test/desktop-oss/beta/1.0.0-beta.2/latest.json"
+        ));
+        assert_eq!(
+            channel_manifest("https://d.test/desktop-oss/beta/1.0.0-beta.2/latest.json").as_deref(),
+            Some("https://d.test/desktop-oss/beta/latest.json")
+        );
     }
 
     #[test]

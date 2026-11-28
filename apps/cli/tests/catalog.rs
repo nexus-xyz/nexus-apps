@@ -4,8 +4,8 @@
 use nexus_cli::catalog::command_catalog;
 use nexus_cli::json::pretty;
 
-/// The CLI's copy of `services/frontend/core/interfaces/commands.json`, so this builds outside the monorepo.
-/// `npm run commands -w @nexus/cli` writes both; `cross_package_check.py` keeps them the same bytes.
+/// The CLI's copy of Nexus's `commands.json` interface file. Nexus maintains it: a change to the catalog updates it in
+/// the same pull request.
 const COMMANDS_JSON: &str = include_str!("fixtures/interfaces/commands.json");
 
 #[test]
@@ -16,9 +16,9 @@ fn the_catalog_is_commands_json() {
         let expected: serde_json::Value = serde_json::from_str(COMMANDS_JSON).expect("commands.json");
         assert_eq!(
             catalog, expected,
-            "the catalog differs; run `npm run commands -w @nexus/cli` from eng/factory"
+            "the catalog differs from tests/fixtures/interfaces/commands.json, which Nexus maintains"
         );
-        panic!("same content, different bytes; run `npm run commands -w @nexus/cli` from eng/factory");
+        panic!("same content, different bytes than tests/fixtures/interfaces/commands.json, which Nexus maintains");
     }
 }
 

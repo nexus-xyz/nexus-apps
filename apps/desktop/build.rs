@@ -98,9 +98,9 @@ fn host_version() {
 
 /// The files `src/assets.rs` and `src/tray.rs` embed with `held!("marks/x.svg")`, copied to `$OUT_DIR/held/`, where the
 /// macro reads them. A file missing from `assets/` stops the build, unless the build opts in with NEXUS_HELD_STAND_INS=1.
-/// The open-source repo does (its .cargo/config.toml): it leaves out the logos Legal has not cleared (export manifest,
-/// B2), so each gets `assets/held/stand-in.svg` (or `.png`), a plain ring, or its own neutral stand-in there
-/// (`app-mark.svg`). Any stand-in sets `cfg(nexus_marks_held)`, so the tests that check a real mark's drawing skip.
+/// This repository does (its .cargo/config.toml): it leaves out the logos pending clearance, so each gets
+/// `assets/held/stand-in.svg` (or `.png`), a plain ring, or its own neutral stand-in there (`app-mark.svg`). Any
+/// stand-in sets `cfg(nexus_marks_held)`, so the tests that check a real mark's drawing skip.
 fn held_assets() {
     let manifest = PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").unwrap_or_default());
     let out = PathBuf::from(std::env::var("OUT_DIR").expect("cargo sets OUT_DIR")).join("held");

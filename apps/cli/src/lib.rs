@@ -1,7 +1,6 @@
-//! The `nexus` CLI as one Rust binary (phase E of the rewrite; eng/factory/rs/README.md): a drop-in replacement for
-//! the TypeScript CLI (`@nexus/cli`, `services/frontend/core/interfaces/src`), command for command against the same
-//! `commands.json` catalog, with the same output, exit codes (0 success, 1 failure, 2 usage), config file and
-//! headers. It is a client of the Nexus API (HTTP only), not an SDK.
+//! The `nexus` CLI as one Rust binary: a drop-in replacement for the TypeScript CLI (`@nexus/cli`), command for command
+//! against the same `commands.json` catalog, with the same output, exit codes (0 success, 1 failure, 2 usage), config
+//! file and headers. It is a client of the Nexus API (HTTP only), not an SDK.
 //!
 //! Arguments are read with the TypeScript CLI's own grammar (`parseArgv`: `--name value`, `--name=value`, a fixed
 //! set of switches, everything else positional), not a derive parser: product commands (`nexus <product> <verb>
