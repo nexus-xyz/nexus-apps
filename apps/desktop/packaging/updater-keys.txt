@@ -1,0 +1,13 @@
+# The public keys a release build trusts for updates. The release workflow reads this file into
+# NEXUS_UPDATER_PUBKEY, and refuses to build while it lists no key.
+#
+# One key per line: the base64 of a minisign public key file (`base64 < minisign.pub`, on one line).
+# The first line is the active key, which signs releases. The second is the next key. Its secret half stays offline
+# until a rotation, so builds that already trust it update without a gap.
+#
+# Lines that start with `#` are comments. A change to this file changes whose updates every later build installs:
+# review it as you review a change to the release workflow.
+# Active: minisign key id D8C260E648BEB69A, the release environment's UPDATER_PRIVATE_KEY.
+dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXkgRDhDMjYwRTY0OEJFQjY5QQpSV1NhdHI1STVtREMyR1VRWVZTRkVWa09Hcm9XeE9qQklRdEYrdElQblpBMEhpSVBoaklmYjM3SQo=
+# Next: minisign key id 2165BB964297E5A4. Its secret half is offline until a rotation.
+dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXkgMjE2NUJCOTY0Mjk3RTVBNApSV1NrNVpkQ2xydGxJWWMzQ1EyTnBScmxKZW9xN1prbUpYcmZrdEx5M1JVNE1WaWRRQktaMmV2dwo=
