@@ -106,6 +106,7 @@ pub mod provider;
 pub mod provision;
 pub mod pty;
 pub mod pull_link;
+mod queue_hold;
 pub mod queued_delivery;
 pub mod reader;
 pub mod restack;
@@ -658,6 +659,8 @@ struct Turn {
     /// A queued message the agent has not been given yet: it gets it once the turn before has ended and its checkpoint
     /// was taken, so the checkpoint never holds this turn's first edits.
     held: Option<Say>,
+    /// The person is rewriting this queued message: the queue does not move on while one is (`queue_hold.rs`).
+    editing: bool,
     /// The person's message that asked for this turn: its `User` event's number. None for a turn the agent started.
     seq: Option<i64>,
     /// Its message is the person's, not a linked session's (`WbEvent::User::from`): a notice that it went unread is
@@ -709,7 +712,7 @@ fn live_status(state: &LiveState) -> Option<ThreadStatus> {
         Some(ThreadStatus::Starting)
     } else if !state.pending.is_empty() {
         Some(ThreadStatus::Approval)
-    } else if !state.turns.is_empty() {
+    } else if !state.turns.is_empty() && !state.paused {
         Some(ThreadStatus::Running)
     } else {
         Some(ThreadStatus::Idle)
@@ -737,6 +740,8 @@ struct LiveState {
     pending: HashMap<String, Asked>,
     /// The turn under way first, then the messages queued behind it.
     turns: VecDeque<Turn>,
+    /// No turn is under way: the queued messages in `turns` wait while the person rewrites one (`queue_hold.rs`).
+    paused: bool,
     /// Work the agent left running past its turn (background shells, sub-agents), by task id: the agent is not idle
     /// while any runs.
     background: HashSet<String>,
@@ -4370,11 +4375,13 @@ impl Workbench {
             let message = seq.is_some() || matches!(say, Some(Say::Steer { .. }));
             state.owed = if message { 0 } else { state.owed.saturating_sub(1) };
             let first = state.turns.is_empty();
+            // A paused queue has no turn to steer into: a message joins the queue behind it (`queue_hold.rs`).
+            let steerable = !state.paused;
             if first && person && seq.is_some() {
                 self.person_turn_begins(thread_id);
             }
             match (first, person, seq, say) {
-                (false, true, Some(seq), Some(Say::Steer { text, images, .. })) => {
+                (false, true, Some(seq), Some(Say::Steer { text, images, .. })) if steerable => {
                     self.person_turn_begins(thread_id);
                     if let Some(turn) = state.turns.front_mut() {
                         turn.person = true;
@@ -4394,7 +4401,7 @@ impl Workbench {
                 // halt as they are. With no `User` event, `Out::Taken` finds nothing of it in `unread`: a notice that
                 // lands after the turn's last step runs as a turn the agent starts itself (`begin_own_turn`), or as
                 // the one a refused steer reserves (`Out::TurnQueued`, not the person's).
-                (false, false, None, Some(say @ Say::Steer { .. })) => {
+                (false, false, None, Some(say @ Say::Steer { .. })) if steerable => {
                     let first_in_line = state.line_up(None, say);
                     (false, first_in_line, None)
                 }
@@ -4409,6 +4416,7 @@ impl Workbench {
                         started: Instant::now(),
                         stopping: false,
                         held,
+                        editing: false,
                         seq,
                         person,
                         notice,
@@ -4573,7 +4581,7 @@ impl Workbench {
         }
         self.release_message(thread_id, seq);
         self.append(thread_id, WbEvent::QueueCancel { seq })?;
-        Ok(())
+        self.resume_queue(thread_id, &live, false)
     }
 
     /// Rewrites the queued message numbered `seq` before the agent gets it. Its images stay.
@@ -4592,11 +4600,13 @@ impl Workbench {
                 }
                 *said = text.to_string();
             }
+            // The rewrite is saved: it holds the queue no longer (`queue_hold.rs`).
+            state.turns[at].editing = false;
         }
         // The rewritten text no longer holds the results said in front of it.
         self.release_message(thread_id, seq);
         self.append(thread_id, WbEvent::QueueEdit { seq, text: text.into() })?;
-        Ok(())
+        self.resume_queue(thread_id, &live, false)
     }
 
     /// Moves the queued message numbered `seq` to just before the queued message `before`, or to the end of the queue
@@ -4624,6 +4634,18 @@ impl Workbench {
         Ok(())
     }
 
+    /// The queue holds while the person rewrites the queued message numbered `seq` (`on`), or no longer. Paused, it
+    /// moves on once no message is being rewritten (`queue_hold.rs`).
+    pub fn queue_hold(&self, thread_id: &str, seq: i64, on: bool) -> Result<()> {
+        let live = self.live(thread_id).ok_or("That message is no longer waiting.")?;
+        {
+            let mut state = live.state();
+            let at = Self::waiting(&mut state, seq)?;
+            state.turns[at].editing = on;
+        }
+        self.resume_queue(thread_id, &live, false)
+    }
+
     /// Sends the queued message numbered `seq` into the turn under way now, rather than after it ("Send now"): Claude
     /// Code takes it in at its next step, Codex as a steer (`turn/steer`). When the turn has no step left, the agent
     /// runs it as its next turn, ahead of the rest of the queue.
@@ -4639,6 +4661,12 @@ impl Workbench {
                 return Err("The agent is stopping, so that message can't go now.".into());
             }
             let at = Self::waiting(&mut state, seq)?;
+            // A paused queue has no turn to join: the message goes first and starts one (`queue_hold.rs`).
+            if state.paused {
+                queue_hold::to_front(&mut state, at);
+                drop(state);
+                return self.resume_queue(thread_id, &live, true);
+            }
             let Some(Say::User { text, images }) = state.turns.remove(at).and_then(|turn| turn.held) else {
                 return Ok(());
             };
@@ -4945,6 +4973,7 @@ impl Workbench {
                 browser: Default::default(),
                 resend: resume_recovery::Resend::keep(agent, resumed || fork.is_some(), sent, seq, person),
                 transcript: None,
+                paused: false,
             }),
         });
         // Registered before the launch, so a message sent while the agent starts waits in the channel. Checked and
@@ -5899,15 +5928,23 @@ impl Workbench {
                         state.cut_short = true;
                     }
                     let cursor = state.cursor.take();
-                    let next = state.turns.front_mut().map(|t| (t.id.clone(), t.seq, t.held.take()));
+                    // The person is rewriting a queued message: the queue waits for it (`queue_hold.rs`).
+                    let parks = queue_hold::parks(&state);
+                    state.paused = parks;
+                    let next = if parks {
+                        None
+                    } else {
+                        state.turns.front_mut().map(|t| (t.id.clone(), t.seq, t.held.take()))
+                    };
                     // The person's message queued behind it begins: an Interrupt since it was sent holds no longer. Not
                     // when the run is stopping: that message never runs, and a Stop's halt must hold.
-                    if state.stop.is_none() && !state.done && state.turns.front().is_some_and(|t| t.person) {
+                    if !parks && state.stop.is_none() && !state.done && state.turns.front().is_some_and(|t| t.person) {
                         self.person_turn_begins(thread_id);
                     }
                     // A notice's reserved turn begins: no `User` event lifts a halt for it, and a halt or a trip
                     // since it was reserved stops it (`notice_turn_begun`).
-                    if state.stop.is_none()
+                    if !parks
+                        && state.stop.is_none()
                         && !state.done
                         && let Some(turn) = state.turns.front().filter(|t| t.notice)
                     {
@@ -6682,7 +6719,8 @@ impl Workbench {
         // ended, goes out right after the message (below), so it still stops the turn the message starts.
         {
             let state = live.state();
-            if !source.applies_to(state.turns.front()) {
+            // A paused queue has no turn under way to stop (`queue_hold.rs`).
+            if state.paused || !source.applies_to(state.turns.front()) {
                 return Ok(());
             }
             // Not when the run is stopping: that message never runs, and a Stop's halt must hold.

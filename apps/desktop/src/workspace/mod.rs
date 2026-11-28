@@ -173,6 +173,7 @@ mod live_fields_tests;
 mod local_mode;
 mod onboarding;
 mod queue_drag;
+mod queue_hold;
 const REQUIRES_SIGN_IN: &str = "Requires sign-in";
 mod revoked_notice;
 mod session_drag;

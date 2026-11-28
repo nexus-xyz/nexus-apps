@@ -113,8 +113,8 @@ pub(super) struct Dock {
     questions_for: Option<String>,
     /// The rewrite of a queued message.
     edit: Entity<InputState>,
-    /// The queued message being rewritten (its `seq`).
-    editing: Option<i64>,
+    /// The queued message being rewritten: the queue holds while it is (`queue_hold.rs`).
+    editing: Option<super::queue_hold::QueueHold>,
     /// Queued messages sent now or taken back whose request has not answered: a second press does nothing. A failed
     /// request clears them (`Workspace::on_code_events`).
     pub(super) acting: HashSet<i64>,
@@ -1097,12 +1097,19 @@ impl Workspace {
         model.is_some_and(|model| nexus_workbench::claude::supports_fast(&model))
     }
 
-    /// Start rewriting queued message `seq` in place.
+    /// Start rewriting queued message `seq` in place. The queue holds until Save or Cancel (`queue_hold.rs`).
     fn edit_queued(&mut self, seq: i64, text: String, window: &mut Window, cx: &mut Context<Self>) {
+        let View::Code(view) = &self.view else {
+            return;
+        };
+        let Some(runs) = self.runs(&view.id) else {
+            return;
+        };
+        let thread = view.id.clone();
         let Some(dock) = self.dock_mut() else {
             return;
         };
-        dock.editing = Some(seq);
+        dock.editing = Some(super::queue_hold::QueueHold::new(runs, thread, seq));
         let edit = dock.edit.clone();
         edit.update(cx, |state, cx| {
             state.set_value(text, window, cx);
@@ -1111,28 +1118,23 @@ impl Workspace {
         cx.notify();
     }
 
-    /// Save the rewrite of the queued message; an empty one is not saved (take it back instead).
+    /// Save the rewrite of the queued message; an empty one is not saved (take it back instead). Either way the queue
+    /// goes on: the save lets it go, and an unchanged or empty rewrite drops its hold.
     fn save_queued(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let runs = match &self.view {
-            View::Code(view) => self.runs(&view.id),
-            _ => None,
-        };
         let View::Code(view) = &mut self.view else {
             return;
         };
-        let Some(seq) = view.dock.editing.take() else {
+        let Some(hold) = view.dock.editing.take() else {
             return;
         };
+        let seq = hold.seq();
         let text = view.dock.edit.read(cx).value().to_string();
         let before = view.blocks.iter().find_map(|block| match block {
             Block::Queued { seq: queued, text } if *queued == seq => Some(text.clone()),
             _ => None,
         });
-        if !text.trim().is_empty()
-            && before.is_some_and(|before| before.trim() != text.trim())
-            && let Some(runs) = runs
-        {
-            runs.queue_edit(view.id.clone(), seq, text);
+        if !text.trim().is_empty() && before.is_some_and(|before| before.trim() != text.trim()) {
+            hold.save(text);
         }
         self.focus_composer(window, cx);
         cx.notify();
@@ -1262,14 +1264,25 @@ impl Workspace {
         });
         let thread = view.id.clone();
         let queued_rows = queued.iter().enumerate().map(|(ix, &(seq, text))| {
-            if view.dock.editing == Some(seq) {
+            if view.dock.editing.as_ref().is_some_and(|hold| hold.seq() == seq) {
                 return h_flex()
                     .id(("queued", ix))
                     .w_full()
                     .min_h(px(32.))
                     .gap(px(8.))
                     .text_size(px(13.5))
-                    .child(on_queue_tag(palette))
+                    // "Paused": nothing in the queue goes while the person rewrites (`queue_hold.rs`).
+                    .child(
+                        div()
+                            .id(("queued-paused", ix))
+                            .child(queue_tag(tr("Paused"), palette))
+                            .tooltip(|window, cx| {
+                                gpui_kit::component::tooltip::Tooltip::new(tr(
+                                    "The queue waits while you edit. Save or Cancel lets it go on.",
+                                ))
+                                .build(window, cx)
+                            }),
+                    )
                     // The rewrite's field: a hairline box, so the row reads as one being edited.
                     .child(
                         div()
@@ -2242,6 +2255,11 @@ fn queue_line(text: &str) -> String {
 
 /// "On queue": a small hairline pill, so the row reads as waiting, not as typed text.
 fn on_queue_tag(palette: Palette) -> Div {
+    queue_tag(tr("On queue"), palette)
+}
+
+/// A queued row's small hairline pill: "On queue", or "Paused" while its rewrite holds the queue.
+fn queue_tag(label: SharedString, palette: Palette) -> Div {
     div()
         .flex_none()
         .h(px(20.))
@@ -2255,7 +2273,7 @@ fn on_queue_tag(palette: Palette) -> Div {
         .text_size(px(11.5))
         .font_weight(FontWeight::MEDIUM)
         .text_color(palette.muted)
-        .child(tr("On queue"))
+        .child(label)
 }
 
 /// "Queued · 2", then when they go.

@@ -456,6 +456,17 @@ impl Runs {
         }
     }
 
+    pub fn queue_hold(&self, thread_id: String, seq: i64, on: bool) {
+        match self {
+            Runs::Here(runner) => runner.queue_hold(thread_id, seq, on),
+            Runs::There(relay) => relay.run(
+                "wb_queue_hold",
+                json!({ "threadId": thread_id, "seq": seq, "on": on }),
+                |_| None,
+            ),
+        }
+    }
+
     pub fn queue_steer(&self, thread_id: String, seq: i64) {
         match self {
             Runs::Here(runner) => runner.queue_steer(thread_id, seq),

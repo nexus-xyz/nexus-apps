@@ -25,6 +25,8 @@ pub struct Item<P> {
 pub struct Queue<P> {
     items: Vec<Item<P>>,
     held: bool,
+    /// The item the person is rewriting: nothing goes on its own while one is, so the old text never goes mid-edit.
+    editing: Option<u64>,
     /// The next item's seq.
     next: u64,
 }
@@ -34,6 +36,7 @@ impl<P> Default for Queue<P> {
         Queue {
             items: Vec::new(),
             held: false,
+            editing: None,
             next: 1,
         }
     }
@@ -80,6 +83,17 @@ impl<P> Queue<P> {
     pub fn remove(&mut self, seq: u64) {
         self.items.retain(|item| item.seq != seq);
         self.held = self.held && !self.items.is_empty();
+        self.editing.take_if(|editing| *editing == seq);
+    }
+
+    /// The item being rewritten, while one is.
+    pub fn editing(&self) -> Option<u64> {
+        self.editing
+    }
+
+    /// The person starts rewriting item `seq` (`Some`), or stops (`None`): the queue waits while they do.
+    pub fn set_editing(&mut self, seq: Option<u64>) {
+        self.editing = seq.filter(|seq| self.items.iter().any(|item| item.seq == *seq));
     }
 
     /// Moves an item to the front (Send now).
@@ -102,12 +116,22 @@ impl<P> Queue<P> {
         self.held = false;
     }
 
-    /// The first item to send, out of the queue; `None` while held or empty.
+    /// The first item to send, out of the queue; `None` while held, empty or while an item is being rewritten.
     pub fn take(&mut self) -> Option<Item<P>> {
+        if self.editing.is_some() {
+            return None;
+        }
+        self.take_now()
+    }
+
+    /// The first item, which the person sent now: a rewrite of another item does not hold it back.
+    pub fn take_now(&mut self) -> Option<Item<P>> {
         if self.held || self.items.is_empty() {
             return None;
         }
-        Some(self.items.remove(0))
+        let item = self.items.remove(0);
+        self.editing.take_if(|editing| *editing == item.seq);
+        Some(item)
     }
 
     /// An answer ended. A complete one hands the turn to the first item; a failed or stopped one holds the queue,
@@ -115,6 +139,7 @@ impl<P> Queue<P> {
     pub fn settle(&mut self, outcome: Outcome, send_now: bool) -> Option<Item<P>> {
         if send_now {
             self.resume();
+            return self.take_now();
         } else if outcome != Outcome::Complete {
             self.hold();
         }
@@ -259,6 +284,36 @@ mod tests {
             assert!(queue.settle(Outcome::Complete, false).is_none());
             assert!(queue.take().is_none());
         }
+    }
+
+    #[test]
+    fn waits_while_an_item_is_rewritten_and_goes_on_after() {
+        let mut queue = queued(&["first", "second"]);
+        let second = queue.items()[1].seq;
+        queue.set_editing(Some(second));
+        assert!(
+            queue.settle(Outcome::Complete, false).is_none(),
+            "nothing goes mid-edit"
+        );
+        assert!(!queue.held(), "a rewrite is no failure to resume from");
+        assert_eq!(texts(&queue), ["first", "second"]);
+        queue.set_editing(None);
+        assert_eq!(queue.take().expect("an item").text, "first");
+    }
+
+    #[test]
+    fn send_now_goes_while_another_item_is_rewritten_and_ends_its_own_rewrite() {
+        let mut queue = queued(&["first", "second"]);
+        let (first, second) = (queue.items()[0].seq, queue.items()[1].seq);
+        queue.set_editing(Some(first));
+        queue.promote(second);
+        assert_eq!(queue.settle(Outcome::Stopped, true).expect("sent now").text, "second");
+        assert_eq!(queue.editing(), Some(first));
+        queue.set_editing(Some(first));
+        assert_eq!(queue.take_now().expect("sent now").text, "first");
+        assert_eq!(queue.editing(), None, "the item left with its rewrite");
+        queue.set_editing(Some(99));
+        assert_eq!(queue.editing(), None, "no rewrite of an item that is not there");
     }
 
     #[test]

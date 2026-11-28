@@ -1502,6 +1502,11 @@ export interface Commands {
   wb_queue_edit: { args: { threadId: string; seq: number; text: string }; result: null };
   /** Move the waiting message `seq` just before the waiting message `before`, or last when `before` is null. */
   wb_queue_move: { args: { threadId: string; seq: number; before: number | null }; result: null };
+  /**
+   * Hold the queue while the person rewrites the waiting message `seq` (`on`), or let it go. While any waiting message
+   * is held, a turn that ends starts none: the session goes idle with its queue intact. `wb_queue_edit` lets it go too.
+   */
+  wb_queue_hold: { args: { threadId: string; seq: number; on: boolean }; result: null };
   wb_queue_steer: { args: { threadId: string; seq: number }; result: null };
   /** Stops the current turn; the agent keeps the conversation. */
   wb_interrupt: { args: { threadId: string }; result: null };

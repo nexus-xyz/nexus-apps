@@ -1660,6 +1660,11 @@ impl CodeRunner {
         self.run(move |api| async move { api.queue_move(thread_id, seq, before).await.map(|()| None) });
     }
 
+    /// Hold the queue while the person rewrites a queued message (`on`), or let it go.
+    pub fn queue_hold(&self, thread_id: String, seq: i64, on: bool) {
+        self.run(move |api| async move { api.queue_hold(thread_id, seq, on).await.map(|()| None) });
+    }
+
     /// Send a queued message into the running turn now ("Send now"): the agent reads it at its next step.
     pub fn queue_steer(&self, thread_id: String, seq: i64) {
         self.run(move |api| async move { api.queue_steer(thread_id, seq).await.map(|()| None) });
